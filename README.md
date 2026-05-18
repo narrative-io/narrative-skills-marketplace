@@ -1,11 +1,11 @@
 # narrative-skills-marketplace
 
-A Claude Code plugin marketplace. Each plugin contains one or more
-interactive skills — AI-powered workflows that guide users through
-recurring processes step by step. Type `/skill-name` in Claude Code and
-the skill walks you through it.
+A Claude Code plugin marketplace published by Narrative I/O. Each plugin
+bundles one or more interactive skills — AI-powered workflows that walk
+you through a recurring process step by step. Install the marketplace,
+type `/skill-name` in Claude Code, and the skill takes it from there.
 
-## Quick start
+## Install
 
 ```bash
 git clone <repo-url> narrative-skills-marketplace
@@ -13,44 +13,28 @@ cd narrative-skills-marketplace
 bash setup
 ```
 
-Then in Claude Code, type:
+`setup` registers the marketplace with Claude Code, installs every
+plugin listed below, and regenerates the catalog in this README.
 
-```
-/hello
-```
+<!-- BEGIN PLUGINS -->
+## Plugins
 
-## Project structure
+### `narrative-common`
 
-```
-narrative-skills-marketplace/
-├── .claude-plugin/
-│   └── marketplace.json        # Marketplace catalog
-├── plugins/
-│   └── example/
-│       ├── .claude-plugin/
-│       │   └── plugin.json     # Plugin manifest
-│       └── skills/
-│           └── hello/
-│               └── SKILL.md    # Skill definition
-├── setup                       # Register marketplace + install plugins
-├── CLAUDE.md                   # Conventions for contributors
-└── README.md
-```
+Common Narrative workflows backed by the narrative-mcp server — starting with Rosetta Stone attribute mapping generation, evaluation, and improvement.
 
-## Adding a new plugin
+| Skill | Use when |
+|-------|----------|
+| `/generate-rosetta-stone-mappings` | "map this dataset to Rosetta Stone", "suggest normalized attributes for dataset N", "evaluate the mappings on dataset N", "why is this mapping low confidence", "fix this expression", "improve this NQL mapping expression". |
 
-1. Create `plugins/<plugin>/.claude-plugin/plugin.json` with `name`,
-   `version`, `description`, `author`.
-2. Add a corresponding entry to `.claude-plugin/marketplace.json`.
-3. Create at least one skill under `plugins/<plugin>/skills/<skill>/SKILL.md`.
-4. Run `bash setup` to register and install.
+<!-- END PLUGINS -->
 
-## Adding a new skill
+## Contributing
 
-1. Create `plugins/<plugin>/skills/<skill>/SKILL.md` with YAML frontmatter
-   (`name`, `version`, `description`, `allowed-tools`) followed by the
-   interactive workflow body.
-2. Re-run `bash setup` (or just `claude plugin install <plugin>@narrative-skills-marketplace`).
-3. Invoke `/skill` in Claude Code to test.
+See [CLAUDE.md](CLAUDE.md) for project structure, naming conventions, the
+`SKILL.md` format, and the design principles every skill in this
+marketplace follows.
 
-See [CLAUDE.md](CLAUDE.md) for conventions and skill design principles.
+The `Plugins` section above is generated from each plugin's
+`plugin.json` and each skill's `SKILL.md` frontmatter — edit those, then
+re-run `bash setup` (or `bun scripts/regen-readme.ts`) to update.
