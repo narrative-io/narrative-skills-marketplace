@@ -77,6 +77,16 @@ Do NOT use for:
 Run these steps in order. Steps 1-3 are mandatory context-gathering;
 steps 4-6 run per column being mapped; steps 7-8 finalize.
 
+**Parallelize where the calls are independent.** Most steps below have
+fan-out points — multiple `narrative_attributes_search` queries (one
+per semantic cluster), a batch of `narrative_attributes_describe` IDs,
+a batch of `narrative_nql_validate` expressions. Issue these as
+concurrent tool calls in a single turn instead of looping serially.
+For very wide datasets (50+ mappable columns), consider spawning a
+sub-agent per column cluster so each one owns its own search →
+describe → validate loop and only the final scoring is reconciled at
+the parent.
+
 ### 1. Pin the company / context
 
 Mappings are scoped to a company. Before any dataset call:
@@ -129,6 +139,14 @@ What to extract from the response:
 - Most recent sample rows (only present when you `include: ["sample"]`)
 - Per-column stats summary (only present when you `include: ["stats"]`)
 - Dataset name, record count, freshness — from `metadata`, used for the summary
+
+**Skip underscore-prefixed columns.** Columns whose names start with
+`_` (e.g., `_nio_last_modified_at`, `_nio_sample_128`) are reserved
+platform-managed columns. The platform generates the mappings it needs
+for them automatically (typically tagged `nio_system` /
+`nio_dataset_implicit_attribute` in `mappings[]`). Do not propose
+user-facing mappings for them, and do not score them as "unmapped" in
+warnings.
 
 If the dataset is small or unfamiliar, the broad include above gives
 you everything in one round trip. For very wide schemas, split:
@@ -210,6 +228,13 @@ if the first batch is insufficient. Avoid `include: ["schema"]` here
 — it makes the search payload large; describe the shortlisted hits
 instead.
 
+Fire one search per semantic cluster (email, person name, geography,
+currency, date, etc.) **in parallel** — these queries are independent
+and batching them as concurrent tool calls in a single turn is
+materially faster than looping. Same applies to the
+`narrative_attributes_describe` call below: pass every shortlisted ID
+in one array (up to 50) rather than one describe per ID.
+
 Then batch the shortlist into one describe call:
 
 ```
@@ -288,6 +313,10 @@ dataset's schema. A structured error points at the offending token.
 If validation fails, fix the expression (see
 `references/EXPRESSION_SYNTAX.md`) and re-validate. Do **not** suggest
 a mapping with an expression that has not been validated.
+
+Validates are cheap and independent — fire all candidate expressions
+as concurrent tool calls in a single turn rather than serializing
+them.
 
 Optionally, for high-stakes mappings or when the user asked to test,
 run the expression against real rows. `narrative_nql_run` is
@@ -429,6 +458,12 @@ Do not re-run the full generation flow for a one-line improvement.
   fresh `narrative_dataset_request_sample` job. The existing sample is
   almost always enough to spot the patterns this skill needs, and
   re-sampling costs a job round-trip.
+- **Skip underscore-prefixed columns.** Columns starting with `_`
+  (e.g., `_nio_last_modified_at`, `_nio_sample_128`) are reserved
+  platform-managed columns. The platform auto-generates mappings for
+  them when needed (tagged `nio_system` / `nio_dataset_implicit_attribute`
+  in `mappings[]`). Don't propose mappings for them and don't list
+  them as unmapped in warnings.
 
 ## Voice
 
