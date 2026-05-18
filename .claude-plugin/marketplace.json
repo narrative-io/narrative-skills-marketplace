@@ -1,0 +1,16 @@
+{
+  "name": "narrative-skills-marketplace",
+  "owner": {
+    "name": "Narrative I/O",
+    "email": "support@narrative.io"
+  },
+  "plugins": [
+    {
+      "name": "example",
+      "description": "Example plugin demonstrating the skill template structure. Replace or remove when adding your own plugins.",
+      "version": "0.1.0",
+      "author": { "name": "Narrative I/O" },
+      "source": "./plugins/example"
+    }
+  ]
+}

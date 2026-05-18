@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# narrative-skills-marketplace setup: register marketplace + install plugins.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MARKETPLACE_JSON="$SCRIPT_DIR/.claude-plugin/marketplace.json"
+
+echo "=== narrative-skills-marketplace setup ==="
+echo ""
+
+if ! command -v claude >/dev/null 2>&1; then
+  echo "error: the 'claude' CLI is not on PATH. Install Claude Code first." >&2
+  exit 1
+fi
+
+if [ ! -f "$MARKETPLACE_JSON" ]; then
+  echo "error: $MARKETPLACE_JSON not found." >&2
+  exit 1
+fi
+
+MARKETPLACE_NAME=$(grep -m1 '"name"' "$MARKETPLACE_JSON" | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+
+echo "Registering plugin marketplace..."
+claude plugin marketplace add "$SCRIPT_DIR"
+
+echo "Installing plugins..."
+# Parse the top-level plugins[].name entries from marketplace.json.
+PLUGIN_NAMES=$(awk '
+  /"plugins"[[:space:]]*:/ { in_plugins=1; next }
+  in_plugins && /"name"[[:space:]]*:/ {
+    match($0, /"name"[[:space:]]*:[[:space:]]*"[^"]+"/)
+    s = substr($0, RSTART, RLENGTH)
+    sub(/^"name"[[:space:]]*:[[:space:]]*"/, "", s)
+    sub(/"$/, "", s)
+    print s
+  }
+' "$MARKETPLACE_JSON")
+
+for name in $PLUGIN_NAMES; do
+  echo "  - $name"
+  claude plugin install "$name@$MARKETPLACE_NAME"
+done
+
+echo ""
+echo "=== Setup complete ==="
+echo "Try it: open Claude Code and type /hello"
