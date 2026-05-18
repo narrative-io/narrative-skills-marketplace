@@ -1,5 +1,5 @@
 ---
-name: generate-rosetta-mappings
+name: generate-rosetta-stone-mappings
 version: 0.1.0
 description: |
   Generate, evaluate, and improve Rosetta Stone attribute mappings for
