@@ -22,10 +22,14 @@ When `narrative_attributes_describe` shows enum constraints on the
 target attribute/property:
 
 1. **Compare sample values against the enum exactly.**
-   - Pull at least 25 sample rows via `narrative_dataset_request_sample`.
+   - Use the sample already returned by
+     `narrative_datasets_describe(include: ["sample"])`. Only enqueue
+     `narrative_dataset_request_sample` (async — poll via
+     `narrative_jobs_describe`) if the existing sample is stale.
    - Look at the distinct values of the source column. If the column
      has high cardinality, also pull
-     `narrative_dataset_get_column_stats` for `top_values`.
+     `narrative_dataset_get_column_stats(columns: ["<col>"])` for
+     `top_values`.
 
 2. **If every distinct source value matches an enum value exactly**
    → direct column reference, confidence 95+.
@@ -70,14 +74,16 @@ target attribute/property:
 
 When evaluating a mapping whose target has enum constraints:
 
-1. Call `narrative_nql_run` on a sample slice to see what the
-   expression actually produces:
+1. Submit a distribution query via `narrative_nql_run(nql: ...)` and
+   poll the returned job with `narrative_jobs_describe` until
+   `state` is `completed`. The query selects the expression against
+   the dataset's table reference `company_data."<dataset_id>"`:
    ```sql
-   SELECT <the_expression> AS produced, COUNT(*) AS n
-   FROM <dataset>
-   GROUP BY 1
-   ORDER BY n DESC
-   LIMIT 50
+   select <the_expression> as produced, count(*) as n
+   from company_data."<dataset_id>"
+   group by 1
+   order by n desc
+   limit 50
    ```
 
 2. Compare each distinct `produced` value to the enum.
@@ -119,8 +125,7 @@ When evaluating a mapping whose target has enum constraints:
 
 - For SQL/NQL syntax of the CASE WHEN expressions themselves, see
   `EXPRESSION_SYNTAX.md`.
-- For the LLM-prompt versions of these rules (which this skill
-  replaces at runtime), see
-  `utils/llm/templates/shared-instructions.ts` —
-  `ENUM_HANDLING_INSTRUCTIONS` (generation) and
-  `ENUM_VALIDATION_INSTRUCTIONS` (evaluation).
+- For the official Rosetta Stone confidence-scoring rubric and
+  normalization model — useful when calibrating low-confidence enum
+  cases — query the `narrative-knowledge-base` MCP server. See
+  `KB_RESEARCH.md` (entry points: `/concepts/rosetta-stone/...`).

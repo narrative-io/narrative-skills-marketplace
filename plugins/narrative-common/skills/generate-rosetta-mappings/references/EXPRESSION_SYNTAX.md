@@ -4,8 +4,10 @@ Mapping expressions are evaluated by the Narrative NQL engine. They
 look like SQL but with quoting rules that trip up most agents on the
 first try.
 
-Always validate with `narrative_nql_validate(dataset_id, expression)`
-before suggesting an expression to the user.
+Always validate with `narrative_nql_validate(nql: ...)` before
+suggesting an expression to the user. The tool takes a full NQL
+query, so wrap the expression as
+`select <expression> from company_data."<dataset_id>"`.
 
 ## Quoting rules
 
@@ -166,3 +168,12 @@ the expression. Common fixes:
 Re-validate after every fix. Never suggest a mapping with an
 expression you have not personally validated against the target
 dataset's schema.
+
+## When this file isn't enough
+
+For the official NQL function/operator reference, type-system rules,
+or worked examples (joins, materialized views, performance patterns),
+query the `narrative-knowledge-base` MCP server. See
+`KB_RESEARCH.md` for the recommended search queries and entry-point
+docs paths (`/concepts/nql/...`, `/cookbooks/nql/...`,
+`/api-reference/nql/...`).

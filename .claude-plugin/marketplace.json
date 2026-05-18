@@ -6,11 +6,11 @@
   },
   "plugins": [
     {
-      "name": "narrative-rosetta",
-      "description": "Rosetta Stone mapping workflows for Narrative datasets — generate, evaluate, and improve normalized attribute mappings using the narrative-mcp server.",
+      "name": "narrative-common",
+      "description": "Common Narrative workflows backed by the narrative-mcp server — starting with Rosetta Stone attribute mapping generation, evaluation, and improvement.",
       "version": "0.1.0",
       "author": { "name": "Narrative I/O" },
-      "source": "./plugins/narrative-rosetta"
+      "source": "./plugins/narrative-common"
     }
   ]
 }
