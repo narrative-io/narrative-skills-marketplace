@@ -6,11 +6,11 @@
   },
   "plugins": [
     {
-      "name": "example",
-      "description": "Example plugin demonstrating the skill template structure. Replace or remove when adding your own plugins.",
+      "name": "narrative-rosetta",
+      "description": "Rosetta Stone mapping workflows for Narrative datasets — generate, evaluate, and improve normalized attribute mappings using the narrative-mcp server.",
       "version": "0.1.0",
       "author": { "name": "Narrative I/O" },
-      "source": "./plugins/example"
+      "source": "./plugins/narrative-rosetta"
     }
   ]
 }

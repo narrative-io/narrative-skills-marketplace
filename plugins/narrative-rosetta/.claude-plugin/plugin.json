@@ -1,0 +1,14 @@
+{
+  "name": "narrative-rosetta",
+  "version": "0.1.0",
+  "description": "Rosetta Stone mapping workflows for Narrative datasets — generate, evaluate, and improve normalized attribute mappings using the narrative-mcp server.",
+  "author": {
+    "name": "Narrative I/O"
+  },
+  "mcpServers": {
+    "narrative-mcp": {
+      "type": "http",
+      "url": "https://mcp.narrative.io/mcp"
+    }
+  }
+}
