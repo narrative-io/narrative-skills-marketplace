@@ -38,7 +38,8 @@ Common, NQL-supported:
 - `LOWER(x)`, `UPPER(x)`, `TRIM(x)`
 - `COALESCE(x, default)` — but see "null handling" below; usually unneeded
 - `NULLIF(x, value)`
-- `CAST(x AS type)` — types: `string`, `long`, `double`, `boolean`, `timestamptz`
+- `CAST(x AS type)` — types: `string`, `long`, `double`, `boolean`, `timestamp`, `timestamptz`
+- `to_timestamp(text, format)` — parse a date/time string with a Presto-style format mask (see "Timestamp normalization"). `date_parse` and `parse_datetime` are NOT supported.
 - `REGEXP_REPLACE(string, pattern, replacement)`
 - `SUBSTRING(x, start, length)`
 - `CONCAT(a, b, ...)`
@@ -141,16 +142,48 @@ and `value`:
 
 ### Timestamp normalization
 
+NQL date-parsing function naming is **not** the standard SQL set — the
+engine accepts `to_timestamp(text, format)` with Presto-style format
+masks, plus `CAST(... AS timestamp)` for already-ISO-shaped strings.
+Several look-alikes (`date_parse`, `parse_datetime`) are **not**
+supported and will fail validation with `No match found for function
+signature ...`.
+
+| Source shape | Use this | Notes |
+| --- | --- | --- |
+| ISO 8601 string (`'2026-05-18T12:34:56Z'`) | `CAST("event_ts" AS timestamp)` | Cheapest path; engine parses ISO directly. |
+| ISO date string (`'2026-05-18'`) | `CAST("event_date" AS timestamp)` | Promotes to midnight UTC. |
+| Locale string (e.g., `'8/15/25'`) | `to_timestamp("check_in_date", '%c/%e/%y')` | Presto-style format mask; see table below. |
+| Epoch seconds (long) | `CAST(FROM_UNIXTIME("epoch_s") AS timestamp)` | Validate first; older engines may need `to_timestamp(CAST("epoch_s" AS varchar))`. |
+| Epoch millis (long) | `CAST(FROM_UNIXTIME("epoch_ms" / 1000) AS timestamp)` | Same caveat. |
+
+Presto-style format mask tokens (most common):
+
+| Token | Meaning | Example |
+| --- | --- | --- |
+| `%Y` | 4-digit year | `2026` |
+| `%y` | 2-digit year | `26` |
+| `%m` | Zero-padded month | `05` |
+| `%c` | Non-padded month | `5` |
+| `%d` | Zero-padded day | `08` |
+| `%e` | Non-padded day | `8` |
+| `%H` | 24-hour | `14` |
+| `%i` | Minute | `34` |
+| `%s` | Second | `56` |
+
 ```json
 {
   "type": "value_mapping",
-  "expression": "CAST(event_ts AS timestamptz)"
+  "expression": "to_timestamp(\"check_in_date\", '%c/%e/%y')"
 }
 ```
 
-If the source is an epoch-seconds long, cast through a TO_TIMESTAMP
-function (validate with `narrative_nql_validate` — exact function name
-varies by engine generation).
+Drop confidence by ≥15 points and add an `ambiguous_date_format`
+warning when (a) the format mask is locale-dependent (M/D vs D/M), or
+(b) you're using `%y` rather than `%Y` (century rollover depends on
+the engine's pivot year — confirm with `narrative_nql_run` if any
+records may be pre-2000). Always validate the exact mask against the
+schema before suggesting it.
 
 ## When validation fails
 
@@ -162,6 +195,7 @@ the expression. Common fixes:
 | "syntax error at or near 'type'" | Unquoted reserved word | Quote with `"type"` |
 | "column not found" | Wrong identifier name / casing | Re-check with `narrative_datasets_describe` |
 | "function does not exist" | Wrong function name (e.g., `LCASE` instead of `LOWER`) | Use the function table above |
+| "No match found for function signature `date_parse`/`parse_datetime`" | NQL doesn't expose these | Use `to_timestamp(text, format)` with Presto-style masks, or `CAST(... AS timestamp)` for ISO strings — see Timestamp normalization. |
 | "cannot cast string to long" | Implicit type coercion | Wrap with `CAST(..., AS long)` or use NULLIF |
 | "unexpected ELSE without CASE" | Mismatched CASE/END | Count CASE … END pairs |
 
