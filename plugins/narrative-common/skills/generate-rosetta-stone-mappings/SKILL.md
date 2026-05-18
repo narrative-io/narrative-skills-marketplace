@@ -1,0 +1,504 @@
+---
+name: generate-rosetta-stone-mappings
+version: 0.1.0
+description: |
+  Generate, evaluate, and improve Rosetta Stone attribute mappings for
+  a Narrative dataset.
+  Use when: "map this dataset to Rosetta Stone", "suggest normalized
+  attributes for dataset N", "evaluate the mappings on dataset N", "why
+  is this mapping low confidence", "fix this expression", "improve this
+  NQL mapping expression".
+  (narrative-common)
+compatibility:
+  requires:
+    tools:
+      - AskUserQuestion
+    mcp-servers:
+      - narrative-mcp
+    mcp-tools:
+      - narrative_context_get
+      - narrative_context_search_companies
+      - narrative_context_set_company
+      - narrative_datasets_search
+      - narrative_datasets_describe
+      - narrative_dataset_request_sample
+      - narrative_dataset_get_column_stats
+      - narrative_dataset_recalculate_statistics
+      - narrative_attributes_search
+      - narrative_attributes_describe
+      - narrative_nql_validate
+      - narrative_nql_run
+      - narrative_jobs_describe
+  recommends:
+    mcp-servers:
+      - narrative-knowledge-base
+    mcp-tools:
+      - search_narrative_i_o_knowledge_base
+      - query_docs_filesystem_narrative_i_o_knowledge_base
+---
+
+# Generate Rosetta Stone Mappings
+
+Map columns from a Narrative source dataset to Rosetta Stone attributes
+via progressive calls to the `narrative-mcp` server. Fetch only the
+schema slice, sample rows, column stats, and attribute definitions you
+need for each decision, and validate every expression with
+`narrative_nql_validate` (and optionally `narrative_nql_run`) before
+suggesting it.
+
+Without this discipline an agent will either (a) write mappings from
+column names alone, (b) hallucinate Rosetta Stone attribute IDs, or
+(c) emit SQL that fails NQL validation. Don't.
+
+When the platform-data tools above aren't enough — e.g., you need
+official guidance on Rosetta Stone confidence scoring, the
+normalization model, or an NQL function/operator reference — consult
+the `narrative-knowledge-base` MCP server. See
+`references/KB_RESEARCH.md` for the recommended query patterns.
+
+## When to use
+
+Triggers:
+
+- "Map this dataset to Rosetta Stone" / "suggest normalized attributes for dataset N"
+- "Why is mapping X low confidence?" / "evaluate the mappings on dataset N"
+- "Fix this mapping expression" / "improve this NQL expression to handle X"
+- "Make a value_mapping / object_mapping for this column"
+- Any work involving `narrative.rosetta_stone."<attribute>"` and a specific source dataset
+
+Do NOT use for:
+
+- Pure NQL query authoring with no mapping intent — go to NQL skills.
+- Custom-attribute *creation* — call this skill first to confirm no
+  Rosetta Stone attribute already covers the column, then hand off.
+
+## Procedure
+
+Run these steps in order. Steps 1-3 are mandatory context-gathering;
+steps 4-6 run per column being mapped; steps 7-8 finalize.
+
+**Parallelize where the calls are independent.** Most steps below have
+fan-out points — multiple `narrative_attributes_search` queries (one
+per semantic cluster), a batch of `narrative_attributes_describe` IDs,
+a batch of `narrative_nql_validate` expressions. Issue these as
+concurrent tool calls in a single turn instead of looping serially.
+For very wide datasets (50+ mappable columns), consider spawning a
+sub-agent per column cluster so each one owns its own search →
+describe → validate loop and only the final scoring is reconciled at
+the parent.
+
+### 1. Pin the company / context
+
+Mappings are scoped to a company. Before any dataset call:
+
+```
+narrative_context_get  → check the active company
+```
+
+If no company is set, or the user named a different one:
+
+```
+narrative_context_search_companies(search_term: "<name>")
+narrative_context_set_company(companyId: <id>)
+```
+
+`narrative_context_search_companies` is global-admin-only. Skip the
+search/set entirely if the user already invoked the skill from a
+Narrative Platform UI session where the company is implicit
+(`narrative_context_get` returns one).
+
+### 2. Resolve and describe the target dataset
+
+If the user gave a dataset ID, go straight to describe. Otherwise:
+
+```
+narrative_datasets_search(search_term: "<phrase from user>")
+```
+
+Then describe the dataset, **opting into every field this flow uses**
+(the default is just `metadata + schema`):
+
+```
+narrative_datasets_describe(
+  dataset_ids: [<id>],
+  include: ["metadata", "schema", "mappings", "stats", "sample"]
+)
+```
+
+`dataset_ids` is an array — pass up to 50 IDs to describe multiple
+datasets in one call. The `include` allowlist is
+`column_stats_config, mappings, metadata, nql, retention_policy,
+sample, schema, stats`.
+
+What to extract from the response:
+
+- Column list with types (always present via `schema`)
+- Existing mappings (only present when you `include: ["mappings"]`).
+  If `mappings[]` is non-empty, the task is evaluation or incremental
+  — see `## Evaluate existing mappings`.
+- Most recent sample rows (only present when you `include: ["sample"]`)
+- Per-column stats summary (only present when you `include: ["stats"]`)
+- Dataset name, record count, freshness — from `metadata`, used for the summary
+
+**Skip underscore-prefixed columns.** Columns whose names start with
+`_` (e.g., `_nio_last_modified_at`, `_nio_sample_128`) are reserved
+platform-managed columns. The platform generates the mappings it needs
+for them automatically (typically tagged `nio_system` /
+`nio_dataset_implicit_attribute` in `mappings[]`). Do not propose
+user-facing mappings for them, and do not score them as "unmapped" in
+warnings.
+
+If the dataset is small or unfamiliar, the broad include above gives
+you everything in one round trip. For very wide schemas, split:
+describe once with `include: ["metadata", "schema", "mappings"]` to
+scope which columns matter, then pull `sample` and `stats` as needed.
+
+**Stop and confirm with the user if**: the dataset has 50+ columns and
+the user gave no scoping hint. Ask which columns or which Rosetta
+Stone domain (identity, demographics, behavior, geo, etc.) they care
+about. Mapping a 200-column dataset blind is rarely what they meant.
+
+### 3. Pull sample rows and column stats
+
+The dataset's *most recent* sample and per-column stats come straight
+out of step 2's describe call when you include `sample` and `stats`.
+Use this step only when you need a fresher sample, finer-grained
+stats, or histograms.
+
+To enqueue a brand-new sampling job (async — returns a job id you
+must poll with `narrative_jobs_describe(job_ids: ["<id>"])` until
+`state` is `completed`):
+
+```
+narrative_dataset_request_sample(dataset_id: <id>)
+```
+
+There is no `limit` parameter; the platform decides sample size. Skip
+this if the sample returned from step 2 is recent enough.
+
+To pull per-column stats without re-describing the dataset, or to
+opt into histograms:
+
+```
+narrative_dataset_get_column_stats(
+  dataset_id: <id>,
+  columns: ["<name>", "<name>"],
+  include: ["basic_column_stats"]
+)
+```
+
+`columns` is an array — omit it to get stats for every column with
+stats (one call covers a 200-column dataset). Pass
+`include: ["basic_column_stats", "histogram"]` with a
+`histogram_bin_limit` (e.g., 25) when you need value distributions;
+histograms are off by default because they can blow the response cap
+on wide columns.
+
+If stats are missing entirely, call
+`narrative_dataset_recalculate_statistics(dataset_id: <id>)` (async,
+returns a `recalculation_id`) and proceed with sample data only,
+noting it in a `data_quality` global warning. Don't block on the
+recalculation completing.
+
+What to look for in stats:
+
+- `null_rate` — high null rates (>30%) → per-suggestion `data_quality` warning
+- `distinct_count` and `top_values` — clue to enum-like columns
+- `min`/`max` — clue to numeric ranges, timestamps, identifiers
+
+What to look for in sample rows:
+
+- Email shape (`@` symbol), phone shape, hash length (32 = MD5, 40 = SHA1, 64 = SHA256)
+- ISO timestamp shape, US ZIP shape, IATA codes, etc.
+- Whether a column is a literal type discriminator (e.g., `'email'`, `'phone'`, `'sha256_email'`)
+
+### 4. Find candidate Rosetta Stone attributes
+
+For each column (or column cluster — see "object_mapping" below):
+
+```
+narrative_attributes_search(
+  search_term: "<column semantic, e.g. 'email identifier'>",
+  per_page: 5
+)
+```
+
+`per_page` defaults to 10 (max 50). Walk additional pages with `page`
+if the first batch is insufficient. Avoid `include: ["schema"]` here
+— it makes the search payload large; describe the shortlisted hits
+instead.
+
+Fire one search per semantic cluster (email, person name, geography,
+currency, date, etc.) **in parallel** — these queries are independent
+and batching them as concurrent tool calls in a single turn is
+materially faster than looping. Same applies to the
+`narrative_attributes_describe` call below: pass every shortlisted ID
+in one array (up to 50) rather than one describe per ID.
+
+Then batch the shortlist into one describe call:
+
+```
+narrative_attributes_describe(
+  attribute_ids: [<id>, <id>, <id>]
+)
+```
+
+`attribute_ids` is an array (up to 50). Default `include` already
+returns both `metadata` and `schema`. This is the **only** way to
+learn the attribute's:
+
+- Type (primitive vs object)
+- Property paths (for object attributes — e.g., `type`, `value`, `context.source`)
+- Enum constraints (`{value1|value2|value3}` in the describe output)
+- Required vs optional properties
+
+Do NOT guess attribute IDs from memory. The catalog changes; describe
+every candidate before mapping to it.
+
+### 5. Decide value_mapping vs object_mapping
+
+| Source shape | Target attribute | Use |
+| --- | --- | --- |
+| Single column → primitive attribute (email, phone, age, country) | Primitive | `value_mapping` |
+| Single column → object attribute where only `value` matters | Object with type/value | `object_mapping` with literal `type` + `value` |
+| Multiple columns → one structured attribute (e.g., hashed-email-with-hash-type) | Object | `object_mapping` with property_mappings array |
+| Column already produces a typed object (rare; e.g., a struct column) | Object | `object_mapping` mirroring the struct |
+
+`value_mapping` shape:
+
+```json
+{
+  "attribute_id": 123,
+  "mapping": {
+    "type": "value_mapping",
+    "expression": "LOWER(email_column)"
+  },
+  "confidence": 95,
+  "reasoning": "Column name and '@' pattern in all sampled values clearly indicate email.",
+  "warnings": []
+}
+```
+
+`object_mapping` shape:
+
+```json
+{
+  "attribute_id": 456,
+  "mapping": {
+    "type": "object_mapping",
+    "property_mappings": [
+      { "path": "type",  "expression": "'sha256_email'", "confidence": 100, "reasoning": "Literal discriminator; all sampled hashes are 64 chars." },
+      { "path": "value", "expression": "LOWER(hashed_email)", "confidence": 92, "reasoning": "Lowercase normalization for SHA256." }
+    ]
+  },
+  "warnings": []
+}
+```
+
+### 6. Validate every expression with NQL
+
+`narrative_nql_validate` takes a full NQL query (parameter name
+`nql`), not a bare expression. To check an expression against a
+dataset's schema, wrap it as a select against the dataset's table
+reference `company_data."<dataset_id>"`:
+
+```
+narrative_nql_validate(
+  nql: 'select <your expression> from company_data."<dataset_id>"'
+)
+```
+
+A success response means the expression compiles against the
+dataset's schema. A structured error points at the offending token.
+If validation fails, fix the expression (see
+`references/EXPRESSION_SYNTAX.md`) and re-validate. Do **not** suggest
+a mapping with an expression that has not been validated.
+
+Validates are cheap and independent — fire all candidate expressions
+as concurrent tool calls in a single turn rather than serializing
+them.
+
+Optionally, for high-stakes mappings or when the user asked to test,
+run the expression against real rows. `narrative_nql_run` is
+**asynchronous** — it returns a job descriptor; poll with
+`narrative_jobs_describe(job_ids: ["<id>"])` until `state` is
+`completed`, `failed`, or `cancelled`:
+
+```
+narrative_nql_run(
+  nql: 'select <expression> as mapped, "<source_column>" as source from company_data."<dataset_id>" limit 25'
+)
+```
+
+Use the run results to:
+
+- Confirm the transformation produces what you expected on real data
+- Catch silent type coercions (e.g., string → null because of a
+  malformed cast)
+- Drop confidence by ≥20 points and add an `enum_mismatch` warning if
+  the output values don't match the target attribute's enum
+
+### 7. Score confidence
+
+| Range | Use when |
+| --- | --- |
+| 95-100 | Clear semantic match (column name + all-sample-pattern matches), well-known standard (email, ISO timestamp, US state code, SHA256 hash). |
+| 85-94 | Strong pattern with minor ambiguity (e.g., `id` column that is *probably* a user identifier given the sample). |
+| 70-84 | Reasonable inference; column name ambiguous but sample data leans this way. |
+| Below 70 | Multiple valid interpretations or sparse evidence. Include the suggestion but flag for user verification. |
+
+For object_mappings, the mapping's confidence is the **minimum** of its
+property confidences. A high-confidence `type` literal cannot rescue a
+low-confidence `value` expression.
+
+### 8. Emit the response object
+
+Return JSON in this shape:
+
+```json
+{
+  "type": "final_answer",
+  "data": {
+    "summary": "<2-4 sentence overview, first person 'I'>",
+    "suggested_mappings": [ /* one entry per mapped column */ ],
+    "warnings": [ /* dataset-wide concerns */ ]
+  }
+}
+```
+
+Each entry in `suggested_mappings` follows the `value_mapping` or
+`object_mapping` shape from step 5. Each `warnings` entry is a string
+naming a dataset-wide concern (e.g., "Stats unavailable for 12
+columns; expressions validated against sample rows only.").
+
+If nothing is mappable, return an empty `suggested_mappings` and use
+the summary to recommend the user define a custom attribute, naming
+the specific columns that have no Rosetta Stone equivalent.
+
+## Common cases
+
+### Mapping generation (no existing mappings)
+
+The default. Follow steps 1-8 in order. Sort suggested_mappings by
+confidence descending; for object_mappings, sort by the minimum
+property confidence.
+
+### Evaluate existing mappings
+
+If `narrative_datasets_describe` (with `include: ["mappings"]`)
+returns a non-empty `mappings[]` array, or the user said "evaluate" /
+"rate" / "why is X low confidence":
+
+1. Skip the attribute-search step — the target attribute is already
+   chosen. Pass the existing attribute IDs as an array to
+   `narrative_attributes_describe(attribute_ids: [<id>, ...])`.
+2. For each existing mapping, build a query that selects the mapping
+   expression and the underlying source columns with a `limit` cap,
+   and submit it via `narrative_nql_run(nql: '...')`. Poll the
+   returned job with `narrative_jobs_describe(job_ids: ["<id>"])`
+   until `state` is `completed`, then read the result rows to see
+   what the mapping actually produces.
+3. Score confidence per the table above, using *execution evidence*
+   not just static reasoning.
+4. Emit a `final_answer` whose `data` has `evaluations[]` and
+   `warnings[]`. Each evaluation entry has `attribute_id`, `confidence`,
+   `reasoning`, an optional `suggested_fix`, and — for object_mappings —
+   `property_scores[]` with one entry per property_mapping path.
+5. Include a `suggested_fix` on any recommendation that has a concrete,
+   testable replacement expression. Validate every `suggested_fix`
+   expression with `narrative_nql_validate` first.
+
+### Improve a single mapping expression
+
+If the user pasted an expression and feedback (e.g., "lowercase the
+emails, our match rate is bad"):
+
+1. Pull the existing sample via
+   `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`
+   so you can see what the relevant column actually contains. Only
+   enqueue a fresh `narrative_dataset_request_sample` if the existing
+   sample is stale or missing.
+2. Generate a single revised expression.
+3. Validate it: wrap as a select and call `narrative_nql_validate(nql: ...)`.
+   If it fails, fix and revalidate.
+4. Return a `final_answer` whose `data` contains the revised
+   `expression`, its `confidence`, `reasoning`, and an optional
+   `warnings[]` array.
+
+Do not re-run the full generation flow for a one-line improvement.
+
+## Edge cases and gotchas
+
+- **Reserved SQL identifiers MUST be double-quoted.** `type`, `value`,
+  `user`, `order`, `group`, `select` are reserved. Write
+  `column."type"`, never `column.type`. See `references/EXPRESSION_SYNTAX.md`.
+- **Enum constraints are case-sensitive.** `'SHA256'` does NOT match
+  `'sha256_email'`. When source values don't match the enum, generate
+  a `CASE WHEN` and lower confidence. See `references/ENUM_HANDLING.md`.
+- **Null handling is automatic at runtime.** Do NOT add `COALESCE` to
+  mask nulls and do NOT flag null inputs as edge cases. Nulls in test
+  results from null inputs are expected.
+- **Object-mapping property_mappings is replace-all.** When suggesting
+  a fix to one property of an object mapping, include *every* existing
+  property_mapping in the suggested mapping — the API replaces the whole
+  array.
+- **Custom attributes are a fallback, not a primary path.** Only mention
+  them in the summary when (a) zero Rosetta Stone matches exist for the
+  dataset, or (b) several columns are clearly proprietary
+  (internal_id, custom_metric_x, etc.).
+- **Don't paraphrase the attribute catalog.** If you'd benefit from the
+  attribute description, just call `narrative_attributes_describe` —
+  don't reason from the search snippet alone.
+- **Mapping confidence ≠ NQL validity.** A 100% valid NQL expression
+  can still be a low-confidence mapping (e.g., `name` column → first
+  name attribute vs full name attribute). Validate syntactically, then
+  score semantically.
+- **Token economy.** Prefer the existing sample returned by
+  `narrative_datasets_describe(include: ["sample"])` over enqueuing a
+  fresh `narrative_dataset_request_sample` job. The existing sample is
+  almost always enough to spot the patterns this skill needs, and
+  re-sampling costs a job round-trip.
+- **Skip underscore-prefixed columns.** Columns starting with `_`
+  (e.g., `_nio_last_modified_at`, `_nio_sample_128`) are reserved
+  platform-managed columns. The platform auto-generates mappings for
+  them when needed (tagged `nio_system` / `nio_dataset_implicit_attribute`
+  in `mappings[]`). Don't propose mappings for them and don't list
+  them as unmapped in warnings.
+
+## Voice
+
+Use first person ("I analyzed 12 columns…") and conversational language
+("cleaned up", not "normalized") in the `summary` field and in
+`reasoning` fields — these strings are user-facing in the Narrative
+Platform UI's Rosetta Stone normalization tab.
+
+## Harness fallbacks
+
+If `narrative-mcp` is unavailable:
+
+- Ask the user to paste the dataset's schema + 10-25 sample rows + the
+  Rosetta Stone attribute IDs they're considering (or to run
+  `curl https://api.narrative.io/datasets/<id>` and paste the response).
+- With that context pasted in, apply steps 5-8 of the procedure
+  manually — you can't validate NQL syntactically without the server,
+  so add a global warning saying expressions were not
+  server-validated and confidence is reduced by 10 points across the
+  board.
+- Never silently degrade. If you can't validate, say so explicitly in
+  the summary.
+
+## Further reading
+
+- `references/EXPRESSION_SYNTAX.md` — SQL/NQL quoting, function, and
+  CASE WHEN rules. Read when an expression fails
+  `narrative_nql_validate` or when mapping a column with a
+  reserved-word name.
+- `references/ENUM_HANDLING.md` — generation-vs-evaluation rules for
+  enum-constrained attributes, including CASE WHEN transformation
+  patterns. Read when `narrative_attributes_describe` shows
+  `{value1|value2|...}` constraints on the target attribute or
+  property.
+- `references/KB_RESEARCH.md` — how to query the
+  `narrative-knowledge-base` MCP server for Rosetta Stone best
+  practices and NQL function/operator references when the local
+  reference files aren't enough.

@@ -6,11 +6,11 @@
   },
   "plugins": [
     {
-      "name": "example",
-      "description": "Example plugin demonstrating the skill template structure. Replace or remove when adding your own plugins.",
+      "name": "narrative-common",
+      "description": "Common Narrative workflows backed by the narrative-mcp server — starting with Rosetta Stone attribute mapping generation, evaluation, and improvement.",
       "version": "0.1.0",
       "author": { "name": "Narrative I/O" },
-      "source": "./plugins/example"
+      "source": "./plugins/narrative-common"
     }
   ]
 }

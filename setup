@@ -26,16 +26,20 @@ claude plugin marketplace add "$SCRIPT_DIR"
 
 echo "Installing plugins..."
 # Parse the top-level plugins[].name entries from marketplace.json.
-PLUGIN_NAMES=$(awk '
-  /"plugins"[[:space:]]*:/ { in_plugins=1; next }
-  in_plugins && /"name"[[:space:]]*:/ {
-    match($0, /"name"[[:space:]]*:[[:space:]]*"[^"]+"/)
-    s = substr($0, RSTART, RLENGTH)
-    sub(/^"name"[[:space:]]*:[[:space:]]*"/, "", s)
-    sub(/"$/, "", s)
-    print s
-  }
+if command -v jq >/dev/null 2>&1; then
+  PLUGIN_NAMES=$(jq -r '.plugins[].name' "$MARKETPLACE_JSON")
+elif command -v python3 >/dev/null 2>&1; then
+  PLUGIN_NAMES=$(python3 -c '
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+for p in data.get("plugins", []):
+    print(p["name"])
 ' "$MARKETPLACE_JSON")
+else
+  echo "error: neither 'jq' nor 'python3' is available to parse marketplace.json." >&2
+  exit 1
+fi
 
 for name in $PLUGIN_NAMES; do
   echo "  - $name"
