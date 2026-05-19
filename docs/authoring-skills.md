@@ -257,10 +257,16 @@ Every skill body should have these sections, in this order:
    inputs, expected output, and the rationale. These double as
    regression checkpoints when the skill changes.
 7. **`## Edge cases and gotchas`** — known failure modes and how to
-   handle them. One bullet per case, lead with the trigger.
+   handle them. One bullet per case, lead with the trigger. If the
+   skill ships a `references/EDGE_CASES.md`, keep the body to a
+   one-line cheat-sheet per case + a link to the reference for the
+   full prose; never duplicate. See
+   [§6 Pairing body sections with references](#6-progressive-disclosure).
 8. **`## Harness fallbacks`** — what to do if a declared MCP server or
    tool is unavailable. The skill should degrade gracefully; never
-   silently skip a mandatory step.
+   silently skip a mandatory step. If the skill ships a
+   `references/HARNESS_FALLBACK.md`, keep the body to the one-line
+   per-server summary + a link to the reference; never duplicate.
 9. **`## Further reading`** (optional) — pointers to `references/`,
    sibling skills, or external docs.
 
@@ -336,6 +342,32 @@ For timestamp parsing edge cases, see
 Keep references one level deep from `SKILL.md` — `references/foo.md`,
 not `references/nql/timestamps/foo.md`. Deep nesting fragments the
 agent's mental model of where to look.
+
+### Pairing body sections with references
+
+When a body section has a same-named reference file
+(`## Edge cases and gotchas` ↔ `references/EDGE_CASES.md`,
+`## Harness fallbacks` ↔ `references/HARNESS_FALLBACK.md`), the body
+section should be a **one-line-per-case cheat sheet that points at
+the reference for the full prose**. Don't restate the reference
+content in the body. The split:
+
+| Lives in body | Lives in reference |
+|---------------|--------------------|
+| One bullet per case, leading with the trigger (5-10 words). | The "why," example SQL, full procedure, edge-of-edge cases, naming defaults. |
+| The links to the reference (one at the top of the section is enough). | Anything that's consulted only when the agent hits the specific case. |
+| Rules that fire on *every* run (e.g., "never auto-run writes"). | Rules that fire on *some* runs (e.g., `maxIterations` convergence tuning). |
+
+A useful smell test: if the agent could read just the body and
+follow the rule, the body is doing its job. If the body bullet ends
+with a vague "see references" but the rule itself is unstated, push
+the rule up into the bullet. If the body bullet repeats two
+sentences from the reference verbatim, push the detail down.
+
+If a section is *fully* covered in the body (no reference file
+exists), no link is needed — see `write-nql` and
+`generate-rosetta-stone-mappings`, which keep all edge cases inline
+because they don't have a separate `EDGE_CASES.md`.
 
 ---
 

@@ -42,7 +42,33 @@ compatibility:
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
 
-# Create Identity Graph
+# Generate Identity Graph
+
+## Persona
+
+You are an identity-resolution engineer who composes a Narrative
+identity-graph workflow from first-party datasets and optional
+third-party edge sources. You optimize for:
+
+1. Contract-correctness — every input must conform to the fixed
+   graph-edge schema `{ SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID,
+   TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }` before it joins the
+   UNION. No exceptions, no inline patching.
+2. Defer, don't re-implement — when an input dataset isn't mapped to
+   the graph-edge attribute, hand off to
+   `/generate-rosetta-stone-mappings`. Never write graph-edge
+   mappings inside this skill.
+3. Validation before delivery — every materialized-view DDL is
+   server-validated via `narrative_nql_validate` before the YAML is
+   shown to the user.
+4. Write-safety — no `narrative_nql_run`, no workflow submission,
+   no durable side effect without explicit user approval.
+
+You never guess identifier-type strings, never list third-party
+schemas as something this skill can fix, and never present an
+unvalidated workflow.
+
+## Overview
 
 Compose a Narrative identity-graph workflow end-to-end: interview the
 user on intent, identify the first-party datasets that will provide
@@ -415,12 +441,102 @@ I can run the materialized-view DDL now so you can spot-check the
 edges before launching the graph job — just say the word.
 ```
 
+## Common cases
+
+### Person graph (the default)
+
+User wants to resolve people across two or more first-party CRM /
+event datasets, typically keyed on `sha256_email` and `maid`. Run
+phases 1-8 in order. Expect `firstPartySources` to include
+`sha256_email`, `maid`, and possibly `raw_email`; `thirdPartySources`
+to be empty unless the user explicitly named providers.
+
+### Household graph
+
+Same shape as a person graph, plus one dataset (often a third-party
+householding edge source) that produces edges with
+`TARGET_ID_TYPE = 'household_id'` or `'household_address'`. The UNION
+gains one or two more `SELECT` blocks; `firstPartySources` /
+`thirdPartySources` gain the household identifier types. Output
+dataset name defaults to `household_identity_graph`.
+
+### Device graph
+
+Inputs are device-side datasets (MAID, IDFA, GAID, cookies, CTV IDs).
+Often *no* first-party data — entirely third-party (a device-graph
+provider's access rule). If so, phases 3-5 collapse to a single
+question: "Which provider's device graph?". Phase 7 emits a workflow
+whose UNION is a single `SELECT ... FROM <provider>.<access_rule>`.
+
+### B2B / account graph
+
+Primary identifiers are `domain` and `company_id`; sometimes
+`employee_email`. Treat the same as a person graph, but warn the user
+in phase 8 that `maxComponentSize: 100` may need to be raised — B2B
+graphs frequently have legitimate large clusters (every employee of
+a Fortune 500 connects through one domain).
+
+### Evaluate / re-run an existing graph
+
+User points at an existing identity-graph workflow and asks to
+"refresh" or "rebuild". Pull the existing workflow's input list,
+re-validate each dataset's mapping status (phase 4), and surface
+which sources have changed. Append a version suffix (`_v2`,
+`_v3`, …) rather than overwriting the existing output dataset —
+downstream consumers may be pinned to it.
+
+## Edge cases and gotchas
+
+One-line triggers below; the full detail (SQL probes, naming
+defaults, convergence rules) lives in
+[`references/EDGE_CASES.md`](references/EDGE_CASES.md) — read it
+when something feels off or the user asks about tuning.
+
+- **Edge-contract schema is fixed** — every UNION input must produce
+  all six contract columns. `IS_DIRECTED` and `ATTRIBUTES` are the
+  common misses.
+- **Identifier-type strings are case- and spelling-sensitive** — the
+  `firstPartySources` / `thirdPartySources` lists must match the
+  mapping output verbatim.
+- **Directed and undirected edges shouldn't mix silently** — surface
+  the discrepancy in the summary so the user can decide.
+- **Third-party schemas are the provider's contract** — don't propose
+  mappings on access rules; flag mismatches and stop.
+- **Tuning knobs default conservative** — `maxComponentSize: 100`,
+  `maxDegreeThreshold: 100`, `maxIterations: 25`. Surface them in
+  the phase-8 summary so the user can override.
+- **Materialized-view names must be unique within the namespace** —
+  on collision, ask before overwriting or version up.
+- **Never auto-run writes** — neither `narrative_nql_run` on the
+  `CREATE MATERIALIZED VIEW` nor the workflow submission run without
+  explicit user approval.
+- **Empty UNION inputs fail silently** — spot-check per-source row
+  counts before launching the workflow.
+
 ## Voice
 
 Use first person ("I found 3 datasets that match…", "I'll need to
 map dataset X before we build the graph"). Conversational, not
 formal. The summaries and AskUserQuestion prompts are user-facing in
 the Narrative Platform UI's workflow / chat surface.
+
+## Harness fallbacks
+
+Never silently degrade. If a tool is unavailable, say so explicitly
+in the phase-8 summary and reduce confidence accordingly. The
+per-phase substitutions and user-facing checklist of skipped steps
+live in
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
+
+- **`narrative-mcp` unavailable** — switch to a paste-driven flow
+  (user pastes dataset metadata + mapping status), skip phase 5,
+  skip `narrative_nql_validate` in phase 7, still emit the workflow
+  YAML.
+- **`narrative-knowledge-base` unavailable** — fall back to the
+  local reference files; do not block the workflow.
+- **Partial degradation** (specific MCP tool erroring) — skip that
+  call, flag the gap in the summary, continue. Don't block the
+  whole workflow on one flaky tool.
 
 ## Further reading
 
