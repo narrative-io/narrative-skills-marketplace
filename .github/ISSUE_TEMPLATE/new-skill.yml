@@ -1,0 +1,86 @@
+name: Suggest a new skill
+description: Propose a new skill for the marketplace.
+title: "[new skill] "
+labels: ["skill:new"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a new skill. Skills follow the **verb-noun** pattern
+        (e.g. `/triage-lead`, `/create-deck`). See `CLAUDE.md` for the full list
+        of approved verbs and naming rules.
+
+  - type: input
+    id: name
+    attributes:
+      label: Proposed slash command
+      description: Lowercase, hyphen-separated, verb-noun (no leading slash).
+      placeholder: e.g. write-changelog
+    validations:
+      required: true
+
+  - type: input
+    id: plugin
+    attributes:
+      label: Target plugin
+      description: |
+        Which plugin should host this skill? Use an existing plugin name from
+        `plugins/`, or write "new plugin: <proposed-name>" if a new plugin is
+        needed.
+      placeholder: e.g. narrative-dev, or "new plugin: narrative-finance"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What problem does this skill solve? Who needs it and how often?
+      placeholder: |
+        Today, when I need to X, I have to manually Y because…
+    validations:
+      required: true
+
+  - type: textarea
+    id: triggers
+    attributes:
+      label: Trigger phrases
+      description: What should a user say to invoke this? List 3-5 natural phrasings.
+      placeholder: |
+        - "write the changelog"
+        - "draft release notes"
+        - "summarize what shipped this week"
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Rough workflow (phases)
+      description: |
+        Sketch the interactive phases. Skills are interactive workflows, not
+        reference docs — one question at a time, drafts before actions.
+      placeholder: |
+        Phase 1. Gather inputs (which repo, which date range)
+        Phase 2. Pull commit history + Shortcut tickets
+        Phase 3. Draft the changelog
+        Phase 4. Review with user, refine
+        Phase 5. Save artifact
+    validations:
+      required: true
+
+  - type: textarea
+    id: overlap
+    attributes:
+      label: Existing skills this overlaps with
+      description: |
+        Any existing skills that touch this space? Why is a new skill the right
+        move vs. extending an existing one?
+      placeholder: |
+        `/commit` handles single commits but there's no rollup across a release window.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: References, prior art, mockups, edge cases.
