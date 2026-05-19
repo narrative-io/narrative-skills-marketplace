@@ -74,7 +74,17 @@ Common Narrative workflows backed by the narrative-mcp server — starting with 
 
 | Skill | Use when |
 |-------|----------|
+| `/design-analysis` | "why did X drop", "is there a relationship between A and B", "who are our highest-value customers", "what's driving the change in Y", "investigate this trend", "design an analysis for", "scope this analytical question". |
 | `/generate-rosetta-stone-mappings` | "map this dataset to Rosetta Stone", "suggest normalized attributes for dataset N", "evaluate the mappings on dataset N", "why is this mapping low confidence", "fix this expression", "improve this NQL mapping expression". |
+| `/write-nql` | "write an NQL query for X", "query this dataset", "validate this NQL", "run NQL against dataset <id>", "how many rows match Y", "show me the top N records from <dataset>". |
+
+### `narrative-identity`
+
+Identity-graph workflows backed by the narrative-mcp server — pre-graph data-quality auditing, edge-quality analysis, and graph-build hygiene.
+
+| Skill | Use when |
+|-------|----------|
+| `/triage-pregraph-data` | "audit this dataset before the graph build", "find bad edges in <dataset>", "check identity data quality", "recommend filters for the graph build", "find hub identifiers in <dataset>", "quantify damage from <identifier_type>", "pre-graph DQ". |
 
 <!-- END PLUGINS -->
 
