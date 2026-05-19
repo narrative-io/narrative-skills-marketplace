@@ -28,9 +28,6 @@ compatibility:
       - narrative_datasets_search
       - narrative_datasets_describe
       - narrative_dataset_get_column_stats
-      - narrative_nql_validate
-      - narrative_nql_run
-      - narrative_jobs_describe
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -218,21 +215,38 @@ Aim for 5–12 hypotheses on a typical dataset. Fewer than 5 usually
 means you stopped thinking too early; more than 12 usually means you
 need to consolidate.
 
-### 4. Test every hypothesis in parallel — mandatory
+### 4. Hand off hypotheses to `/design-analysis` for parallel testing — mandatory
 
-For each hypothesis, write one query that quantifies the issue.
-**Issue all hypothesis queries concurrently in a single turn** — not
-serially. This phase is embarrassingly parallel; treat it that way.
+This skill **does not write or run queries directly**. Query
+authoring and execution belong to `/design-analysis`, which owns
+the `/write-nql` orchestration. Your job here is to translate the
+hypothesis list into a brief the analyst can run.
 
-For very wide audits (15+ hypotheses), consider spawning a sub-agent
-per hypothesis cluster so each owns its own draft → validate → run
-loop and only the consolidated results return to the parent.
+Compose a single brief and pass it to `/design-analysis`. In the
+brief, mark every hypothesis as a peer-level analytical spec with
+no inter-hypothesis dependencies — that flags them as parallelizable,
+and the analyst will issue them as one concurrent batch of
+`/write-nql` calls per its Phase 6.
 
-If `--no-parallel` was passed, run serially but flag in the report
-that this should be parallelized in production.
+#### What each hypothesis spec must contain
 
-For each query, what to quantify (pick the slice that fits the
-hypothesis):
+For every hypothesis, the spec passed to `/design-analysis` includes:
+
+- **Purpose** — the falsifiable claim from Phase 3, restated.
+- **Source table + grain** — from Phase 2.
+- **Filters + time window** — what slice of rows this hypothesis
+  examines.
+- **Group-by dimensions** — usually the identifier column under
+  test.
+- **Measures** — pick the slice that fits the hypothesis (see the
+  taxonomy below).
+- **Expected output shape** — e.g. "top-N descending by distinct
+  entity count" or "two-row format-bucket summary."
+- **Validation check** — e.g. "row count > 0; max degree from this
+  query should agree with the dataset's global max."
+- **Dependency: none** — explicit, so the analyst parallelizes.
+
+What to quantify per hypothesis (pick the slice that fits):
 
 - **Distinct entities per identifier value** — `COUNT(DISTINCT entity_id) GROUP BY identifier_value`, top-N descending.
 - **Degree distribution** — top-N and the long tail (e.g., 99th, 99.9th, max percentiles).
@@ -240,15 +254,27 @@ hypothesis):
 - **Format distribution** — `LENGTH`, `REGEXP_LIKE`, prefix patterns; cardinality per format bucket.
 - **Share of total rows affected** — confirmed-issue rows / total rows. An issue at 0.01% is a different problem from one at 5%.
 
-Hand each query off to the query-writing skill (`/write-nql` for
-Narrative datasets). The brief sent to the query writer for each
-hypothesis includes: purpose, source table + grain, filters,
-group-by, measures, expected output shape, and a validation check
-(e.g., "row count > 0; max degree from this query should agree with
-the dataset's global max").
+#### Invocation
 
-Wait for terminal job state on every hypothesis query before moving
-to Phase 5. Do not interpret partial results.
+```
+/design-analysis --dataset <id> --brief-only
+  Test the following pre-graph data-quality hypotheses against
+  <table>. Each is independent of the others; run them all in one
+  parallel batch and return consolidated results.
+
+  H1: <purpose, source, filters, group-by, measures, output, validation>
+  H2: <…>
+  …
+```
+
+If `--no-parallel` was passed to this skill, forward that intent to
+the analyst ("run hypotheses serially for harness compatibility")
+and flag in the audit report that the next run should be
+parallelized.
+
+Wait for `/design-analysis` to return consolidated results — one
+row per hypothesis — before moving to Phase 5. Do not interpret
+partial results.
 
 ### 5. Quantify the damage — mandatory
 
@@ -337,12 +363,15 @@ explicit ask.
 
 ## Recommended next step
 - Materialize a view with the filters above applied; pass it to the
-  graph builder. The downstream `/write-nql` invocations for each
-  filter expression are listed below.
+  graph builder. Hand the filter expressions to `/design-analysis`
+  as a new brief ("materialize a filtered view of <table> per the
+  audit's recommended filters") and let the analyst orchestrate
+  the `/write-nql` invocations that produce the view.
 ```
 
 The report is the deliverable. This skill stops at the report; it
-does not run the filters or trigger the graph build.
+does not author queries, run filters, or trigger the graph build.
+All query work routes through `/design-analysis`.
 
 ## Common cases
 
@@ -415,30 +444,37 @@ If `narrative-mcp` is unavailable (or `--no-schema` was passed):
 - Ask the user to paste the relevant table schema (name, grain,
   identifier columns + types + known caveats) and a representative
   sample.
-- With that pasted, run Phases 3–7 normally; substitute "imagined
-  query" plain-English drafts where the brief would have gone to
-  `/write-nql`. Annotate the report: "queries not executed against
-  live MCP; the user must run them through their query tool and
-  feed results back."
-- Never silently skip the evidence-collection step. An audit with no
-  numbers is worse than no audit.
+- With that pasted, run Phases 3, 5, 6, 7 normally; substitute
+  "imagined query" plain-English drafts in Phase 4 where the brief
+  would have gone to `/design-analysis`. Annotate the report:
+  "queries not executed against live MCP; the user must run them
+  through their query tool and feed results back."
+- Never silently skip the evidence-collection step. An audit with
+  no numbers is worse than no audit.
 
-If the query-writing skill (`/write-nql`) is unavailable:
+If `/design-analysis` is unavailable:
 
-- Issue queries via whatever query tool the user has. Insist on the
-  parallel-execution pattern; serial execution multiplies wall-clock
-  time and erodes the audit's value.
+- This skill cannot run end-to-end without the analyst. The
+  separation of concerns is a hard architectural rule, not a
+  preference. Stop, surface the dependency, and hand the audit
+  framing + hypothesis list to the user as a manual brief they can
+  pass to whatever analytical tooling they have. Insist on the
+  parallel-execution pattern in that brief — serial execution
+  multiplies wall-clock time and erodes the audit's value.
 
 ## Further reading
 
 - `docs/authoring-skills.md` — house conventions this skill follows.
-- `plugins/narrative-common/skills/design-analysis/` — sibling skill
-  providing the question-framing discipline this skill inherits in
-  Phase 2.
-- `plugins/narrative-common/skills/write-nql/` — the canonical
-  downstream query writer for Narrative datasets. Each hypothesis
-  query and each filter expression in the audit report is intended
-  to feed one `/write-nql` invocation.
+- `plugins/narrative-common/skills/design-analysis/` — the analyst.
+  This skill hands every query workload (hypothesis testing in
+  Phase 4, filter materialization in the next-step recommendation
+  of Phase 7) off to `/design-analysis`; the analyst owns
+  `/write-nql` orchestration. Do not call `/write-nql` from this
+  skill directly.
+- `plugins/narrative-common/skills/write-nql/` — the query writer.
+  Reached transitively via `/design-analysis`, not directly. Listed
+  here for context on what the analyst will be invoking on this
+  skill's behalf.
 - `plugins/narrative-common/skills/generate-rosetta-stone-mappings/`
   — run first if the dataset's identifier columns are not yet mapped
   to Rosetta Stone attributes.
