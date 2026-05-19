@@ -167,21 +167,67 @@ weigh in — they account for the majority of first-pass failures.
 
 ### Table references
 
-Datasets are addressed as `company_data."<dataset_id>"`. The dataset
-id is numeric and **must** be double-quoted because it would otherwise
-be parsed as a number:
+Every table reference is **schema-qualified**. The three schemas you'll
+meet in practice:
+
+| Schema | Holds | Example |
+| --- | --- | --- |
+| `company_data` | Your own datasets, views, and the data shared into your tenant. | `company_data.web_events` |
+| `<provider_slug>` | Another company's resources, exposed to you through an access rule. The schema name is that company's slug. | `acme."ar_fitness"` |
+| `narrative` | Platform-wide special tables — most notably `narrative.rosetta_stone` for global identity resolution. | `narrative.rosetta_stone` |
+
+Within a schema, a dataset, view, or access rule can be addressed two
+ways:
+
+| Form | Looks like | When to use |
+| --- | --- | --- |
+| **`unique_name`** (preferred) | `company_data.web_events` | Always, when you know it. Stable across environments, readable in code review, and survives dataset re-creation. Datasets, views, and access rules share a single `unique_name` namespace, so the same syntax works for all three. |
+| Numeric id | `company_data."12345"` | Only when you don't have a `unique_name` — e.g. a freshly created dataset, or one referenced from a job payload. The id is numeric and **must** be double-quoted, otherwise NQL parses it as a number. |
 
 ```sql
-SELECT col_a, col_b FROM company_data."12345" LIMIT 10
+-- Preferred: address by unique_name
+SELECT user_id, email FROM company_data.web_events LIMIT 10
+
+-- Fallback: address by numeric id (quoted)
+SELECT user_id, email FROM company_data."12345" LIMIT 10
 ```
 
-For cross-dataset queries, fully qualify each side and alias them:
+The schema name itself is just an identifier, so `"company_data"."12345"`
+is equivalent to `company_data."12345"` — bare is the convention.
+
+**Quoting a `unique_name`.** Leave safe snake_case slugs unquoted
+(`web_events`). Double-quote when the name collides with a reserved
+word, contains uppercase letters or dashes, or — as the docs do for
+access rules — when you want to be defensive about an externally
+supplied name: `acme."ar_fitness"`, `company_data."Order_History"`.
+
+**Cross-dataset queries.** Fully qualify each side and alias them. This
+works identically whether you mix forms or not:
 
 ```sql
-SELECT a.id, b.email
-FROM company_data."12345" a
-JOIN company_data."67890" b ON a.user_id = b.user_id
+SELECT u.user_id, o.order_id, o.total_cents
+FROM company_data.users        AS u
+JOIN company_data.order_history AS o ON u.user_id = o.user_id
 ```
+
+**Special: Rosetta Stone scopes.** The `_rosetta_stone` virtual table
+attaches to any schema or dataset to surface normalized identity data.
+The same name/id rule applies to the dataset segment:
+
+```sql
+-- Global
+FROM narrative.rosetta_stone
+-- Company-scoped
+FROM company_data._rosetta_stone
+-- Dataset-scoped, by unique_name
+FROM company_data.web_events._rosetta_stone
+-- Dataset-scoped, by id
+FROM company_data."12345"._rosetta_stone
+```
+
+When you don't already know the `unique_name`, look it up with
+`narrative_datasets_search` / `narrative_datasets_describe` before
+falling back to the id.
 
 ### Identifier vs. literal quoting
 
@@ -364,27 +410,78 @@ Terminal states:
 
 | `state` | Meaning | Next step |
 | --- | --- | --- |
-| `completed` | Rows are available on the job descriptor | Read `result` / `rows` / `output_url` from the job payload |
-| `failed` | Engine error mid-execution | Read `error` from the job payload; show it to the user verbatim; revise query and retry |
+| `completed` | Job finished. **The payload depends on job type — rows almost never live here.** See "What `completed` actually returns" below. |
+| `failed` | Engine error mid-execution | Read `failures` from the job payload; show it to the user verbatim; revise query and retry |
 | `cancelled` | Operator or timeout abort | Tell the user the job was cancelled; offer to re-run |
 
 Non-terminal states (`queued`, `running`, `processing`) → keep
 polling. Never treat them as a result.
 
+### What `completed` actually returns
+
+The `result` field on a finished job is shaped by the job `type`:
+
+| Job type | Triggered by | `result` payload | Where the rows live |
+| --- | --- | --- | --- |
+| `nql-forecast` | `narrative_nql_run` with `EXPLAIN …` | `{rows, cost}` — an estimate, not actual rows | n/a — forecasts return numbers only |
+| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW …`, or any non-`EXPLAIN` `SELECT` (which is materialized into a dataset) | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
+| `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
+
+### Reading rows after a `materialize-view` job completes
+
+Rows from a `CREATE MATERIALIZED VIEW` (or any executed `SELECT`) are
+never inlined on the job. To see them you have to run a second
+asynchronous job to materialize a sample, then fetch it:
+
+1. **Submit the sampling job.** `narrative_dataset_request_sample(dataset_id: <id>)` → returns a new `job_id`. Use the `dataset_id` from the prior job's `result`.
+2. **Poll that job to completion** with `narrative_jobs_describe(job_ids: ["<sample_job_id>"])`, using the same backoff as above.
+3. **Read the sample rows** with `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`. The sample lives in the control plane and is what `include=["sample"]` returns.
+
+```
+narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS (SELECT …) BUDGET 5 USD")
+  → poll narrative_jobs_describe → result.dataset_id = 1234
+narrative_dataset_request_sample(dataset_id: 1234)
+  → poll narrative_jobs_describe → completed
+narrative_datasets_describe(dataset_ids: [1234], include: ["sample"])
+  → returns the sample rows (capped at 1,000)
+```
+
+The sample is a **point-in-time snapshot capped at 1,000 rows** of the
+dataset as it stood when the sample job ran. All columns are included;
+data is unmodified (Rosetta Stone attributes show their normalized
+form). Samples persist on the control plane until deleted, so re-runs
+of `narrative_datasets_describe(include=["sample"])` return the same
+snapshot until a new sampling job is enqueued.
+
+**1,000-row implication for query design.** When the goal is for the
+user to inspect every row of the intended output (a dedup check, a
+small enumerated set, an audit cut), cap the query itself at 1,000
+rows — `LIMIT 1000` on the inner `SELECT`, or a `WHERE`/`GROUP BY`
+that you know produces ≤ 1,000 rows. If the materialized dataset has
+more than 1,000 rows, the sample is just an arbitrary 1,000 of them
+and rows past the cap are invisible without exporting. For the
+opposite case — billions of rows you don't actually need to see —
+keep the `LIMIT` low (or push the work into aggregates: `COUNT(*)`,
+`SUM`, `GROUP BY`) to control cost.
+
 ### Cost-of-execution reminder
 
 Every `narrative_nql_run` consumes platform resources and the result
 set is materialized. Default to a `LIMIT` clause whenever the user's
-question doesn't explicitly need every row. Push aggregations into
-the query (`COUNT(*)`, `SUM`, `GROUP BY`) instead of pulling raw rows
-back and counting in the agent.
+question doesn't explicitly need every row. Prefer aggregations
+(`COUNT(*)`, `SUM`, `GROUP BY`) over pulling raw rows and counting in
+the agent.
 
 ### Other async tools that follow the same pattern
 
-`narrative_dataset_request_sample` and
+`narrative_dataset_request_sample`,
+`narrative_dataset_refresh_materialized_view`, and
 `narrative_dataset_recalculate_statistics` use the same job-id +
 `narrative_jobs_describe` polling protocol. The state machine and
-backoff above apply identically.
+backoff above apply identically. The recalculation case has one
+caveat: for datasets not yet on the new statistics framework, the
+returned id is **not** a job id and `narrative_jobs_describe` will
+not find it — surface that to the user rather than polling forever.
 
 Submit the validated query:
 
