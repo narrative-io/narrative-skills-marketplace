@@ -21,6 +21,30 @@ fi
 
 MARKETPLACE_NAME=$(grep -m1 '"name"' "$MARKETPLACE_JSON" | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
 
+# Render SKILL.md files from SKILL.md.tmpl templates. Skills using shared
+# snippets (e.g. {{SNIPPET:pin-company-context}}) need this step to
+# produce the SKILL.md that the plugin loader actually reads. See
+# scripts/gen-skill-docs.ts and CLAUDE.md ("Template system") for details.
+if command -v bun >/dev/null 2>&1; then
+  if [ ! -d "$SCRIPT_DIR/node_modules" ] && [ -f "$SCRIPT_DIR/package.json" ]; then
+    echo "Installing template-renderer dependencies..."
+    (cd "$SCRIPT_DIR" && bun install --silent)
+  fi
+  if [ -f "$SCRIPT_DIR/scripts/gen-skill-docs.ts" ]; then
+    echo "Rendering SKILL.md from templates..."
+    (cd "$SCRIPT_DIR" && bun run gen:skill-docs)
+  fi
+else
+  # Bun is required only when there are .tmpl files to render. Without
+  # it, fail loudly only if any .tmpl exists; otherwise the install
+  # proceeds with whatever SKILL.md files are already committed.
+  if find "$SCRIPT_DIR/plugins" -name 'SKILL.md.tmpl' -print -quit | grep -q .; then
+    echo "error: 'bun' is not on PATH but SKILL.md.tmpl templates exist." >&2
+    echo "       Install Bun (https://bun.sh) or commit pre-rendered SKILL.md files." >&2
+    exit 1
+  fi
+fi
+
 echo "Registering plugin marketplace..."
 claude plugin marketplace add "$SCRIPT_DIR"
 

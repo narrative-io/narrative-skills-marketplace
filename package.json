@@ -1,0 +1,13 @@
+{
+  "name": "narrative-skills-marketplace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen:skill-docs": "bun run scripts/gen-skill-docs.ts",
+    "check:skill-docs": "bun run scripts/gen-skill-docs.ts --dry-run"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.5.0"
+  }
+}
