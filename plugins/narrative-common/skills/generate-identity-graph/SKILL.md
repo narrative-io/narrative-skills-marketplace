@@ -1,0 +1,445 @@
+---
+name: generate-identity-graph
+version: 0.1.0
+description: |
+  Interactively build a Narrative identity graph workflow from one or
+  more first-party datasets and (optionally) third-party data sources.
+  Confirms each input dataset is mapped to the Rosetta Stone graph
+  edge attribute (mapping it via /generate-rosetta-stone-mappings if
+  not), then composes and submits a workflow that unions every edge
+  source and labels connected components.
+  Use when: "build an identity graph", "generate an identity graph",
+  "create an identity graph", "stitch these datasets into a graph",
+  "make a graph workflow", "label connected components on these
+  datasets", "I want a person graph / household graph / device graph".
+  (narrative-common)
+compatibility:
+  requires:
+    tools:
+      - AskUserQuestion
+      - Read
+      - Write
+    mcp-servers:
+      - narrative-mcp
+    mcp-tools:
+      - narrative_context_get
+      - narrative_context_search_companies
+      - narrative_context_set_company
+      - narrative_datasets_search
+      - narrative_datasets_describe
+      - narrative_attributes_search
+      - narrative_attributes_describe
+      - narrative_nql_validate
+      - narrative_nql_run
+      - narrative_jobs_describe
+  recommends:
+    mcp-servers:
+      - narrative-knowledge-base
+    mcp-tools:
+      - search_narrative_i_o_knowledge_base
+      - query_docs_filesystem_narrative_i_o_knowledge_base
+---
+<!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
+<!-- Regenerate: bun run gen:skill-docs -->
+
+# Create Identity Graph
+
+Compose a Narrative identity-graph workflow end-to-end: interview the
+user on intent, identify the first-party datasets that will provide
+edges, confirm (or generate) Rosetta Stone graph-edge mappings on
+each, layer in third-party edge sources if the user wants them, and
+emit a runnable workflow YAML that unions every edge dataset into a
+materialized view and runs `LabelConnectedComponents` over it.
+
+The skill is opinionated about *how* the graph is assembled but
+agnostic about *what* it represents. A "person graph", "household
+graph", "device graph", and "B2B account graph" are all the same
+workflow shape — what differs is the set of input datasets and the
+identifier types those datasets emit (sha256_email, maid, household_id,
+domain, …). Use the interview to nail down that shape before touching
+any tools.
+
+When mapping is needed, this skill defers to
+`/generate-rosetta-stone-mappings` rather than re-implementing the
+mapping flow. Don't try to write graph-edge mappings inline.
+
+## When to use
+
+Triggers:
+
+- "Build / create an identity graph from datasets X and Y"
+- "Stitch these datasets into a graph"
+- "Label connected components on these datasets"
+- "I want a person graph / household graph / device graph"
+- "Make a workflow that turns these datasets into a graph"
+
+Do NOT use for:
+
+- One-off NQL `LabelConnectedComponents` queries with no
+  productionization intent — write the NQL directly.
+- Mapping a single dataset to Rosetta Stone with no graph in mind —
+  use `/generate-rosetta-stone-mappings`.
+- Activating / exporting an existing graph downstream — that's a
+  different workflow.
+
+## Procedure
+
+Run phases in order. Phases 1-3 frame the problem; phases 4-6 prepare
+the inputs; phases 7-8 compose and submit. Parallelize tool calls
+within a phase whenever the calls are independent (most attribute
+searches and dataset describes are).
+
+### Phase 1. Frame the use case
+
+Before touching any data, understand what the user is actually trying
+to build. Ask one question at a time via `AskUserQuestion`. Do not
+batch these — the answers gate later phases.
+
+1. **What kind of graph?** Options to offer:
+   - Person graph (people-level identity resolution)
+   - Household graph (people → household stitching)
+   - Device graph (cookies, MAIDs, CTV IDs)
+   - B2B / account graph (domains, companies, employees)
+   - Custom / other (free text)
+
+2. **What's the primary identifier you want to resolve to?**
+   Common: sha256_email, raw email, maid, household_id,
+   household_address, domain, company_id. The user's answer drives
+   which `firstPartySources` / `thirdPartySources` lists you build in
+   phase 7.
+
+3. **What's the use case downstream?** (Activation, measurement,
+   modeling, analytics?) This is context for the workflow `description`
+   and tag, not a hard gate.
+
+Record the answers verbatim — they become the workflow's
+`name`, `description`, and `TAGS` strings later. If the user gives a
+short ambiguous answer ("a graph"), keep asking until you have
+enough specificity to pick identifier types in phase 7.
+
+**Handling incomplete or contradictory responses**: If the user provides
+incomplete or conflicting answers during the interview:
+- Ask targeted follow-up questions to clarify the discrepancy
+- Summarize your understanding and confirm before proceeding
+- Do not advance to later phases until answers are consistent and
+  specific enough to inform dataset and mapping selection
+
+### Phase 2. Pin the company / context
+
+Most Narrative work is scoped to a company. Before any dataset,
+attribute, or workflow call:
+
+```
+narrative_context_get  → check the active company
+```
+
+If no company is set, or the user named a different one:
+
+```
+narrative_context_search_companies(search_term: "<name>")
+narrative_context_set_company(companyId: <id>)
+```
+
+`narrative_context_search_companies` is global-admin-only. Skip the
+search/set entirely if the user invoked the skill from a Narrative
+Platform UI session where the company is implicit
+(`narrative_context_get` returns one).
+
+### Phase 3. Identify first-party input datasets
+
+Ask the user which of their own datasets should contribute edges.
+Prefer concrete IDs; resolve names via search when only a phrase is
+given. Drive this with `AskUserQuestion` plus `narrative_datasets_search`.
+
+For each candidate dataset the user names:
+
+```
+narrative_datasets_search(search_term: "<phrase>")
+```
+
+Then describe the shortlisted datasets in **one batched call**, opting
+into `metadata`, `schema`, and (crucially) `mappings`:
+
+```
+narrative_datasets_describe(
+  dataset_ids: [<id>, <id>, ...],
+  include: ["metadata", "schema", "mappings"]
+)
+```
+
+`dataset_ids` accepts up to 50 IDs — batch them all into the same
+call. Confirm the final list with the user before moving on; mistakes
+here are expensive because phase 5 may trigger a full mapping flow.
+
+**Stop and confirm with the user if**:
+
+- The user gave a vague description and 5+ datasets matched the
+  search — ask them to narrow it.
+- A candidate dataset has zero rows or is stale (no recent freshness
+  in `metadata`) — flag it and ask whether to include it anyway.
+
+### Phase 4. Check graph-edge mapping status
+
+The graph-edge target is a Rosetta Stone attribute whose schema is
+the edge contract `{ SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID,
+TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }`. Don't guess its ID — look
+it up:
+
+```
+narrative_attributes_search(
+  search_term: "graph edge",
+  per_page: 5
+)
+```
+
+Walk additional pages if the first batch doesn't surface a
+graph-edge-shaped attribute. Describe the top candidate to confirm
+the schema:
+
+```
+narrative_attributes_describe(attribute_ids: [<id>])
+```
+
+The right attribute will have properties matching the edge contract
+above (names may be lowercase / snake_case in the catalog — match on
+shape, not exact casing).
+
+Then, for each dataset from phase 3, inspect the `mappings[]` array
+returned by `narrative_datasets_describe(include: ["mappings"])`:
+
+- **Mapped**: at least one entry in `mappings[]` points at the
+  graph-edge attribute ID. Record the dataset as ready.
+- **Unmapped**: no entry references that attribute ID. Record the
+  dataset as needing mapping; it feeds phase 5.
+
+Surface a short table back to the user — one row per dataset, two
+columns (`dataset`, `status: ready | needs mapping`) — and confirm
+before triggering phase 5. The user may opt to drop an unmapped
+dataset rather than map it.
+
+### Phase 5. Map any unmapped datasets
+
+For each dataset flagged "needs mapping" in phase 4, hand off to
+`/generate-rosetta-stone-mappings`, targeting the graph-edge
+attribute specifically:
+
+> "Map dataset `<id>` to the Rosetta Stone graph-edge attribute
+> (`attribute_id: <id>`). I need every column that contributes to
+> SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED,
+> and ATTRIBUTES — this will be an `object_mapping` with
+> property_mappings, not a `value_mapping`."
+
+Run that skill per-dataset, in parallel if more than one is unmapped.
+Wait for the user to approve each set of suggested mappings (or
+amend them) before resuming the graph workflow — the mapping skill
+emits drafts, not applied changes; the user (or a follow-up call)
+must persist them.
+
+If the user declines to map a flagged dataset, drop it from the input
+list and continue. If *every* candidate dataset is unmapped and the
+user declines to map any, stop and report — there's nothing to
+build a graph from.
+
+### Phase 6. Identify third-party edge sources (optional)
+
+Ask, via `AskUserQuestion`:
+
+1. **"Are you augmenting with any third-party data?"** (yes / no /
+   not sure).
+2. If yes: **"Which providers and which access rules?"** Encourage
+   the user to name provider + access-rule pairs (e.g.,
+   `acxiom.consumer_identity_v3`,
+   `liveramp.householding_edges_q1_2026`).
+
+Third-party datasets show up in NQL as
+`<third_party_company>.<access_rule_name>` (a different namespace from
+first-party `company_data."<id>"`). Their schemas must already conform
+to the graph-edge contract — you do **not** map them here; the
+provider does. If the user names a third-party source whose schema
+you can't verify, flag it as a global warning and add it anyway with
+a `TODO` comment in the workflow YAML.
+
+If the user is not sure what third-party data is available, point
+them at the data marketplace via the Narrative Platform UI — this
+skill does not browse the catalog.
+
+### Phase 7. Compose the workflow document
+
+Assemble the workflow YAML using the inputs from phases 1, 3, 5, 6.
+The shape is fixed; only the contents of the UNION and the source
+lists change.
+
+Workflow template:
+
+```yaml
+document:
+  dsl: '1.0.0'
+  namespace: <slug-of-company-name>
+  name: <slug-from-phase-1-graph-kind>-identity-graph
+  version: '1.0.0'
+
+# Workflow to create a simple identity graph
+
+do:
+  # ─── Universal edges ──────────────────────────────────────────────
+  # UNION ALL all of the input edges from both first and third party
+  # data sources, leveraging the rosetta stone graph edge attribute.
+  # LabelConnectedComponents expects a single edge dataset as input.
+
+  - createEdges:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW "<edges-view-name>"
+          DISPLAY_NAME = '<human-readable display name>'
+          DESCRIPTION = '<one-sentence description from phase 1>'
+          TAGS = ('<graph-kind>', 'identity-graph')
+          WRITE_MODE = 'overwrite'
+          AS
+          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
+          FROM COMPANY_DATA.<first_party_dataset_1>
+          UNION ALL
+          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
+          FROM COMPANY_DATA.<first_party_dataset_2>
+          UNION ALL
+          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
+          FROM <third_party_company>.<access_rule_name>
+
+  # ─── Final connected components ───────────────────────────────────
+
+  - createGraph:
+      call: LabelConnectedComponents
+      with:
+        edgeDataset: <edges-view-name>
+        outputDataset: <graph-output-dataset-name>
+        sourceIdCol: SOURCE_ID
+        sourceSystemCol: SOURCE_ID_TYPE
+        bridgeKeyCol: TARGET_ID
+        bridgeKeyTypeCol: TARGET_ID_TYPE
+        firstPartySources:
+          - <list of distinct SOURCE_ID_TYPE / TARGET_ID_TYPE values from first-party datasets>
+        thirdPartySources:
+          - <list of distinct SOURCE_ID_TYPE / TARGET_ID_TYPE values from third-party datasets>
+        maxDegreeThreshold: 100
+        maxComponentSize: 100
+        maxIterations: 25
+```
+
+Rules for filling in the template:
+
+- **`namespace`**: kebab-case slug of the company name returned by
+  `narrative_context_get`.
+- **`name`**: kebab-case slug derived from the graph kind in phase 1
+  (`person-identity-graph`, `household-identity-graph`, …). Append a
+  qualifier if the user named one ("us-person-identity-graph").
+- **One `SELECT ... FROM ...` block per input dataset** in the UNION
+  ALL. First-party datasets use `COMPANY_DATA.<dataset_id>`; third-party
+  datasets use `<provider>.<access_rule_name>`. Preserve order:
+  first-party first, third-party second — easier to scan in review.
+- **`firstPartySources`** lists the distinct identifier-type values
+  (the `SOURCE_ID_TYPE` / `TARGET_ID_TYPE` enum values) that the
+  first-party datasets emit. Pull these from the column stats /
+  sample rows surfaced when phase 5's mapping work ran (or from the
+  `attributes` describe if the user has the canonical list). If you
+  don't know them, ask the user — do NOT guess.
+- **`thirdPartySources`** lists the equivalent identifier types
+  contributed by third-party access rules.
+- **`maxDegreeThreshold`, `maxComponentSize`, `maxIterations`**: keep
+  the defaults (100/100/25) unless the user has a calibrated reason
+  to change them. Surface defaults explicitly in the summary so the
+  user can override.
+
+Before showing the YAML to the user, **validate the materialized-view
+NQL** by extracting the `CREATE MATERIALIZED VIEW ... AS ...` body
+and running:
+
+```
+narrative_nql_validate(nql: '<the CREATE MATERIALIZED VIEW statement>')
+```
+
+If validation fails (e.g., a referenced dataset doesn't exist, a
+column is named differently than the contract expects), fix the
+offending block and re-validate. Do **not** present an unvalidated
+workflow to the user.
+
+Save the validated YAML to a file in the working directory using the
+`Write` tool, e.g. `./<graph-name>.workflow.yaml`. This is the
+artifact the user will submit.
+
+### Phase 8. Submit / hand off the workflow
+
+There is no MCP tool to submit a workflow document directly from
+within this skill. After saving the YAML in phase 7, present the
+user with:
+
+1. The path to the saved workflow file.
+2. A 3-5 line summary of what the workflow does, the input datasets,
+   the third-party sources, and the output graph dataset name.
+3. Submission instructions — direct the user to the Narrative
+   Platform UI's Workflows tab, or to the workflow API endpoint, to
+   submit the file. (Do not invent endpoint URLs; if the user asks
+   for the exact endpoint and you don't already know it, suggest
+   they check the Narrative docs.)
+4. An offer to optionally run the materialized-view DDL right now via
+   `narrative_nql_run` so the edge view exists ahead of the workflow
+   submission — useful if the user wants to spot-check edge counts
+   before kicking off `LabelConnectedComponents`. This is async; poll
+   the returned job with `narrative_jobs_describe(job_ids: ["<id>"])`
+   until `state` is `completed`.
+
+Do not submit the materialized view without explicit user approval —
+it writes a real dataset.
+
+## Final summary format
+
+When phase 8 completes, return a single summary message in this
+shape (plain text, not JSON — this skill emits an artifact, not a
+structured payload like the mappings skill):
+
+```
+Saved <path> — <graph kind> identity graph.
+
+Inputs:
+  • <dataset_1_name> (<dataset_1_id>) — first-party — mapped ✓ / mapped this run
+  • <dataset_2_name> (<dataset_2_id>) — first-party — mapped this run
+  • <provider>.<access_rule> — third-party
+
+Identifier types:
+  first-party: [<list>]
+  third-party: [<list>]
+
+Output graph dataset: <name>
+
+Next: submit the workflow via <UI tab or API endpoint>. Optionally,
+I can run the materialized-view DDL now so you can spot-check the
+edges before launching the graph job — just say the word.
+```
+
+## Voice
+
+Use first person ("I found 3 datasets that match…", "I'll need to
+map dataset X before we build the graph"). Conversational, not
+formal. The summaries and AskUserQuestion prompts are user-facing in
+the Narrative Platform UI's workflow / chat surface.
+
+## Further reading
+
+- `references/EDGE_CASES.md` — gotchas and tuning notes: the fixed
+  edge-contract schema, identifier-type casing, directed/undirected
+  mixing, `maxComponentSize` / `maxDegreeThreshold` / `maxIterations`
+  defaults, materialized-view naming, and write-safety rules. Read
+  when something feels off or the user is asking about tuning knobs.
+- `references/HARNESS_FALLBACK.md` — what to do when `narrative-mcp`
+  or `narrative-knowledge-base` is unavailable. Covers full and
+  partial degradation, and the per-phase substitutions for a
+  paste-driven flow. Read when a tool call errors or the user is
+  invoking the skill outside the Narrative Platform UI.
+- `../generate-rosetta-stone-mappings/SKILL.md` — the mapping skill
+  this one defers to in phase 5.
+- `../generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md` —
+  NQL quoting and function rules; relevant for the materialized-view
+  DDL in phase 7.
+- `../generate-rosetta-stone-mappings/references/KB_RESEARCH.md` —
+  how to query the `narrative-knowledge-base` MCP server for
+  identity-graph and `LabelConnectedComponents` docs when the local
+  references aren't enough.
