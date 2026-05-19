@@ -165,10 +165,20 @@ What to extract:
   — informs whether a filter will return anything.
 - **Metadata**: record count, freshness — surface in the explanation
   if the user is about to query a stale or tiny dataset.
+- **Data plane**: the dataset's `data_plane_id` (or equivalent plane
+  field) from the metadata block. You'll pass this to
+  `narrative_nql_run` and `narrative_nql_get_job` in step 8 —
+  omitting it falls back to the company default plane, which is
+  usually wrong on multi-plane tenants. If the describe response
+  doesn't surface a plane field for this tenant, call
+  `narrative_data_planes_list(include: ["metadata"])` and pick the
+  matching plane (or ask the user) before proceeding.
 
 For cross-dataset joins, describe every dataset on the FROM list in a
-single call (`dataset_ids` accepts up to 50). Confirm a join key exists
-in both schemas before drafting.
+single call (`dataset_ids` accepts up to 50). Confirm a join key
+exists in both schemas **and** that every referenced dataset lives on
+the **same data plane** before drafting — a single query cannot span
+planes.
 
 ### 4. Draft the NQL query — mandatory
 
@@ -275,7 +285,7 @@ Supported (Presto-flavored):
 - `FROM_UNIXTIME(epoch_seconds)`
 - `REGEXP_REPLACE(string, pattern, replacement)`, `REGEXP_LIKE(string, pattern)`
 - `SUBSTRING(x, start, length)`, `CONCAT(a, b, …)`, `LENGTH(x)`
-- Aggregates: `COUNT(*)`, `COUNT(DISTINCT col)`, `SUM`, `AVG`, `MIN`, `MAX`, `APPROX_DISTINCT(col)`
+- Aggregates: `COUNT(1)`, `COUNT(<col>)`, `COUNT(DISTINCT col)`, `SUM`, `AVG`, `MIN`, `MAX`, `APPROX_COUNT_DISTINCT(col)`. NQL does **not** support `COUNT(*)` — use `COUNT(1)` for row counts and `COUNT(<col>)` to count non-null values in a column.
 
 Conditional:
 
@@ -295,6 +305,28 @@ The engine propagates nulls automatically. `LOWER(null)` is `null`,
 default. Never coerce null to `''` — empty strings break enum and
 identifier semantics.
 
+### Common NQL gotchas
+
+The KB's troubleshooting and performance pages document the failure
+modes that consistently bite first-pass queries. Apply the rules here
+before validating; consult the KB for the long form.
+
+| Gotcha | Rule | KB page |
+| --- | --- | --- |
+| **Wildcards / `COUNT(*)`** | NQL does **not** support `SELECT *`, `SELECT t.*`, or `COUNT(*)`. Always list columns explicitly. Use `COUNT(1)` for row counts, `COUNT(<col>)` for non-null counts. This rule applies inside CTEs and subqueries too. | `/nql/general/explicit-columns` |
+| **Naked `SELECT` is not runnable** | You cannot submit a bare `SELECT` to `narrative_nql_run` and expect rows back. Every executed query must land somewhere — wrap the `SELECT` in `CREATE MATERIALIZED VIEW "<name>" AS (SELECT …)` (optionally with `REFRESH_SCHEDULE`, `EXPIRE`, `BUDGET`, etc.), then read the rows via `narrative_dataset_request_sample` + `narrative_datasets_describe(include=["sample"])`. Use `EXPLAIN <SELECT …>` for forecasts. Bare-`SELECT` validation passes, but execution requires the materialized-view wrapper. | `/nql/commands/create-materialized-view`, `/guides/nql/creating-materialized-views` |
+| **Reserved keywords** | Reserved words (`type`, `value`, `user`, `order`, `group`, `select`, etc.) must be double-quoted when used as identifiers — including nested property paths like `data."value"`. | `/nql/general/reserved-keywords` |
+| **Dataset IDs are numeric** | Dataset IDs in `company_data` are numeric and must be double-quoted: `company_data."123"`. Bare `company_data.123` parses as a numeric literal. | `/concepts/nql/sql-comparison` |
+| **Fully qualify columns in joins** | Use `company_data."123".col` (or aliased equivalents) in `JOIN`s and `WHERE`s — ambiguous column references fail at parse. | `/guides/nql/filtering-transforming` |
+| **`GEOMETRY` cannot be in `SELECT`** | Geometry types (e.g. the output of `STCIRCLE`) cannot be returned in result sets. Keep geometry expressions inside `JOIN` and `WHERE` clauses; return `latitude` / `longitude` / identifiers instead. | `/guides/nql/troubleshooting/unsupported-type-error` |
+| **`\|\|` concatenation is string-only** | The `\|\|` operator requires both operands to be strings. Structured fields need `.value` extracted first; non-string types need `CAST(... AS VARCHAR)`. | `/guides/nql/troubleshooting/unsupported-type-error` |
+| **Cross-data-plane queries fail** | A single query cannot reference datasets that live in different data planes. Verify dataset plane assignments before drafting joins; either query each plane separately or materialize into a common plane. | `/guides/nql/troubleshooting/cross-data-plane-queries` |
+| **Pass `data_plane_id` matching the dataset's plane** | `narrative_nql_run` and `narrative_nql_get_job` default to the company default plane when `data_plane_id` is omitted — usually wrong on multi-plane tenants. Capture the dataset's plane from `narrative_datasets_describe` (or `narrative_data_planes_list`), and pass the same `data_plane_id` to both run and poll. Validate is plane-agnostic — it only catches schema issues, not wrong-plane mistakes. | `/reference/integrations/mcp-server`, `/guides/nql/troubleshooting/cross-data-plane-queries` |
+| **`OR` in `JOIN` clauses** | `ON a.x = b.x OR a.y = b.y` defeats hash-join optimization and can run 100× slower. Restructure with `CROSS JOIN UNNEST([…])` on a flattened key column, or `UNION` two single-key joins. | `/guides/nql/query-optimization/avoid-or-in-join` |
+| **Filter before joining** | Push filters into CTEs / subqueries on each side of the join, not after. Cuts the rows hashed and the rows scanned. | `/cookbooks/nql/performance-patterns` |
+| **Prefer `APPROX_COUNT_DISTINCT`** | Cheaper and faster than `COUNT(DISTINCT col)`; exact at low cardinality, near-exact at scale. Reserve `COUNT(DISTINCT col)` for `HAVING` / `CASE WHEN` threshold logic. | `/cookbooks/nql/performance-patterns` |
+| **`QUALIFY` over subquery dedup** | `QUALIFY ROW_NUMBER() OVER (...) = 1` is the idiomatic NQL dedup; cheaper than a `WHERE rn = 1` wrapper around a `ROW_NUMBER()` subquery. | `/cookbooks/nql/performance-patterns` |
+
 ### Validation error → fix cheat sheet
 
 | Error symptom | Likely cause | Fix |
@@ -305,11 +337,27 @@ identifier semantics.
 | "No match found for function signature `date_parse`/`parse_datetime`" | Function not exposed | Use `to_timestamp(text, format)` or `CAST(... AS timestamp)` |
 | "cannot cast string to long" | Implicit coercion | Wrap with `CAST(... AS long)` or `NULLIF` |
 | "unexpected ELSE without CASE" | Mismatched CASE/END | Count `CASE … END` pairs |
+| "wildcard not supported" / "SELECT \* not supported" | Used `SELECT *` or `COUNT(*)` | Enumerate columns; use `COUNT(1)` or `COUNT(<col>)` |
+| "Unsupported GEOMETRY type" | `GEOMETRY` returned in `SELECT` | Move geometry to `JOIN` / `WHERE` only; project `latitude` / `longitude` / ids |
+| "String Concatenation" type error | `\|\|` mixing non-string types | `CAST(<x> AS VARCHAR)`, or extract `.value` from structured fields |
+| "Cross-Data Plane Query" error | Datasets in different planes | Query each plane separately, or materialize into one plane |
 
 When the local rules above aren't enough — type system edge cases,
 window functions, advanced join semantics — query the
-`narrative-knowledge-base` MCP server (`/concepts/nql/…`,
-`/cookbooks/nql/…`).
+`narrative-knowledge-base` MCP server. Useful entry points:
+
+- `/guides/nql/troubleshooting` and its sub-pages (`unsupported-type-error`, `cross-data-plane-queries`) — the canonical gotchas catalog.
+- `/cookbooks/nql/performance-patterns` and `/guides/nql/query-optimization` — performance recipes.
+- `/concepts/nql/…`, `/cookbooks/nql/…` — broader reference.
+
+Typical lookups:
+
+```
+search_narrative_i_o_knowledge_base(query: "NQL <symptom or function>")
+query_docs_filesystem_...(command: "cat /guides/nql/troubleshooting/unsupported-type-error.mdx")
+query_docs_filesystem_...(command: "cat /guides/nql/query-optimization/avoid-or-in-join.mdx")
+query_docs_filesystem_...(command: "cat /cookbooks/nql/performance-patterns.mdx")
+```
 
 Drafting heuristics specific to this skill:
 
@@ -409,10 +457,45 @@ immediately; the actual rows arrive only after the job finishes.
 
 ```
 narrative_nql_run(
-  nql: 'select … from company_data."<id>" limit 100'
+  query: 'CREATE MATERIALIZED VIEW "<name>" AS (SELECT … FROM company_data."<id>")',
+  data_plane_id: '<uuid-of-dataset-plane>'
 )
 → { job_id: "<uuid>", state: "queued", ... }
 ```
+
+### Selecting `data_plane_id` — mandatory when it's not the company default
+
+NQL queries execute inside a single data plane and only see datasets
+that live there. `narrative_nql_run` and `narrative_nql_get_job` both
+accept an optional `data_plane_id`; when omitted, the request falls
+back to the **company default** plane, which is almost never the
+right choice for a multi-plane tenant. Pass the data plane of the
+dataset(s) being queried explicitly.
+
+Resolution sequence:
+
+1. **Capture the dataset's data plane during describe.** `narrative_datasets_describe(dataset_ids: [<id>], include: ["metadata"])` exposes the dataset's plane assignment alongside its name and id. Record it next to the unique_name / id you'll use in the query.
+2. **Confirm every dataset on the query is on the same plane.** Cross-plane joins fail at execution; if a query references multiple datasets, all of them must share a plane. If they don't, that's the cross-data-plane gotcha — query each plane separately or materialize one side into the other plane first.
+3. **Pass `data_plane_id` to `narrative_nql_run` and `narrative_nql_get_job`.** Use the same value for both. If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first.
+4. **`narrative_nql_validate` is plane-agnostic.** The validate tool only takes `query`; it compiles the NQL against the control-plane schema catalog. It will **not** catch a wrong-plane mistake — that error surfaces only at run time, as a cross-data-plane or "dataset not found" failure.
+
+```
+narrative_nql_run(
+  query: 'CREATE MATERIALIZED VIEW "wn_check_20260519" EXPIRE = ''P1D'' AS (SELECT … FROM company_data."12345") BUDGET 5 USD',
+  data_plane_id: '<dataset_12345_plane_uuid>'
+)
+narrative_nql_get_job(
+  job_id: '<returned>',
+  data_plane_id: '<dataset_12345_plane_uuid>'
+)
+```
+
+If the dataset describe response doesn't include a plane field for
+your tenant, fall back to: `narrative_data_planes_list(include: ["metadata"])`
+→ pick the plane whose `default` matches the company's data residency
+for that dataset, or ask the user. **Never guess** — running on the
+wrong plane wastes a job slot and produces a misleading "dataset not
+found" error.
 
 Poll with `narrative_jobs_describe(job_ids: ["<uuid>"])` until `state`
 is terminal. Use a short, bounded backoff — most queries finish in a
@@ -440,14 +523,16 @@ The `result` field on a finished job is shaped by the job `type`:
 | Job type | Triggered by | `result` payload | Where the rows live |
 | --- | --- | --- | --- |
 | `nql-forecast` | `narrative_nql_run` with `EXPLAIN …` | `{rows, cost}` — an estimate, not actual rows | n/a — forecasts return numbers only |
-| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW …`, or any non-`EXPLAIN` `SELECT` (which is materialized into a dataset) | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
+| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS (SELECT …)`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
 | `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
 
 ### Reading rows after a `materialize-view` job completes
 
-Rows from a `CREATE MATERIALIZED VIEW` (or any executed `SELECT`) are
-never inlined on the job. To see them you have to run a second
-asynchronous job to materialize a sample, then fetch it:
+Rows from a `CREATE MATERIALIZED VIEW` are never inlined on the job
+descriptor. To see them you have to run a second asynchronous job to
+materialize a sample, then fetch it. (And remember: a bare `SELECT`
+is not a runnable form — you must explicitly wrap it in
+`CREATE MATERIALIZED VIEW` before submitting to `narrative_nql_run`.)
 
 1. **Submit the sampling job.** `narrative_dataset_request_sample(dataset_id: <id>)` → returns a new `job_id`. Use the `dataset_id` from the prior job's `result`.
 2. **Poll that job to completion** with `narrative_jobs_describe(job_ids: ["<sample_job_id>"])`, using the same backoff as above.
@@ -477,7 +562,7 @@ that you know produces ≤ 1,000 rows. If the materialized dataset has
 more than 1,000 rows, the sample is just an arbitrary 1,000 of them
 and rows past the cap are invisible without exporting. For the
 opposite case — billions of rows you don't actually need to see —
-keep the `LIMIT` low (or push the work into aggregates: `COUNT(*)`,
+keep the `LIMIT` low (or push the work into aggregates: `COUNT(1)`,
 `SUM`, `GROUP BY`) to control cost.
 
 ### Cost-of-execution reminder
@@ -485,8 +570,9 @@ keep the `LIMIT` low (or push the work into aggregates: `COUNT(*)`,
 Every `narrative_nql_run` consumes platform resources and the result
 set is materialized. Default to a `LIMIT` clause whenever the user's
 question doesn't explicitly need every row. Prefer aggregations
-(`COUNT(*)`, `SUM`, `GROUP BY`) over pulling raw rows and counting in
-the agent.
+(`COUNT(1)`, `SUM`, `GROUP BY`) over pulling raw rows and counting in
+the agent. NQL does not support `COUNT(*)` — use `COUNT(1)` (rows)
+or `COUNT(<col>)` (non-null values).
 
 ### Other async tools that follow the same pattern
 
@@ -499,11 +585,40 @@ caveat: for datasets not yet on the new statistics framework, the
 returned id is **not** a job id and `narrative_jobs_describe` will
 not find it — surface that to the user rather than polling forever.
 
-Submit the validated query:
+Before submitting, wrap your validated `SELECT` in `CREATE MATERIALIZED
+VIEW` — a bare `SELECT` is not a runnable form against
+`narrative_nql_run`, even when it passes validation. Use the smallest
+viable wrapper (no schedule, short `EXPIRE`, low `BUDGET`) for one-off
+analytical queries; promote to a real refresh schedule only when the
+view is intended to persist.
 
 ```
-narrative_nql_run(nql: '<the same validated NQL>')
+narrative_nql_run(
+  query: '
+    CREATE MATERIALIZED VIEW "wn_<short_slug>_<yyyymmddhhmm>"
+    EXPIRE = ''P1D''
+    AS (
+      <the same validated SELECT>
+    )
+    BUDGET 5 USD
+  ',
+  data_plane_id: '<plane captured in step 3>'
+)
 ```
+
+Always pass `data_plane_id` matching the dataset's plane (captured in
+step 3). Use the **same** `data_plane_id` when polling with
+`narrative_nql_get_job` — otherwise the poll falls back to the company
+default plane and won't see your job. `narrative_nql_validate` is
+plane-agnostic and ignores the parameter; it cannot catch a wrong-plane
+mistake — that surfaces only when the run job fails with a
+cross-data-plane or "dataset not found" error.
+
+For pure forecasts (cost / row-count estimates without materializing
+data), submit `EXPLAIN <SELECT …>` instead — the job is a
+`nql-forecast` rather than a `materialize-view`, returns
+`{rows, cost}`, and does not consume execution budget. The
+`data_plane_id` rule still applies.
 
 Then poll `narrative_jobs_describe(job_ids: ["<job_id>"])` per the
 cadence above. While polling, tell the user what's happening once
@@ -529,9 +644,13 @@ descriptor.
 ### "Just count something"
 
 ```sql
-SELECT COUNT(*) FROM company_data."12345"
+SELECT COUNT(1) AS row_count FROM company_data."12345"
 WHERE "event_ts" >= CAST('2026-04-19' AS timestamp)
 ```
+
+NQL does not support `COUNT(*)` — use `COUNT(1)` for rows or
+`COUNT(<col>)` to count non-null values in a column. The validator
+will reject `COUNT(*)`.
 
 Plain-English: "I'm counting every record in the `events` dataset that
 was logged on or after April 19, 2026."
@@ -551,7 +670,7 @@ dataset, showing the user, the timestamp, and the event type."
 ### "Group by something"
 
 ```sql
-SELECT event_type, COUNT(*) AS event_count
+SELECT event_type, COUNT(1) AS event_count
 FROM company_data."12345"
 WHERE "event_ts" >= CAST('2026-04-19' AS timestamp)
 GROUP BY event_type
@@ -577,6 +696,10 @@ dataset on the shared user id, counting how many events each user has,
 and showing the 50 most active users first."
 
 Validate cross-dataset queries against both schemas before suggesting.
+Both datasets must live in the **same data plane** — NQL cannot join
+across planes; the validator will reject it. Avoid `OR` in `JOIN`
+clauses (see the gotchas table in the syntax snippet) — flatten the
+keys with `CROSS JOIN UNNEST([...])` or `UNION` two single-key joins.
 
 ## Edge cases and gotchas
 
@@ -614,9 +737,24 @@ If `narrative-mcp` is unavailable:
 ## Further reading
 
 - `narrative-knowledge-base` MCP — `/concepts/nql/…`,
-  `/cookbooks/nql/…`, `/api-reference/nql/…`. Use when the local
+  `/cookbooks/nql/…`, `/api-reference/nql/…`,
+  `/reference/integrations/mcp-server` (parameter contracts for
+  `narrative_nql_run` / `narrative_nql_get_job`, including
+  `data_plane_id` / `compute_pool_id`). Use when the local
   syntax-essentials snippet doesn't cover the operator, function, or
-  pattern you need.
+  pattern you need. For gotchas specifically, prefer:
+  - `/guides/nql/troubleshooting` (and `unsupported-type-error`,
+    `cross-data-plane-queries`) — the canonical troubleshooting catalog.
+  - `/nql/general/explicit-columns` — why `SELECT *` and `COUNT(*)`
+    are rejected and what to write instead.
+  - `/nql/general/reserved-keywords` — when to double-quote identifiers.
+  - `/nql/commands/create-materialized-view` — required wrapper for
+    runnable queries; full option reference.
+  - `/concepts/primitives/data-planes` — why every run needs an
+    explicit `data_plane_id` matching the dataset's plane.
+  - `/guides/nql/query-optimization/avoid-or-in-join` and
+    `/cookbooks/nql/performance-patterns` — performance gotchas
+    (OR-in-join, filter-before-join, `APPROX_COUNT_DISTINCT`, `QUALIFY`).
 - `plugins/narrative-common/skills/generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md`
   — sibling skill's reference; deeper coverage of timestamp parsing,
   enum handling, and reserved-name nesting if you hit them here.

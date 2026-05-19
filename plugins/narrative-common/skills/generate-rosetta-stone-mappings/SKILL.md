@@ -331,8 +331,14 @@ narrative_nql_validate(
 A success response means the expression compiles against the
 dataset's schema. A structured error points at the offending token.
 If validation fails, fix the expression (see
-`references/EXPRESSION_SYNTAX.md`) and re-validate. Do **not** suggest
-a mapping with an expression that has not been validated.
+`references/EXPRESSION_SYNTAX.md`) and re-validate. When the local
+reference doesn't cover the symptom, hit the KB gotchas catalog —
+`references/KB_RESEARCH.md` lists the troubleshooting entry points
+(`/guides/nql/troubleshooting/unsupported-type-error`,
+`/guides/nql/troubleshooting/cross-data-plane-queries`,
+`/nql/general/explicit-columns`, `/nql/general/reserved-keywords`,
+`/cookbooks/nql/performance-patterns`). Do **not** suggest a mapping
+with an expression that has not been validated.
 
 Validates are cheap and independent — fire all candidate expressions
 as concurrent tool calls in a single turn rather than serializing

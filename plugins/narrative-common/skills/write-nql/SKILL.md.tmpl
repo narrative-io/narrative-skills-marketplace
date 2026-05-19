@@ -146,10 +146,20 @@ What to extract:
   — informs whether a filter will return anything.
 - **Metadata**: record count, freshness — surface in the explanation
   if the user is about to query a stale or tiny dataset.
+- **Data plane**: the dataset's `data_plane_id` (or equivalent plane
+  field) from the metadata block. You'll pass this to
+  `narrative_nql_run` and `narrative_nql_get_job` in step 8 —
+  omitting it falls back to the company default plane, which is
+  usually wrong on multi-plane tenants. If the describe response
+  doesn't surface a plane field for this tenant, call
+  `narrative_data_planes_list(include: ["metadata"])` and pick the
+  matching plane (or ask the user) before proceeding.
 
 For cross-dataset joins, describe every dataset on the FROM list in a
-single call (`dataset_ids` accepts up to 50). Confirm a join key exists
-in both schemas before drafting.
+single call (`dataset_ids` accepts up to 50). Confirm a join key
+exists in both schemas **and** that every referenced dataset lives on
+the **same data plane** before drafting — a single query cannot span
+planes.
 
 ### 4. Draft the NQL query — mandatory
 
@@ -255,11 +265,40 @@ back to step 4 with their feedback.
 
 {{SNIPPET:nql-async-execution}}
 
-Submit the validated query:
+Before submitting, wrap your validated `SELECT` in `CREATE MATERIALIZED
+VIEW` — a bare `SELECT` is not a runnable form against
+`narrative_nql_run`, even when it passes validation. Use the smallest
+viable wrapper (no schedule, short `EXPIRE`, low `BUDGET`) for one-off
+analytical queries; promote to a real refresh schedule only when the
+view is intended to persist.
 
 ```
-narrative_nql_run(nql: '<the same validated NQL>')
+narrative_nql_run(
+  query: '
+    CREATE MATERIALIZED VIEW "wn_<short_slug>_<yyyymmddhhmm>"
+    EXPIRE = ''P1D''
+    AS (
+      <the same validated SELECT>
+    )
+    BUDGET 5 USD
+  ',
+  data_plane_id: '<plane captured in step 3>'
+)
 ```
+
+Always pass `data_plane_id` matching the dataset's plane (captured in
+step 3). Use the **same** `data_plane_id` when polling with
+`narrative_nql_get_job` — otherwise the poll falls back to the company
+default plane and won't see your job. `narrative_nql_validate` is
+plane-agnostic and ignores the parameter; it cannot catch a wrong-plane
+mistake — that surfaces only when the run job fails with a
+cross-data-plane or "dataset not found" error.
+
+For pure forecasts (cost / row-count estimates without materializing
+data), submit `EXPLAIN <SELECT …>` instead — the job is a
+`nql-forecast` rather than a `materialize-view`, returns
+`{rows, cost}`, and does not consume execution budget. The
+`data_plane_id` rule still applies.
 
 Then poll `narrative_jobs_describe(job_ids: ["<job_id>"])` per the
 cadence above. While polling, tell the user what's happening once
@@ -285,9 +324,13 @@ descriptor.
 ### "Just count something"
 
 ```sql
-SELECT COUNT(*) FROM company_data."12345"
+SELECT COUNT(1) AS row_count FROM company_data."12345"
 WHERE "event_ts" >= CAST('2026-04-19' AS timestamp)
 ```
+
+NQL does not support `COUNT(*)` — use `COUNT(1)` for rows or
+`COUNT(<col>)` to count non-null values in a column. The validator
+will reject `COUNT(*)`.
 
 Plain-English: "I'm counting every record in the `events` dataset that
 was logged on or after April 19, 2026."
@@ -307,7 +350,7 @@ dataset, showing the user, the timestamp, and the event type."
 ### "Group by something"
 
 ```sql
-SELECT event_type, COUNT(*) AS event_count
+SELECT event_type, COUNT(1) AS event_count
 FROM company_data."12345"
 WHERE "event_ts" >= CAST('2026-04-19' AS timestamp)
 GROUP BY event_type
@@ -333,6 +376,10 @@ dataset on the shared user id, counting how many events each user has,
 and showing the 50 most active users first."
 
 Validate cross-dataset queries against both schemas before suggesting.
+Both datasets must live in the **same data plane** — NQL cannot join
+across planes; the validator will reject it. Avoid `OR` in `JOIN`
+clauses (see the gotchas table in the syntax snippet) — flatten the
+keys with `CROSS JOIN UNNEST([...])` or `UNION` two single-key joins.
 
 ## Edge cases and gotchas
 
@@ -370,9 +417,24 @@ If `narrative-mcp` is unavailable:
 ## Further reading
 
 - `narrative-knowledge-base` MCP — `/concepts/nql/…`,
-  `/cookbooks/nql/…`, `/api-reference/nql/…`. Use when the local
+  `/cookbooks/nql/…`, `/api-reference/nql/…`,
+  `/reference/integrations/mcp-server` (parameter contracts for
+  `narrative_nql_run` / `narrative_nql_get_job`, including
+  `data_plane_id` / `compute_pool_id`). Use when the local
   syntax-essentials snippet doesn't cover the operator, function, or
-  pattern you need.
+  pattern you need. For gotchas specifically, prefer:
+  - `/guides/nql/troubleshooting` (and `unsupported-type-error`,
+    `cross-data-plane-queries`) — the canonical troubleshooting catalog.
+  - `/nql/general/explicit-columns` — why `SELECT *` and `COUNT(*)`
+    are rejected and what to write instead.
+  - `/nql/general/reserved-keywords` — when to double-quote identifiers.
+  - `/nql/commands/create-materialized-view` — required wrapper for
+    runnable queries; full option reference.
+  - `/concepts/primitives/data-planes` — why every run needs an
+    explicit `data_plane_id` matching the dataset's plane.
+  - `/guides/nql/query-optimization/avoid-or-in-join` and
+    `/cookbooks/nql/performance-patterns` — performance gotchas
+    (OR-in-join, filter-before-join, `APPROX_COUNT_DISTINCT`, `QUALIFY`).
 - `plugins/narrative-common/skills/generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md`
   — sibling skill's reference; deeper coverage of timestamp parsing,
   enum handling, and reserved-name nesting if you hit them here.

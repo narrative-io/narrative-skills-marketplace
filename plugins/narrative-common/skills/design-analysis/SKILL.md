@@ -272,8 +272,9 @@ population, time window, comparison period>
 - **Source**: `<table>`, grain `<unit>`.
 - **Filters**: `<time window>`, `<population filter>`.
 - **Group by**: none.
-- **Measures**: `COUNT(*)`, `COUNT(DISTINCT <key>)`,
-  `MIN(<time_col>)`, `MAX(<time_col>)`.
+- **Measures**: `COUNT(1) AS row_count`, `COUNT(DISTINCT <key>)`,
+  `MIN(<time_col>)`, `MAX(<time_col>)`. (NQL forbids `COUNT(*)`;
+  use `COUNT(1)` for rows.)
 - **Output shape**: single row.
 - **Validation**: row count must be > 0; date min/max must fall
   inside the window.
@@ -297,6 +298,29 @@ Each query specification names: **purpose**, **source tables + grain**,
 (including derived calculations and windowed functions described
 conceptually)**, **joins + semantics**, **expected output shape**, and
 **validation checks the query writer should build in**.
+
+Specs must be expressible in NQL — when in doubt, lean on the gotchas
+catalog the downstream `/write-nql` skill will apply. The biggest
+ones to keep in mind while drafting specs:
+
+- Enumerate measure columns; **no `SELECT *` or `COUNT(*)`** (NQL
+  rejects both). Specify `COUNT(1)` or `COUNT(<col>)` when the
+  intent is row / non-null counts.
+- Every joined dataset must live in the **same data plane** — flag
+  this in the brief if there's any doubt; cross-plane joins fail at
+  validation.
+- Avoid `OR` in `JOIN` conditions in the spec; if a hypothesis
+  legitimately requires multi-key matching, name it as such so the
+  writer uses `UNNEST` / `UNION` (see the gotchas table in the
+  shared NQL syntax snippet).
+- Executable queries must be wrapped in `CREATE MATERIALIZED VIEW`;
+  a bare `SELECT` is not runnable. `/write-nql` handles the wrapping
+  — your spec just needs to describe the underlying `SELECT`.
+- For "how many distinct X" measures, prefer `APPROX_COUNT_DISTINCT`
+  unless the spec needs an exact count for threshold logic.
+
+For the long form, the writer consults the `narrative-knowledge-base`
+MCP server (`/guides/nql/troubleshooting/…`, `/cookbooks/nql/…`).
 
 ### 6. Execute the brief via `/write-nql` — gated
 
