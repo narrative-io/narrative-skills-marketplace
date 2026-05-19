@@ -3,10 +3,45 @@ immediately; the actual rows arrive only after the job finishes.
 
 ```
 narrative_nql_run(
-  nql: 'select … from company_data."<id>" limit 100'
+  query: 'CREATE MATERIALIZED VIEW "<name>" AS (SELECT … FROM company_data."<id>")',
+  data_plane_id: '<uuid-of-dataset-plane>'
 )
 → { job_id: "<uuid>", state: "queued", ... }
 ```
+
+### Selecting `data_plane_id` — mandatory when it's not the company default
+
+NQL queries execute inside a single data plane and only see datasets
+that live there. `narrative_nql_run` and `narrative_nql_get_job` both
+accept an optional `data_plane_id`; when omitted, the request falls
+back to the **company default** plane, which is almost never the
+right choice for a multi-plane tenant. Pass the data plane of the
+dataset(s) being queried explicitly.
+
+Resolution sequence:
+
+1. **Capture the dataset's data plane during describe.** `narrative_datasets_describe(dataset_ids: [<id>], include: ["metadata"])` exposes the dataset's plane assignment alongside its name and id. Record it next to the unique_name / id you'll use in the query.
+2. **Confirm every dataset on the query is on the same plane.** Cross-plane joins fail at execution; if a query references multiple datasets, all of them must share a plane. If they don't, that's the cross-data-plane gotcha — query each plane separately or materialize one side into the other plane first.
+3. **Pass `data_plane_id` to `narrative_nql_run` and `narrative_nql_get_job`.** Use the same value for both. If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first.
+4. **`narrative_nql_validate` is plane-agnostic.** The validate tool only takes `query`; it compiles the NQL against the control-plane schema catalog. It will **not** catch a wrong-plane mistake — that error surfaces only at run time, as a cross-data-plane or "dataset not found" failure.
+
+```
+narrative_nql_run(
+  query: 'CREATE MATERIALIZED VIEW "wn_check_20260519" EXPIRE = ''P1D'' AS (SELECT … FROM company_data."12345") BUDGET 5 USD',
+  data_plane_id: '<dataset_12345_plane_uuid>'
+)
+narrative_nql_get_job(
+  job_id: '<returned>',
+  data_plane_id: '<dataset_12345_plane_uuid>'
+)
+```
+
+If the dataset describe response doesn't include a plane field for
+your tenant, fall back to: `narrative_data_planes_list(include: ["metadata"])`
+→ pick the plane whose `default` matches the company's data residency
+for that dataset, or ask the user. **Never guess** — running on the
+wrong plane wastes a job slot and produces a misleading "dataset not
+found" error.
 
 Poll with `narrative_jobs_describe(job_ids: ["<uuid>"])` until `state`
 is terminal. Use a short, bounded backoff — most queries finish in a
@@ -34,14 +69,16 @@ The `result` field on a finished job is shaped by the job `type`:
 | Job type | Triggered by | `result` payload | Where the rows live |
 | --- | --- | --- | --- |
 | `nql-forecast` | `narrative_nql_run` with `EXPLAIN …` | `{rows, cost}` — an estimate, not actual rows | n/a — forecasts return numbers only |
-| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW …`, or any non-`EXPLAIN` `SELECT` (which is materialized into a dataset) | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
+| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS (SELECT …)`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
 | `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
 
 ### Reading rows after a `materialize-view` job completes
 
-Rows from a `CREATE MATERIALIZED VIEW` (or any executed `SELECT`) are
-never inlined on the job. To see them you have to run a second
-asynchronous job to materialize a sample, then fetch it:
+Rows from a `CREATE MATERIALIZED VIEW` are never inlined on the job
+descriptor. To see them you have to run a second asynchronous job to
+materialize a sample, then fetch it. (And remember: a bare `SELECT`
+is not a runnable form — you must explicitly wrap it in
+`CREATE MATERIALIZED VIEW` before submitting to `narrative_nql_run`.)
 
 1. **Submit the sampling job.** `narrative_dataset_request_sample(dataset_id: <id>)` → returns a new `job_id`. Use the `dataset_id` from the prior job's `result`.
 2. **Poll that job to completion** with `narrative_jobs_describe(job_ids: ["<sample_job_id>"])`, using the same backoff as above.
@@ -71,7 +108,7 @@ that you know produces ≤ 1,000 rows. If the materialized dataset has
 more than 1,000 rows, the sample is just an arbitrary 1,000 of them
 and rows past the cap are invisible without exporting. For the
 opposite case — billions of rows you don't actually need to see —
-keep the `LIMIT` low (or push the work into aggregates: `COUNT(*)`,
+keep the `LIMIT` low (or push the work into aggregates: `COUNT(1)`,
 `SUM`, `GROUP BY`) to control cost.
 
 ### Cost-of-execution reminder
@@ -79,8 +116,9 @@ keep the `LIMIT` low (or push the work into aggregates: `COUNT(*)`,
 Every `narrative_nql_run` consumes platform resources and the result
 set is materialized. Default to a `LIMIT` clause whenever the user's
 question doesn't explicitly need every row. Prefer aggregations
-(`COUNT(*)`, `SUM`, `GROUP BY`) over pulling raw rows and counting in
-the agent.
+(`COUNT(1)`, `SUM`, `GROUP BY`) over pulling raw rows and counting in
+the agent. NQL does not support `COUNT(*)` — use `COUNT(1)` (rows)
+or `COUNT(<col>)` (non-null values).
 
 ### Other async tools that follow the same pattern
 

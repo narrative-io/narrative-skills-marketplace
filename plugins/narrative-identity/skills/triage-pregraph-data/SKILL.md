@@ -252,7 +252,16 @@ What to quantify per hypothesis (pick the slice that fits):
 - **Degree distribution** — top-N and the long tail (e.g., 99th, 99.9th, max percentiles).
 - **Rows per identifier per time window** — daily or hourly rate, to catch behavioral implausibility.
 - **Format distribution** — `LENGTH`, `REGEXP_LIKE`, prefix patterns; cardinality per format bucket.
-- **Share of total rows affected** — confirmed-issue rows / total rows. An issue at 0.01% is a different problem from one at 5%.
+- **Share of total rows affected** — confirmed-issue rows / total rows. An issue at 0.01% is a different problem from one at 5%. Express row totals as `COUNT(1)`, not `COUNT(*)` — NQL rejects `COUNT(*)`.
+
+Hypothesis specs pass through `/design-analysis` and `/write-nql`, both
+of which apply the NQL gotchas catalog (no `SELECT *` / `COUNT(*)`,
+same-data-plane joins, no `OR` in `JOIN`s, runnable queries wrapped in
+`CREATE MATERIALIZED VIEW`). Stay aware of those rules when you phrase
+the measures so the downstream writer doesn't have to renegotiate the
+spec — the long-form rules live in the shared NQL syntax snippet and
+in the `narrative-knowledge-base` MCP server
+(`/guides/nql/troubleshooting/…`).
 
 #### Invocation
 

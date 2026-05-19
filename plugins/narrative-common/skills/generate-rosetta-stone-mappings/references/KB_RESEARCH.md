@@ -80,14 +80,33 @@ NQL material lives under `/concepts/nql/`, `/cookbooks/nql/`, and
 | `/getting-started/first-nql-query.mdx` | Smoke check for `company_data."<id>"` syntax |
 | `/api-reference/nql/` | Endpoint contracts mirroring `narrative_nql_validate` / `narrative_nql_run` |
 
+For NQL **gotchas / troubleshooting** specifically — when a mapping
+expression validates locally but fails at run time, or when you're
+unsure whether a pattern is supported — go to these pages before
+asking the user:
+
+| Path | Covers |
+| --- | --- |
+| `/guides/nql/troubleshooting.mdx` | Index of the canonical error catalog |
+| `/guides/nql/troubleshooting/unsupported-type-error.mdx` | `GEOMETRY`-in-`SELECT`, `\|\|` concatenation type errors, structured-field `.value` extraction, `CAST(... AS VARCHAR)` |
+| `/guides/nql/troubleshooting/cross-data-plane-queries.mdx` | "Single query cannot span data planes" — relevant when a mapping crosses tenants |
+| `/nql/general/explicit-columns.mdx` | Why `SELECT *` and `COUNT(*)` are rejected; idiomatic replacements (`COUNT(1)`, explicit column lists) |
+| `/nql/general/reserved-keywords.mdx` | The double-quote rule for `type`, `value`, `user`, `order`, etc. |
+| `/nql/commands/create-materialized-view.mdx` | Wrapper required to actually run a `SELECT`; full options reference (`REFRESH_SCHEDULE`, `EXPIRE`, `BUDGET`, `PARTITIONED_BY`, `MERGE ON`) |
+| `/guides/nql/query-optimization/avoid-or-in-join.mdx` | Why `OR` in `JOIN` clauses kills performance; `UNNEST` / `UNION` rewrites |
+| `/cookbooks/nql/performance-patterns.mdx` | `APPROX_COUNT_DISTINCT`, `QUALIFY`, filter-before-join, price-filter early |
+
 Starting queries:
 
 ```
 search_narrative_i_o_knowledge_base(query: "NQL string functions lower upper trim")
 search_narrative_i_o_knowledge_base(query: "NQL case when expression syntax")
 search_narrative_i_o_knowledge_base(query: "NQL cast bigint double timestamp")
+search_narrative_i_o_knowledge_base(query: "NQL gotchas troubleshooting")
 query_docs_filesystem_...(command: "rg -nC3 -i 'cast\\(' /concepts/nql /cookbooks/nql | head -80")
 query_docs_filesystem_...(command: "head -200 /concepts/nql/sql-comparison.mdx")
+query_docs_filesystem_...(command: "cat /guides/nql/troubleshooting/unsupported-type-error.mdx")
+query_docs_filesystem_...(command: "cat /cookbooks/nql/performance-patterns.mdx")
 ```
 
 ## Heuristics
