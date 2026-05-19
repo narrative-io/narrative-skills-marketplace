@@ -1,13 +1,27 @@
 {
   "name": "narrative-skills-marketplace",
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "@types/bun": "latest",
+    "gray-matter": "^4.0.3",
+    "knip": "^6.14.1",
+    "typescript": "^5.5.0"
+  },
   "private": true,
-  "type": "module",
   "scripts": {
     "gen:skill-docs": "bun run scripts/gen-skill-docs.ts",
-    "check:skill-docs": "bun run scripts/gen-skill-docs.ts --dry-run"
+    "check:skill-docs": "bun run scripts/gen-skill-docs.ts --dry-run",
+    "check:manifests": "bun run scripts/check-manifests.ts",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "knip": "knip",
+    "knip:fix": "knip --fix",
+    "ci": "bun run check:skill-docs && bun run check:manifests && bun run check && bun run typecheck && bun run knip"
   },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.5.0"
-  }
+  "type": "module"
 }

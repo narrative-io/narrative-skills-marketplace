@@ -1,44 +1,21 @@
 /**
  * Extract `name` and `description` from a SKILL.md.tmpl frontmatter block.
  * Used by gen-skill-docs.ts to validate the description-length cap.
- *
- * Mirrors ai-tools/scripts/frontmatter.ts.
  */
+import matter from 'gray-matter';
 
-export function extractNameAndDescription(content: string): { name: string; description: string } {
-  const fmStart = content.indexOf('---\n');
-  if (fmStart !== 0) return { name: '', description: '' };
-  const fmEnd = content.indexOf('\n---', fmStart + 4);
-  if (fmEnd === -1) return { name: '', description: '' };
+interface SkillFrontmatter {
+  name?: unknown;
+  description?: unknown;
+}
 
-  const frontmatter = content.slice(fmStart + 4, fmEnd);
-  const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-  const name = nameMatch ? nameMatch[1].trim() : '';
-
-  let description = '';
-  const lines = frontmatter.split('\n');
-  let inDescription = false;
-  const descLines: string[] = [];
-  for (const line of lines) {
-    if (line.match(/^description:\s*\|?\s*$/)) {
-      inDescription = true;
-      continue;
-    }
-    if (line.match(/^description:\s*\S/)) {
-      description = line.replace(/^description:\s*/, '').trim();
-      break;
-    }
-    if (inDescription) {
-      if (line === '' || line.match(/^\s/)) {
-        descLines.push(line.replace(/^  /, ''));
-      } else {
-        break;
-      }
-    }
-  }
-  if (descLines.length > 0) {
-    description = descLines.join('\n').trim();
-  }
-
-  return { name, description };
+export function extractNameAndDescription(content: string): {
+  name: string;
+  description: string;
+} {
+  const { data } = matter(content) as { data: SkillFrontmatter };
+  return {
+    name: String(data.name ?? '').trim(),
+    description: String(data.description ?? '').trim(),
+  };
 }

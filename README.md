@@ -1,20 +1,61 @@
-# narrative-skills-marketplace
+<div align="center">
 
-A Claude Code plugin marketplace published by Narrative I/O. Each plugin
-bundles one or more interactive skills — AI-powered workflows that walk
-you through a recurring process step by step. Install the marketplace,
-type `/skill-name` in Claude Code, and the skill takes it from there.
+<!-- Drop a hero image at .github/banner.png (1280x320 ideal) and uncomment the line below.
+     Until then, the wordmark + tagline lead. -->
+<!-- <img src=".github/banner.png" alt="Narrative Skills Marketplace" width="100%" /> -->
+
+# Narrative Skills Marketplace
+
+**A Claude Code plugin marketplace from [Narrative I/O](https://narrative.io).**
+
+Interactive, AI-powered workflows that walk you through the recurring
+work of a modern data company — mapping schemas, writing NQL,
+qualifying leads, shipping code, building decks — one approval at a time.
+
+[![CI](https://github.com/narrative-io/narrative-skills-marketplace/actions/workflows/ci.yml/badge.svg)](https://github.com/narrative-io/narrative-skills-marketplace/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-d97757)](https://claude.com/claude-code)
+[![Biome](https://img.shields.io/badge/lint%20%26%20format-Biome-60a5fa?logo=biome)](https://biomejs.dev)
+[![Bun](https://img.shields.io/badge/runtime-Bun-fbf0df?logo=bun&logoColor=black)](https://bun.sh)
+[![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
+[![Knip](https://img.shields.io/badge/dead%20code-Knip-7e22ce)](https://knip.dev)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CLAUDE.md)
+
+</div>
+
+---
+
+## What is this?
+
+This repo is a **marketplace** of Claude Code plugins. Each plugin
+bundles one or more **skills** — interactive slash commands like
+`/write-nql` or `/generate-rosetta-stone-mappings` that turn a
+recurring task into a guided, AI-augmented workflow.
+
+Install the marketplace, type a slash command in Claude Code, and the
+skill takes it from there: it asks the right questions, does the
+research, drafts the artifact, and waits for your approval before
+acting on anything outside your repo.
+
+> **Want the design philosophy?** See
+> [CLAUDE.md](CLAUDE.md#skill-design-principles) — "interactive, not
+> reference," "drafts, not actions," "evidence over assumptions," etc.
 
 ## Install
 
 ```bash
-git clone <repo-url> narrative-skills-marketplace
+git clone https://github.com/narrative-io/narrative-skills-marketplace
 cd narrative-skills-marketplace
 bash setup
 ```
 
 `setup` registers the marketplace with Claude Code, installs every
 plugin listed below, and regenerates the catalog in this README.
+
+**Requirements**
+
+- [Claude Code](https://claude.com/claude-code) CLI on `PATH`
+- [Bun](https://bun.sh) ≥ 1.1 (used for template rendering + scripts)
 
 <!-- BEGIN PLUGINS -->
 ## Plugins
@@ -29,12 +70,71 @@ Common Narrative workflows backed by the narrative-mcp server — starting with 
 
 <!-- END PLUGINS -->
 
+## What's a skill?
+
+A skill is a single `SKILL.md` file with YAML frontmatter and a
+numbered, phased workflow. The frontmatter declares what tools the
+skill can call; the body walks the user through the work, one
+question at a time, drafting artifacts and waiting for approval at
+each gate.
+
+```yaml
+---
+name: write-nql
+version: 1.0.0
+description: |
+  Compose, validate, and run NQL against a Narrative dataset.
+  Use when: "write an NQL query for X", "validate this NQL".
+allowed-tools:
+  - Bash
+  - Read
+  - AskUserQuestion
+---
+
+## Phase 1. Pin the dataset
+
+…
+```
+
+Some skills reuse boilerplate via the snippet system — author a
+`SKILL.md.tmpl` with `{{SNIPPET:pin-company-context}}` and `bun run
+gen:skill-docs` renders the final `SKILL.md`. See
+[CLAUDE.md → Template system](CLAUDE.md#template-system).
+
+## Development
+
+```bash
+bun install                  # install dev deps (Biome, Knip, TS)
+bun run gen:skill-docs       # render SKILL.md from SKILL.md.tmpl files
+bun run check                # Biome — format + lint
+bun run check:fix            # Biome — autofix everything safe
+bun run typecheck            # tsc --noEmit, strict mode
+bun run knip                 # find unused deps / files / exports
+bun run check:manifests      # validate marketplace.json + plugin.json + SKILL.md
+bun run check:skill-docs     # fail if any SKILL.md is stale vs. its .tmpl
+bun run ci                   # everything CI runs, in order
+```
+
+Every check above runs in [CI](.github/workflows/ci.yml) on push and
+PR — including [shellcheck](https://www.shellcheck.net) on the
+`setup` script. Biome is configured with the strictest practical
+ruleset (all rule groups + nursery + pedantic style/correctness/
+suspicious rules); see [`biome.json`](biome.json).
+
 ## Contributing
 
-See [CLAUDE.md](CLAUDE.md) for project structure, naming conventions, the
-`SKILL.md` format, and the design principles every skill in this
-marketplace follows.
+Read [CLAUDE.md](CLAUDE.md) first — it covers:
 
-The `Plugins` section above is generated from each plugin's
-`plugin.json` and each skill's `SKILL.md` frontmatter — edit those, then
-re-run `bash setup` (or `bun scripts/regen-readme.ts`) to update.
+- Project structure (`plugins/<plugin>/skills/<skill>/SKILL.md`)
+- Naming conventions (verb-noun: `/triage-lead`, `/create-deck`)
+- The `SKILL.md` format + the 1024-char description cap
+- Skill design principles (interactive, drafts-not-actions, etc.)
+- The snippet / template system
+
+Pull requests go through the CI gauntlet above; the `Plugins`
+catalog in this README regenerates itself from each skill's
+frontmatter — edit the frontmatter, not the table.
+
+## License
+
+[MIT](LICENSE) © 2026 Narrative I/O
