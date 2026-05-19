@@ -6,7 +6,7 @@
 
 # Narrative Skills Marketplace
 
-**A Claude Code plugin marketplace from [Narrative I/O](https://narrative.io).**
+**An agent skills marketplace from [Narrative I/O](https://narrative.io).**
 
 Interactive, AI-powered workflows that walk you through the recurring
 work of a modern data company — mapping schemas, writing NQL,
@@ -14,12 +14,12 @@ qualifying leads, shipping code, building decks — one approval at a time.
 
 [![CI](https://github.com/narrative-io/narrative-skills-marketplace/actions/workflows/ci.yml/badge.svg)](https://github.com/narrative-io/narrative-skills-marketplace/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-d97757)](https://claude.com/claude-code)
+[![Agent Skills spec](https://img.shields.io/badge/spec-agentskills.io-d97757)](https://agentskills.io)
 [![Biome](https://img.shields.io/badge/lint%20%26%20format-Biome-60a5fa?logo=biome)](https://biomejs.dev)
 [![Bun](https://img.shields.io/badge/runtime-Bun-fbf0df?logo=bun&logoColor=black)](https://bun.sh)
 [![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Knip](https://img.shields.io/badge/dead%20code-Knip-7e22ce)](https://knip.dev)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CLAUDE.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](AGENTS.md)
 
 </div>
 
@@ -27,18 +27,23 @@ qualifying leads, shipping code, building decks — one approval at a time.
 
 ## What is this?
 
-This repo is a **marketplace** of Claude Code plugins. Each plugin
-bundles one or more **skills** — interactive slash commands like
-`/write-nql` or `/generate-rosetta-stone-mappings` that turn a
-recurring task into a guided, AI-augmented workflow.
+A **marketplace** of agent skills. Each plugin bundles one or more
+**skills** — interactive slash commands like `/write-nql` or
+`/generate-rosetta-stone-mappings` that turn a recurring task into a
+guided, AI-augmented workflow.
 
-Install the marketplace, type a slash command in Claude Code, and the
+Install the marketplace, type a slash command in your agent, and the
 skill takes it from there: it asks the right questions, does the
 research, drafts the artifact, and waits for your approval before
 acting on anything outside your repo.
 
+Skills follow the [Agent Skills spec](https://agentskills.io) and run
+in any spec-compliant harness. The bundled `bash setup` installer
+currently targets Claude Code; for other harnesses, point your agent
+at the `plugins/*/skills/*/SKILL.md` files directly.
+
 > **Want the design philosophy?** See
-> [CLAUDE.md](CLAUDE.md#skill-design-principles) — "interactive, not
+> [AGENTS.md](AGENTS.md#skill-design-principles) — "interactive, not
 > reference," "drafts, not actions," "evidence over assumptions," etc.
 
 ## Install
@@ -49,12 +54,15 @@ cd narrative-skills-marketplace
 bash setup
 ```
 
-`setup` registers the marketplace with Claude Code, installs every
-plugin listed below, and regenerates the catalog in this README.
+`setup` registers the marketplace, installs every plugin listed
+below, and regenerates the catalog in this README. The installer
+currently targets [Claude Code](https://claude.com/claude-code) — for
+other harnesses, load any `plugins/*/skills/*/SKILL.md` directly.
 
 **Requirements**
 
-- [Claude Code](https://claude.com/claude-code) CLI on `PATH`
+- [Claude Code](https://claude.com/claude-code) CLI on `PATH` (for
+  `bash setup`; the SKILL.md files themselves are spec-portable)
 - [Bun](https://bun.sh) ≥ 1.1 (used for template rendering + scripts)
 
 <!-- BEGIN PLUGINS -->
@@ -99,7 +107,7 @@ allowed-tools:
 Some skills reuse boilerplate via the snippet system — author a
 `SKILL.md.tmpl` with `{{SNIPPET:pin-company-context}}` and `bun run
 gen:skill-docs` renders the final `SKILL.md`. See
-[CLAUDE.md → Template system](CLAUDE.md#template-system).
+[AGENTS.md → Template system](AGENTS.md#template-system).
 
 ## Development
 
@@ -123,7 +131,13 @@ suspicious rules); see [`biome.json`](biome.json).
 
 ## Contributing
 
-Read [CLAUDE.md](CLAUDE.md) first — it covers:
+[`docs/authoring-skills.md`](docs/authoring-skills.md) is the canonical
+guide for writing a new skill — frontmatter contract, description
+writing, phased body structure, progressive disclosure, composing
+skills, the template / snippet system, and CI checks.
+
+[AGENTS.md](AGENTS.md) is the quick reference for the same material
+and covers:
 
 - Project structure (`plugins/<plugin>/skills/<skill>/SKILL.md`)
 - Naming conventions (verb-noun: `/triage-lead`, `/create-deck`)
