@@ -16,7 +16,11 @@
       "!plugins/**/skills/**/SKILL.md",
       "!plugins/**/skills/**/SKILL.md.tmpl",
       "!plugins/**/_snippets",
-      "!snippets"
+      "!snippets",
+      "!renovate.json",
+      "!renovate.json5",
+      "!.github/renovate.json",
+      "!.github/renovate.json5"
     ]
   },
   "formatter": {
