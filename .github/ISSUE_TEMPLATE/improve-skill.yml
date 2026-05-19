@@ -1,0 +1,135 @@
+name: Suggest an improvement to an existing skill
+description: Report friction, ambiguity, or a bug in an existing skill.
+title: "[improve] /<skill-name>: "
+labels: ["skill:feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when an existing skill caused friction — something
+        that should have been one-shot took several back-and-forths, an
+        instruction was unclear, an assumption was wrong, or the agent got
+        stuck.
+
+        > This template's schema is also designed to be filled in
+        > programmatically by an MCP feedback tool. Keep field names stable.
+
+  - type: input
+    id: skill
+    attributes:
+      label: Skill
+      description: The slash command (with leading slash).
+      placeholder: /write-story
+    validations:
+      required: true
+
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin
+      description: The plugin that owns the skill (from `plugins/`).
+      placeholder: narrative-dev
+    validations:
+      required: true
+
+  - type: dropdown
+    id: friction_type
+    attributes:
+      label: Type of friction
+      description: What broadly went wrong?
+      options:
+        - Unclear instructions / ambiguous phase
+        - Missing information the skill should have gathered
+        - Wrong assumption baked into the skill
+        - Wrong tool used / right tool not used
+        - Skill didn't degrade gracefully when a dep was missing
+        - Output format was wrong / unusable
+        - Skill should have stopped earlier for approval
+        - Skill stopped/asked when it should have continued
+        - Bug / hard error
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What was the user/agent trying to do?
+      description: The original intent, in one or two sentences.
+      placeholder: |
+        I asked `/write-story` to spec a ticket for adding a new column to the
+        identity-resolution dashboard.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What actually happened?
+      description: Where did things go wrong? Where did the skill get stuck or take a wrong turn?
+      placeholder: |
+        The skill asked me to pick a parent epic before it had searched
+        Shortcut for relevant epics — so I had to abandon the flow, search
+        manually, then start over.
+    validations:
+      required: true
+
+  - type: input
+    id: roundtrips
+    attributes:
+      label: Round-trip count
+      description: Roughly how many back-and-forths did it take vs. the ideal of 1?
+      placeholder: "5"
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened?
+      description: Describe the ideal one-shot behavior.
+      placeholder: |
+        The skill should have searched Shortcut for active epics matching the
+        problem area first, presented the top 3, and let me pick or skip.
+
+  - type: textarea
+    id: suggested_fix
+    attributes:
+      label: Suggested fix (optional)
+      description: |
+        If you have a concrete change in mind — new phase, reordering, new
+        snippet, different question — describe it here. File paths welcome.
+      placeholder: |
+        In `plugins/narrative-dev/skills/write-story/SKILL.md.tmpl`, insert a
+        new Phase 2 that searches Shortcut for related epics before asking the
+        user to choose one.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context / transcript excerpt
+      description: |
+        Paste the relevant transcript snippet, related file paths, or anything
+        else that helps a maintainer reproduce.
+      render: markdown
+
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: Which Claude model was running the skill? (e.g. claude-opus-4-7)
+      placeholder: claude-opus-4-7
+
+  - type: input
+    id: session_at
+    attributes:
+      label: Session timestamp (UTC)
+      description: When did this happen? ISO 8601 if possible.
+      placeholder: "2026-05-19T14:32:00Z"
+
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: |
+        Where did this feedback come from? Leave as `human` for hand-filed
+        reports. The MCP feedback tool will set this to `mcp:<tool-name>`.
+      placeholder: human
