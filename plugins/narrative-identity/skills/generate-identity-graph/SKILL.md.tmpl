@@ -12,7 +12,7 @@ description: |
   "create an identity graph", "stitch these datasets into a graph",
   "make a graph workflow", "label connected components on these
   datasets", "I want a person graph / household graph / device graph".
-  (narrative-common)
+  (narrative-identity)
 compatibility:
   requires:
     tools:
@@ -29,9 +29,6 @@ compatibility:
       - narrative_datasets_describe
       - narrative_attributes_search
       - narrative_attributes_describe
-      - narrative_nql_validate
-      - narrative_nql_run
-      - narrative_jobs_describe
   recommends:
     mcp-servers:
       - narrative-knowledge-base
@@ -61,8 +58,8 @@ third-party edge sources. You optimize for:
 3. Validation before delivery — every materialized-view DDL is
    server-validated (by `/write-nql`, which owns that step) before
    the YAML is shown to the user.
-4. Write-safety — no `narrative_nql_run`, no workflow submission,
-   no durable side effect without explicit user approval.
+4. Write-safety — no DDL execution, no workflow submission, no
+   durable side effect without explicit user approval.
 
 You never guess identifier-type strings, never list third-party
 schemas as something this skill can fix, and never present an
@@ -380,15 +377,16 @@ user with:
    submit the file. (Do not invent endpoint URLs; if the user asks
    for the exact endpoint and you don't already know it, suggest
    they check the Narrative docs.)
-4. An offer to optionally run the materialized-view DDL right now via
-   `narrative_nql_run` so the edge view exists ahead of the workflow
-   submission — useful if the user wants to spot-check edge counts
-   before kicking off `LabelConnectedComponents`. This is async; poll
-   the returned job with `narrative_jobs_describe(job_ids: ["<id>"])`
-   until `state` is `completed`.
+4. An offer to optionally run the materialized-view DDL right now,
+   so the edge view exists ahead of the workflow submission — useful
+   if the user wants to spot-check edge counts before kicking off
+   `LabelConnectedComponents`. Execution is delegated to `/write-nql`
+   with `--run` and the same prompt used in phase 7a; `/write-nql`
+   owns the polling, error handling, and the user-facing "completed"
+   confirmation. Do not re-implement execution or job polling here.
 
-Do not submit the materialized view without explicit user approval —
-it writes a real dataset.
+Do not delegate execution without explicit user approval — the
+materialized view writes a real dataset.
 
 ## Final summary format
 
@@ -481,9 +479,9 @@ when something feels off or the user asks about tuning.
   the phase-8 summary so the user can override.
 - **Materialized-view names must be unique within the namespace** —
   on collision, ask before overwriting or version up.
-- **Never auto-run writes** — neither `narrative_nql_run` on the
-  `CREATE MATERIALIZED VIEW` nor the workflow submission run without
-  explicit user approval.
+- **Never auto-run writes** — neither materialized-view execution
+  (delegated to `/write-nql --run`) nor workflow submission runs
+  without explicit user approval.
 - **Empty UNION inputs fail silently** — spot-check per-source row
   counts before launching the workflow.
 
@@ -530,16 +528,16 @@ live in
   partial degradation, and the per-phase substitutions for a
   paste-driven flow. Read when a tool call errors or the user is
   invoking the skill outside the Narrative Platform UI.
-- `../generate-rosetta-stone-mappings/SKILL.md` — the mapping skill
-  this one defers to in phase 5.
-- `../write-nql/SKILL.md` — the NQL drafting + validation skill this
-  one defers to in phase 7a. Invoked with `--no-explain` and without
-  `--run` so it returns a validated `CREATE MATERIALIZED VIEW`
-  statement without executing it.
-- `../generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md` —
-  NQL quoting and function rules; relevant for the materialized-view
-  DDL in phase 7.
-- `../generate-rosetta-stone-mappings/references/KB_RESEARCH.md` —
+- `../../../narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md` —
+  the mapping skill this one defers to in phase 5
+  (`/generate-rosetta-stone-mappings`, lives in the
+  `narrative-common` plugin).
+- `../../../narrative-common/skills/write-nql/SKILL.md` — the NQL
+  drafting + validation skill this one defers to in phase 7a
+  (`/write-nql`, lives in the `narrative-common` plugin). Invoked
+  with `--no-explain` and without `--run` so it returns a validated
+  `CREATE MATERIALIZED VIEW` statement without executing it.
+- `../../../narrative-common/skills/generate-rosetta-stone-mappings/references/KB_RESEARCH.md` —
   how to query the `narrative-knowledge-base` MCP server for
   identity-graph and `LabelConnectedComponents` docs when the local
   references aren't enough.

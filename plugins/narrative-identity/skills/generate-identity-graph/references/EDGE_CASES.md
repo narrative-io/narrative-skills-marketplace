@@ -27,16 +27,12 @@ the **exact** strings produced by the mapping expressions. If a
 mapping emits `'sha256_email'` (lowercase, underscore), don't list
 it as `'SHA256_Email'` — the graph job will not match them.
 
-When in doubt, run a quick `narrative_nql_run` against the edge
-materialized view:
-
-```sql
-SELECT DISTINCT SOURCE_ID_TYPE FROM "<edges_view>"
-UNION
-SELECT DISTINCT TARGET_ID_TYPE FROM "<edges_view>"
-```
-
-Use the result set verbatim to populate the source lists.
+When in doubt, ask `/write-nql --run` to enumerate the distinct
+identifier-type values in the edge materialized view (something
+like "show me all the distinct values of SOURCE_ID_TYPE and
+TARGET_ID_TYPE in `<edges_view>`"). Use the result set verbatim
+to populate the source lists. Don't hand-author the probe — let
+`/write-nql` write and validate it.
 
 ## Don't mix directed and undirected edges silently
 
@@ -77,10 +73,11 @@ sentinel-identifier leak, not an iteration budget.
 
 ## Materialized view names must be globally unique within the namespace
 
-If `narrative_nql_validate` returns a name-collision error on the
-`CREATE MATERIALIZED VIEW` statement, ask the user whether to
-overwrite the existing view (use `WRITE_MODE = 'overwrite'`,
-already in the template) or pick a new name. Defaults:
+If `/write-nql` reports a name-collision error during phase 7a
+validation of the `CREATE MATERIALIZED VIEW` statement, ask the
+user whether to overwrite the existing view (use
+`WRITE_MODE = 'overwrite'`, already in the template) or pick a new
+name. Defaults:
 
 - View: `<graph_kind>_identity_graph_edges`
 - Output dataset: `<graph_kind>_identity_graph`
@@ -91,26 +88,18 @@ consumers may be pinned to it.
 
 ## Don't auto-run anything that writes
 
-The materialized-view creation (`narrative_nql_run` on the `CREATE
-MATERIALIZED VIEW`) and the workflow submission both produce
-durable artifacts in the user's namespace. Confirm explicitly with
-the user before either runs. Phase 8 of the main procedure is the
-only place writes are allowed, and only after explicit approval.
+The materialized-view creation (delegated to `/write-nql --run`)
+and the workflow submission both produce durable artifacts in the
+user's namespace. Confirm explicitly with the user before either
+runs. Phase 8 of the main procedure is the only place writes are
+allowed, and only after explicit approval.
 
 ## Empty UNION inputs
 
 If a first-party dataset is mapped to the graph-edge attribute but
-has zero rows that survive the mapping, its `SELECT` block in the
-UNION will return nothing — silently. The graph will build fine,
-just smaller than expected. Spot-check edge counts per source
-before launching the workflow:
-
-```sql
-SELECT 'first_party_<id>' AS source, COUNT(*) AS n
-FROM COMPANY_DATA.<first_party_dataset>
-UNION ALL
-SELECT '<provider>.<access_rule>' AS source, COUNT(*) AS n
-FROM <provider>.<access_rule>
-```
-
+has zero rows that survive the mapping, its contribution to the
+UNION will be empty — silently. The graph will build fine, just
+smaller than expected. Spot-check edge counts per source before
+launching the workflow by asking `/write-nql --run` for a labeled
+per-source count across the first-party and third-party inputs.
 Flag any zero-count source as a warning in the phase-8 summary.

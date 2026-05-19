@@ -85,17 +85,14 @@ When unavailable:
 
 ## Partial degradation
 
-If `narrative-mcp` is available but a *specific* tool errors (e.g.,
-`narrative_nql_validate` is returning 500s):
+If `narrative-mcp` is available but a *specific* downstream call
+errors (e.g., `/write-nql` reports repeated validation failures, or
+a dataset/attribute MCP tool returns 500s):
 
 - For `/write-nql` failures after its own internal retries: surface
   the verbatim error to the user, ask whether to drop the offending
   dataset or remap it, and re-invoke. Don't try to bypass validation
   — that's the rule `/write-nql` exists to enforce.
-- For ad-hoc validation errors (e.g., on a one-off expression you
-  validated outside `/write-nql`): skip validation for that one
-  expression and flag it as unvalidated in the summary. Do not block
-  the entire workflow on a flaky validate call.
 - For dataset describe errors: retry once with a smaller `include`
   list (drop `mappings` and `stats`; keep `metadata` and `schema`).
   If still failing, fall back to asking the user to paste schema
