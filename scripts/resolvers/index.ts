@@ -1,5 +1,5 @@
-import type { ResolverFn } from './types';
 import { generateSnippet } from './snippet';
+import type { ResolverFn } from './types';
 
 /**
  * Resolver registry. Keys are the UPPERCASE_NAME used inside

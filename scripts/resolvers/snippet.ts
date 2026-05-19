@@ -19,7 +19,7 @@ import type { TemplateContext } from './types';
 export function generateSnippet(ctx: TemplateContext, args?: string[]): string {
   if (!args || args.length === 0 || !args[0]) {
     throw new Error(
-      `{{SNIPPET:...}} requires a snippet name (e.g. {{SNIPPET:pin-company-context}}).`
+      `{{SNIPPET:...}} requires a snippet name (e.g. {{SNIPPET:pin-company-context}}).`,
     );
   }
 
@@ -28,9 +28,8 @@ export function generateSnippet(ctx: TemplateContext, args?: string[]): string {
   // Extract plugin name from tmplPath: .../plugins/<plugin>/skills/<skill>/SKILL.md.tmpl
   const parts = path.normalize(ctx.tmplPath).split(path.sep);
   const pluginsIdx = parts.lastIndexOf('plugins');
-  const pluginName = pluginsIdx >= 0 && pluginsIdx + 1 < parts.length
-    ? parts[pluginsIdx + 1]
-    : null;
+  const pluginName =
+    pluginsIdx >= 0 && pluginsIdx + 1 < parts.length ? parts[pluginsIdx + 1] : null;
 
   const candidates: string[] = [];
   if (pluginName) {
@@ -46,6 +45,6 @@ export function generateSnippet(ctx: TemplateContext, args?: string[]): string {
 
   throw new Error(
     `{{SNIPPET:${name}}}: no snippet file found. Looked in:\n  ` +
-    candidates.map(c => path.relative(ctx.root, c)).join('\n  ')
+      candidates.map((c) => path.relative(ctx.root, c)).join('\n  '),
   );
 }

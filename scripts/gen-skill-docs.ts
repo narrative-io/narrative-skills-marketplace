@@ -37,9 +37,10 @@ const PLACEHOLDER_RE = /\{\{([A-Z_]+(?::[^}]+)?)\}\}/g;
 
 function renderPlaceholders(content: string, ctx: TemplateContext, relTmplPath: string): string {
   return content.replace(PLACEHOLDER_RE, (_match, fullKey: string) => {
-    const parts = fullKey.split(':');
-    const resolverName = parts[0];
-    const args = parts.slice(1);
+    const [resolverName, ...args] = fullKey.split(':');
+    if (!resolverName) {
+      throw new Error(`Empty placeholder in ${relTmplPath}`);
+    }
     const resolver = RESOLVERS[resolverName];
     if (!resolver) {
       throw new Error(`Unknown placeholder {{${resolverName}}} in ${relTmplPath}`);
@@ -59,9 +60,9 @@ function processTemplate(tmplPath: string): { outputPath: string; content: strin
   if (description.length > DESCRIPTION_MAX_CHARS) {
     throw new Error(
       `Description for skill "${skillName}" is ${description.length} chars, ` +
-      `exceeds ${DESCRIPTION_MAX_CHARS}-char cap (in ${relTmplPath}). ` +
-      `Trim by collapsing redundant clauses, dropping low-value Use-when triggers, ` +
-      `or shortening enumerated lists. Target ≤1000 chars for safety buffer.`
+        `exceeds ${DESCRIPTION_MAX_CHARS}-char cap (in ${relTmplPath}). ` +
+        `Trim by collapsing redundant clauses, dropping low-value Use-when triggers, ` +
+        `or shortening enumerated lists. Target ≤1000 chars for safety buffer.`,
     );
   }
 
@@ -74,7 +75,9 @@ function processTemplate(tmplPath: string): { outputPath: string; content: strin
   for (let i = 0; i < 5; i++) {
     const before = content;
     content = renderPlaceholders(content, ctx, relTmplPath);
-    if (content === before) break;
+    if (content === before) {
+      break;
+    }
   }
 
   const remaining = content.match(PLACEHOLDER_RE);
@@ -87,11 +90,11 @@ function processTemplate(tmplPath: string): { outputPath: string; content: strin
   // opens it directly, and survives a clean diff against the template.
   const header = GENERATED_HEADER.replace('{{SOURCE}}', path.basename(tmplPath));
   const fmEnd = content.indexOf('---', content.indexOf('---') + 3);
-  if (fmEnd !== -1) {
+  if (fmEnd === -1) {
+    content = header + content;
+  } else {
     const insertAt = content.indexOf('\n', fmEnd) + 1;
     content = content.slice(0, insertAt) + header + content.slice(insertAt);
-  } else {
-    content = header + content;
   }
 
   return { outputPath, content };
@@ -115,11 +118,11 @@ for (const { tmpl } of templates) {
 
   if (DRY_RUN) {
     const existing = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf-8') : '';
-    if (existing !== content) {
+    if (existing === content) {
+      console.log(`FRESH: ${relOutput}`);
+    } else {
       console.log(`STALE: ${relOutput}`);
       hasChanges = true;
-    } else {
-      console.log(`FRESH: ${relOutput}`);
     }
   } else {
     fs.writeFileSync(outputPath, content);

@@ -11,15 +11,26 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 const SKIP = new Set([
-  'node_modules', '.git', 'dist', 'scripts', 'bin',
-  '.claude-plugin', 'commands', 'test', 'references', 'snippets',
+  'node_modules',
+  '.git',
+  'dist',
+  'scripts',
+  'bin',
+  '.claude-plugin',
+  'commands',
+  'test',
+  'references',
+  'snippets',
 ]);
 
 function subdirs(dir: string): string[] {
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir, { withFileTypes: true })
-    .filter(d => d.isDirectory() && !d.name.startsWith('.') && !SKIP.has(d.name))
-    .map(d => d.name);
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.startsWith('.') && !SKIP.has(d.name))
+    .map((d) => d.name);
 }
 
 export function discoverTemplates(root: string): Array<{ tmpl: string; output: string }> {
