@@ -112,10 +112,54 @@ Do NOT use for:
 
 ## Procedure
 
-Run phases in order. Phases 1-3 frame the problem; phases 4-6 prepare
-the inputs; phases 7-8 compose and submit. Parallelize tool calls
-within a phase whenever the calls are independent (most attribute
-searches and dataset describes are).
+Run phases in order. Phase 0 is an optional pre-flight; phases 1-3
+frame the problem; phases 4-6 prepare the inputs; phases 7-8 compose
+and submit. Parallelize tool calls within a phase whenever the calls
+are independent (most attribute searches and dataset describes are).
+
+### Phase 0. Optional pre-flight data audit
+
+Before designing the workflow, ask the user whether they want to
+audit any of their input datasets for graph-quality issues. Identity
+graphs are extremely sensitive to hub identifiers, leaky sentinel
+values (`null@example.com`, `00000000...`), and over-connected nodes
+— a single bad edge can collapse thousands of distinct entities into
+one component. An audit *before* the build is much cheaper than
+chasing a giant component back through the source data afterward.
+
+Ask via `AskUserQuestion`:
+
+> "Before we design the graph workflow, would you like to audit any
+> of your input datasets for graph-quality issues (hub identifiers,
+> leaky sentinel values, over-connected nodes) first?"
+
+Options:
+
+- **Yes — audit first.** Hand off to `/triage-pregraph-data`. That
+  skill has its own dataset-discovery flow, so you don't need to
+  surface dataset IDs here. Stop after the handoff — do not continue
+  to phase 1.
+- **No — skip the audit.** Continue to phase 1.
+- **Not sure — what does the audit do?** Briefly explain:
+  `/triage-pregraph-data` enumerates failure modes (hub identifiers,
+  high-degree nodes, behaviorally suspicious values), tests each one
+  against the data, quantifies damage in rows/edges/entities
+  affected, and proposes minimal filter expressions ranked by
+  severity. It produces a report; it does not modify any data. Then
+  re-ask the same question.
+
+If the user opts in, tell them:
+
+> "I'll hand off to `/triage-pregraph-data` now. It will produce a
+> triage report with filter expressions ranked by severity. Once
+> you've applied the recommended filters (`/write-nql` can help with
+> the materialized-view DDL), re-run `/generate-identity-graph` —
+> I'll pick up from phase 1 with the cleaned dataset list."
+
+Do not try to chain the two skills inside this run. The audit's
+output is filter expressions that have to be applied to source data
+before the graph build, which usually means a new materialized view
+and a fresh dataset ID — that's a clean restart, not a continuation.
 
 ### Phase 1. Frame the use case
 
@@ -547,6 +591,10 @@ live in
   partial degradation, and the per-phase substitutions for a
   paste-driven flow. Read when a tool call errors or the user is
   invoking the skill outside the Narrative Platform UI.
+- `../triage-pregraph-data/SKILL.md` — the pre-graph data-quality
+  audit this one hands off to in phase 0 when the user opts into a
+  pre-flight audit. Produces filter expressions; doesn't modify
+  data.
 - `../../../narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md` —
   the mapping skill this one defers to in phase 5
   (`/generate-rosetta-stone-mappings`, lives in the
