@@ -1,7 +1,9 @@
 # narrative-skills-marketplace
 
-A Claude Code plugin marketplace. Plugins live under `plugins/`; each
+An agent skills marketplace. Plugins live under `plugins/`; each
 plugin contains one or more skills under `plugins/<plugin>/skills/`.
+Skills follow the [Agent Skills spec](https://agentskills.io); the
+`bash setup` installer currently targets Claude Code.
 
 > **Authoring a skill?** [`docs/authoring-skills.md`](docs/authoring-skills.md)
 > is the canonical guide — frontmatter contract, description writing,
