@@ -1,5 +1,3 @@
 node_modules/
-__pycache__/
-*.pyc
+*.tsbuildinfo
 .DS_Store
-.claude/
