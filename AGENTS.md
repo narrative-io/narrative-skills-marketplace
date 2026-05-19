@@ -3,6 +3,12 @@
 A Claude Code plugin marketplace. Plugins live under `plugins/`; each
 plugin contains one or more skills under `plugins/<plugin>/skills/`.
 
+> **Authoring a skill?** [`docs/authoring-skills.md`](docs/authoring-skills.md)
+> is the canonical guide — frontmatter contract, description writing,
+> phased body structure, progressive disclosure, composition, the
+> template / snippet system, and CI checks. The notes below are the
+> 60-second tour.
+
 ## Commands
 
 ```bash

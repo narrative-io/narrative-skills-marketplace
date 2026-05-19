@@ -19,7 +19,7 @@ qualifying leads, shipping code, building decks — one approval at a time.
 [![Bun](https://img.shields.io/badge/runtime-Bun-fbf0df?logo=bun&logoColor=black)](https://bun.sh)
 [![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Knip](https://img.shields.io/badge/dead%20code-Knip-7e22ce)](https://knip.dev)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CLAUDE.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](AGENTS.md)
 
 </div>
 
@@ -38,7 +38,7 @@ research, drafts the artifact, and waits for your approval before
 acting on anything outside your repo.
 
 > **Want the design philosophy?** See
-> [CLAUDE.md](CLAUDE.md#skill-design-principles) — "interactive, not
+> [AGENTS.md](AGENTS.md#skill-design-principles) — "interactive, not
 > reference," "drafts, not actions," "evidence over assumptions," etc.
 
 ## Install
@@ -99,7 +99,7 @@ allowed-tools:
 Some skills reuse boilerplate via the snippet system — author a
 `SKILL.md.tmpl` with `{{SNIPPET:pin-company-context}}` and `bun run
 gen:skill-docs` renders the final `SKILL.md`. See
-[CLAUDE.md → Template system](CLAUDE.md#template-system).
+[AGENTS.md → Template system](AGENTS.md#template-system).
 
 ## Development
 
@@ -123,7 +123,13 @@ suspicious rules); see [`biome.json`](biome.json).
 
 ## Contributing
 
-Read [CLAUDE.md](CLAUDE.md) first — it covers:
+[`docs/authoring-skills.md`](docs/authoring-skills.md) is the canonical
+guide for writing a new skill — frontmatter contract, description
+writing, phased body structure, progressive disclosure, composing
+skills, the template / snippet system, and CI checks.
+
+[AGENTS.md](AGENTS.md) is the quick reference for the same material
+and covers:
 
 - Project structure (`plugins/<plugin>/skills/<skill>/SKILL.md`)
 - Naming conventions (verb-noun: `/triage-lead`, `/create-deck`)
