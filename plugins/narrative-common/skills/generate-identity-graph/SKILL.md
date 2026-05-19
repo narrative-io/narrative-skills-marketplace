@@ -56,11 +56,13 @@ third-party edge sources. You optimize for:
    UNION. No exceptions, no inline patching.
 2. Defer, don't re-implement — when an input dataset isn't mapped to
    the graph-edge attribute, hand off to
-   `/generate-rosetta-stone-mappings`. Never write graph-edge
-   mappings inside this skill.
+   `/generate-rosetta-stone-mappings`; when the materialized-view
+   NQL needs to be written, hand off to `/write-nql`. Never write
+   graph-edge mappings or hand-author/validate NQL inside this
+   skill.
 3. Validation before delivery — every materialized-view DDL is
-   server-validated via `narrative_nql_validate` before the YAML is
-   shown to the user.
+   server-validated (by `/write-nql`, which owns that step) before
+   the YAML is shown to the user.
 4. Write-safety — no `narrative_nql_run`, no workflow submission,
    no durable side effect without explicit user approval.
 
@@ -87,7 +89,10 @@ any tools.
 
 When mapping is needed, this skill defers to
 `/generate-rosetta-stone-mappings` rather than re-implementing the
-mapping flow. Don't try to write graph-edge mappings inline.
+mapping flow. Don't try to write graph-edge mappings inline. When
+the materialized-view NQL needs to be drafted and validated, the
+skill defers to `/write-nql` — the body shows the exact contract in
+phase 7a. Don't hand-write or validate NQL inside this skill.
 
 ## When to use
 
@@ -304,17 +309,65 @@ third-party dataset in the UNION ALL, plus the
 once at the start of this phase and fill in the placeholders using
 the rules below.
 
-Rules for filling in the template:
+#### 7a. Generate the materialized-view NQL via `/write-nql`
+
+Do **not** hand-write the `CREATE MATERIALIZED VIEW` body inline.
+Delegate to `/write-nql`, which owns NQL drafting + server-side
+validation. Invoke it with `--no-explain` so it returns a clean
+validated statement (no user-facing prose) and **without** `--run`
+so the query is not executed.
+
+Input (the free-text question passed to `/write-nql`):
+
+> Write a `CREATE MATERIALIZED VIEW "<edges-view-name>"` statement
+> with:
+>
+> - `DISPLAY_NAME = '<display name from phase 1>'`
+> - `DESCRIPTION = '<one-sentence description from phase 1>'`
+> - `TAGS = ('<graph-kind>', 'identity-graph')`
+> - `WRITE_MODE = 'overwrite'`
+>
+> The body should `SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE,
+> TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES` from each of
+> these datasets, `UNION ALL`'d together in the order listed:
+>
+> First-party datasets (use `COMPANY_DATA.<id>`):
+>   - `<first_party_dataset_id_1>`
+>   - `<first_party_dataset_id_2>`
+>   - …
+>
+> Third-party datasets (use `<provider>.<access_rule>`):
+>   - `<provider_1>.<access_rule_1>`
+>   - …
+>
+> Validate the statement and return it. Don't run it.
+
+Contract:
+
+- **Input** to `/write-nql`: the prompt above with placeholders
+  filled from phases 1, 3, 5, 6. Pass `--no-explain` only.
+- **Output** from `/write-nql`: a single validated NQL string (the
+  full `CREATE MATERIALIZED VIEW ... AS ...` statement). Take the
+  string as-is — do not edit it before embedding.
+
+If `/write-nql` reports validation failure after its own internal
+retries (a referenced dataset doesn't exist, a column is named
+differently than the contract expects), surface the verbatim error
+to the user, ask whether to drop the offending dataset or remap it,
+and re-invoke `/write-nql` with the corrected input list. Do **not**
+present an unvalidated workflow to the user.
+
+#### 7b. Substitute and fill the rest of the workflow
+
+Take the NQL string from step 7a and substitute it into the
+`createEdges.with.nql: |` block of `assets/workflow.yaml`, replacing
+the entire placeholder body. Then fill the remaining placeholders:
 
 - **`namespace`**: kebab-case slug of the company name returned by
   `narrative_context_get`.
 - **`name`**: kebab-case slug derived from the graph kind in phase 1
   (`person-identity-graph`, `household-identity-graph`, …). Append a
   qualifier if the user named one ("us-person-identity-graph").
-- **One `SELECT ... FROM ...` block per input dataset** in the UNION
-  ALL. First-party datasets use `COMPANY_DATA.<dataset_id>`; third-party
-  datasets use `<provider>.<access_rule_name>`. Preserve order:
-  first-party first, third-party second — easier to scan in review.
 - **`firstPartySources`** lists the distinct identifier-type values
   (the `SOURCE_ID_TYPE` / `TARGET_ID_TYPE` enum values) that the
   first-party datasets emit. Pull these from the column stats /
@@ -328,20 +381,7 @@ Rules for filling in the template:
   to change them. Surface defaults explicitly in the summary so the
   user can override.
 
-Before showing the YAML to the user, **validate the materialized-view
-NQL** by extracting the `CREATE MATERIALIZED VIEW ... AS ...` body
-and running:
-
-```
-narrative_nql_validate(nql: '<the CREATE MATERIALIZED VIEW statement>')
-```
-
-If validation fails (e.g., a referenced dataset doesn't exist, a
-column is named differently than the contract expects), fix the
-offending block and re-validate. Do **not** present an unvalidated
-workflow to the user.
-
-Save the validated YAML to a file in the working directory using the
+Save the filled YAML to a file in the working directory using the
 `Write` tool, e.g. `./<graph-name>.workflow.yaml`. This is the
 artifact the user will submit.
 
@@ -481,10 +521,13 @@ per-phase substitutions and user-facing checklist of skipped steps
 live in
 [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 
-- **`narrative-mcp` unavailable** — switch to a paste-driven flow
-  (user pastes dataset metadata + mapping status), skip phase 5,
-  skip `narrative_nql_validate` in phase 7, still emit the workflow
-  YAML.
+- **`narrative-mcp` unavailable** — `/write-nql` and
+  `/generate-rosetta-stone-mappings` are both degraded too. Switch
+  to a paste-driven flow (user pastes dataset metadata + mapping
+  status), skip phase 5, skip the `/write-nql` handoff in phase 7a
+  and hand-author the `CREATE MATERIALIZED VIEW` from the asset's
+  placeholders with a global "not server-validated" warning, still
+  emit the workflow YAML.
 - **`narrative-knowledge-base` unavailable** — fall back to the
   local reference files; do not block the workflow.
 - **Partial degradation** (specific MCP tool erroring) — skip that
@@ -508,6 +551,10 @@ live in
   invoking the skill outside the Narrative Platform UI.
 - `../generate-rosetta-stone-mappings/SKILL.md` — the mapping skill
   this one defers to in phase 5.
+- `../write-nql/SKILL.md` — the NQL drafting + validation skill this
+  one defers to in phase 7a. Invoked with `--no-explain` and without
+  `--run` so it returns a validated `CREATE MATERIALIZED VIEW`
+  statement without executing it.
 - `../generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md` —
   NQL quoting and function rules; relevant for the materialized-view
   DDL in phase 7.

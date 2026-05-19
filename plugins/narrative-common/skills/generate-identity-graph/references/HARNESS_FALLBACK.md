@@ -47,13 +47,17 @@ all depend on it. Recover by switching to a paste-driven flow:
    user-driven.
 
 6. **Phase 7** still produces the workflow YAML, but **skip the
-   `narrative_nql_validate` step** on the `CREATE MATERIALIZED VIEW`
-   body. Add a global warning to the summary:
+   `/write-nql` handoff in step 7a**. `/write-nql` cannot run
+   without `narrative-mcp` either, so it can't draft or validate
+   the `CREATE MATERIALIZED VIEW` body. Instead, hand-author the
+   statement directly from the asset's placeholders using the input
+   list from the paste-driven flow above. Add a global warning to
+   the summary:
 
-   > "The materialized-view NQL was not server-validated because
-   > narrative-mcp was unavailable. Confidence in column names and
-   > table references is reduced — please review the YAML carefully
-   > before submitting."
+   > "The materialized-view NQL was hand-authored because
+   > narrative-mcp was unavailable and `/write-nql` could not be
+   > used. It has not been server-validated — please review the
+   > YAML carefully before submitting."
 
 7. **Phase 8** is unchanged — still emit the file and submission
    instructions.
@@ -84,9 +88,14 @@ When unavailable:
 If `narrative-mcp` is available but a *specific* tool errors (e.g.,
 `narrative_nql_validate` is returning 500s):
 
-- For validation errors: skip validation for that one expression
-  and flag it as unvalidated in the summary. Do not block the entire
-  workflow on a flaky validate call.
+- For `/write-nql` failures after its own internal retries: surface
+  the verbatim error to the user, ask whether to drop the offending
+  dataset or remap it, and re-invoke. Don't try to bypass validation
+  — that's the rule `/write-nql` exists to enforce.
+- For ad-hoc validation errors (e.g., on a one-off expression you
+  validated outside `/write-nql`): skip validation for that one
+  expression and flag it as unvalidated in the summary. Do not block
+  the entire workflow on a flaky validate call.
 - For dataset describe errors: retry once with a smaller `include`
   list (drop `mappings` and `stats`; keep `metadata` and `schema`).
   If still failing, fall back to asking the user to paste schema
@@ -106,7 +115,8 @@ checklist is better than a paragraph:
 Skipped because narrative-mcp was unavailable:
   • Company-context resolution (namespace was taken from your input)
   • Dataset mapping-status verification
-  • Materialized-view NQL validation
+  • /write-nql handoff for the materialized-view DDL — statement was
+    hand-authored from the asset and is not server-validated
   • Identifier-type discovery (source lists came from your input)
 
 Please verify these manually before submitting the workflow.
