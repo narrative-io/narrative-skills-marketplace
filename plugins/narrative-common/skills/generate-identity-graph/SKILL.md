@@ -295,61 +295,14 @@ Assemble the workflow YAML using the inputs from phases 1, 3, 5, 6.
 The shape is fixed; only the contents of the UNION and the source
 lists change.
 
-Workflow template:
-
-```yaml
-document:
-  dsl: '1.0.0'
-  namespace: <slug-of-company-name>
-  name: <slug-from-phase-1-graph-kind>-identity-graph
-  version: '1.0.0'
-
-# Workflow to create a simple identity graph
-
-do:
-  # ─── Universal edges ──────────────────────────────────────────────
-  # UNION ALL all of the input edges from both first and third party
-  # data sources, leveraging the rosetta stone graph edge attribute.
-  # LabelConnectedComponents expects a single edge dataset as input.
-
-  - createEdges:
-      call: CreateMaterializedViewIfNotExists
-      with:
-        nql: |
-          CREATE MATERIALIZED VIEW "<edges-view-name>"
-          DISPLAY_NAME = '<human-readable display name>'
-          DESCRIPTION = '<one-sentence description from phase 1>'
-          TAGS = ('<graph-kind>', 'identity-graph')
-          WRITE_MODE = 'overwrite'
-          AS
-          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
-          FROM COMPANY_DATA.<first_party_dataset_1>
-          UNION ALL
-          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
-          FROM COMPANY_DATA.<first_party_dataset_2>
-          UNION ALL
-          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
-          FROM <third_party_company>.<access_rule_name>
-
-  # ─── Final connected components ───────────────────────────────────
-
-  - createGraph:
-      call: LabelConnectedComponents
-      with:
-        edgeDataset: <edges-view-name>
-        outputDataset: <graph-output-dataset-name>
-        sourceIdCol: SOURCE_ID
-        sourceSystemCol: SOURCE_ID_TYPE
-        bridgeKeyCol: TARGET_ID
-        bridgeKeyTypeCol: TARGET_ID_TYPE
-        firstPartySources:
-          - <list of distinct SOURCE_ID_TYPE / TARGET_ID_TYPE values from first-party datasets>
-        thirdPartySources:
-          - <list of distinct SOURCE_ID_TYPE / TARGET_ID_TYPE values from third-party datasets>
-        maxDegreeThreshold: 100
-        maxComponentSize: 100
-        maxIterations: 25
-```
+Load the canonical template from
+[`assets/workflow.yaml`](assets/workflow.yaml) — it contains the
+full `document` / `do` skeleton with `<placeholder>` tokens (one
+`SELECT ... FROM ...` block per first-party dataset and one per
+third-party dataset in the UNION ALL, plus the
+`LabelConnectedComponents` call with default tuning knobs). Read it
+once at the start of this phase and fill in the placeholders using
+the rules below.
 
 Rules for filling in the template:
 
@@ -540,6 +493,9 @@ live in
 
 ## Further reading
 
+- `assets/workflow.yaml` — the canonical workflow skeleton loaded in
+  phase 7. Edit this file (not the body) to change the workflow's
+  default shape; the procedure references it by path.
 - `references/EDGE_CASES.md` — gotchas and tuning notes: the fixed
   edge-contract schema, identifier-type casing, directed/undirected
   mixing, `maxComponentSize` / `maxDegreeThreshold` / `maxIterations`
