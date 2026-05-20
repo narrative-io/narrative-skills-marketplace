@@ -27,7 +27,7 @@ Resolution sequence:
 
 ```
 narrative_nql_run(
-  query: 'CREATE MATERIALIZED VIEW "wn_check_20260519" EXPIRE = ''P1D'' AS (SELECT … FROM company_data."12345") BUDGET 5 USD',
+  query: 'CREATE MATERIALIZED VIEW "wn_check_20260519" EXPIRE = ''P1D'' AS (SELECT … FROM company_data."12345")',
   data_plane_id: '<dataset_12345_plane_uuid>'
 )
 narrative_nql_get_job(
@@ -48,8 +48,14 @@ is terminal. Use a short, bounded backoff — most queries finish in a
 few seconds; very few should need more than 60s of polling.
 
 Suggested polling cadence: 1s, 2s, 3s, 5s, 5s, 5s, 10s, 10s, 10s, 15s,
-15s, … cap at ~15s between polls, give up at 5 minutes total wall
-time and surface the partial state to the user.
+15s, … cap at ~15s between polls. **Give-up rule: 15 minutes per
+state, with the timer reset whenever the job's `state` field
+transitions** (e.g. `pending` → `running`, `running` → `processing`).
+Only abandon polling if the same state has persisted for 15 minutes
+without progress. Cold compute pools can sit in `pending` for several
+minutes before promoting; a flat 5-minute total cap kills jobs that
+haven't actually started. When you do give up, surface the
+`job_id` and partial state to the user so they can check on it later.
 
 Terminal states:
 
@@ -85,7 +91,7 @@ is not a runnable form — you must explicitly wrap it in
 3. **Read the sample rows** with `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`. The sample lives in the control plane and is what `include=["sample"]` returns.
 
 ```
-narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS (SELECT …) BUDGET 5 USD")
+narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS (SELECT …)")
   → poll narrative_jobs_describe → result.dataset_id = 1234
 narrative_dataset_request_sample(dataset_id: 1234)
   → poll narrative_jobs_describe → completed
