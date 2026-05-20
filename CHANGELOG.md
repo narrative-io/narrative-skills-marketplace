@@ -13,3 +13,46 @@ the two views are deliberately redundant.
 [gh-releases]: https://github.com/narrative-io/narrative-skills-marketplace/releases
 
 <!-- RELEASES BELOW -->
+
+## [2026.05.0] - 2026-05-20
+
+### ✨ Features
+
+- adopt CalVer + GitHub-native release process (#21) (715f7c8)
+- enforce conventional commits at PR and commit time (#22) (46741ba)
+- wire narrative-agent-feedback MCP into every skill (#19) (5085051)
+- **narrative-common:** add /create-workflow skill (#18) (68d3e80)
+- add design-analysis skill and narrative-identity plugin (#11) (413ab23)
+- add SKILL.md template and snippet system (#4) (74986c6)
+- **narrative-rosetta:** add rosetta mapping plugin (#1) (9223659)
+
+### 🐛 Bug Fixes
+
+- **docs:** correct branch-protection gh api snippet (#23) (1d85fa3)
+
+### 📚 Documentation
+
+- **write-nql:** add persona to skill body (#15) (3ac0dd4)
+- add canonical skill authoring guide, rename CLAUDE.md, harness-agnostic framing (#8) (33afffc)
+
+### 🤖 CI / Tooling
+
+- exclude renovate config files from Biome formatter (#10) (c77ca9e)
+
+### 🧹 Maintenance
+
+- prep repo for going public (#20) (b7cd5fb)
+- **deps:** update dependency typescript to v6 (#13) (7e45f76)
+- **deps:** update actions/checkout action to v6 (#12) (5deffda)
+- add CI tooling, pedantic linting, and public-ready README (#6) (06741d0)
+- add github issue templates for new skills and feedback (#5) (152bf64)
+- self-document README from plugin and skill manifests (#2) (25530ea)
+- initial marketplace scaffolding (6c1d633)
+
+### Other
+
+- [Feature] Extract /find-attribute skill to narrative-common (#17) (2353b47)
+- [Docs] Thread NQL gotchas + data_plane_id guidance through NQL skills (#16) (cdba031)
+- Add renovate.json (#9) (02c4ae2)
+- [Feature] Add write-nql skill to narrative-common (#7) (de14a32)
+
