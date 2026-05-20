@@ -5,9 +5,13 @@ This project uses [CalVer](https://calver.org) versions in the form
 same-month follow-up, `2026.06.0` next month).
 
 What's versioned is the **marketplace as a whole** — i.e. the set of
-plugins shipped at that point in time. Individual plugins keep their
-own SemVer in each `plugin.json`, so "plugin Y is API-stable at 1.x"
-remains a separate story from "the marketplace shipped on date X."
+plugins shipped at that point in time. Every `plugins[].version` in
+`.claude-plugin/marketplace.json` is rewritten to that CalVer in the
+release commit, so the file on `main` always matches the tag it ships
+under. Per-plugin `plugin.json` files keep their own SemVer
+(independent of the marketplace tag), so "plugin Y is API-stable at
+1.x" remains a separate story from "the marketplace shipped on date
+X."
 
 ## Cadence
 
@@ -121,9 +125,12 @@ pass `--release-as=2026.05.3` to `release:apply`.
 
 - It does not publish to npm or any other registry — the marketplace
   is consumed via `git clone`.
-- It does not bump per-plugin `plugin.json` versions. Plugins are
-  versioned independently; bump their version in the PR that changes
-  them, not at release time.
+- It does not bump per-plugin `plugin.json` versions. Those stay on
+  their own SemVer and should be bumped in the PR that changes the
+  plugin, not at release time. (The `plugins[].version` entries in
+  `.claude-plugin/marketplace.json` *are* rewritten to the CalVer in
+  the release commit so the marketplace view of "what shipped" lines
+  up with the tag.)
 - It does not gate releases on a manual approval beyond your own
   `git push`. If you want a stricter flow, add a protected
   environment to `release.yml`.

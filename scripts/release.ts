@@ -53,6 +53,7 @@ type Commit = {
 
 const REPO_ROOT = resolve(import.meta.dir, '..');
 const CHANGELOG_PATH = resolve(REPO_ROOT, 'CHANGELOG.md');
+const MARKETPLACE_PATH = resolve(REPO_ROOT, '.claude-plugin', 'marketplace.json');
 const RELEASES_MARKER = '<!-- RELEASES BELOW -->';
 
 const TAG_PREFIX = 'v';
@@ -261,12 +262,58 @@ function insertEntry(entry: string): void {
   writeFileSync(CHANGELOG_PATH, updated);
 }
 
+// Rewrites every `plugins[].version` in marketplace.json to the release
+// version so the file always reflects the tag it ships with. Preserves the
+// existing key order and trailing newline. Returns the list of plugin names
+// whose version actually changed (for the preview output).
+function bumpMarketplaceVersions(version: string): string[] {
+  const raw = readFileSync(MARKETPLACE_PATH, 'utf-8');
+  const data = JSON.parse(raw) as {
+    plugins?: Array<{ name?: string; version?: string }>;
+  };
+  if (!Array.isArray(data.plugins) || data.plugins.length === 0) {
+    throw new Error('.claude-plugin/marketplace.json has no plugins[] to bump.');
+  }
+  const changed: string[] = [];
+  for (const entry of data.plugins) {
+    if (entry.version !== version) {
+      changed.push(entry.name ?? '(unnamed)');
+      entry.version = version;
+    }
+  }
+  const trailingNewline = raw.endsWith('\n') ? '\n' : '';
+  writeFileSync(MARKETPLACE_PATH, `${JSON.stringify(data, null, 2)}${trailingNewline}`);
+  return changed;
+}
+
 function assertGhAvailable(): void {
   try {
     execSync('gh --version', { stdio: 'ignore' });
   } catch {
     throw new Error('`gh` (GitHub CLI) is required for --apply. Install: https://cli.github.com');
   }
+}
+
+function previewMarketplaceBump(version: string): void {
+  const data = JSON.parse(readFileSync(MARKETPLACE_PATH, 'utf-8')) as {
+    plugins?: Array<{ name?: string; version?: string }>;
+  };
+  const rows = (data.plugins ?? []).map((p) => ({
+    name: p.name ?? '(unnamed)',
+    from: p.version ?? '(none)',
+    to: version,
+    changed: p.version !== version,
+  }));
+  if (rows.length === 0) {
+    return;
+  }
+  console.log('--- marketplace.json plugins[] versions ---');
+  for (const r of rows) {
+    const marker = r.changed ? '→' : '=';
+    console.log(`  ${r.name}: ${r.from} ${marker} ${r.to}`);
+  }
+  console.log('--- end ---');
+  console.log('');
 }
 
 function preview(version: string, commits: Commit[], since: string | null): string {
@@ -281,6 +328,7 @@ function preview(version: string, commits: Commit[], since: string | null): stri
   console.log(entry);
   console.log('--- end ---');
   console.log('');
+  previewMarketplaceBump(version);
   return entry;
 }
 
@@ -300,7 +348,11 @@ function openReleasePR(version: string, entry: string): void {
   shInherit('git pull --ff-only origin main');
   shInherit(`git checkout -b ${branch}`);
   insertEntry(entry);
-  shInherit('git add CHANGELOG.md');
+  const bumped = bumpMarketplaceVersions(version);
+  if (bumped.length > 0) {
+    console.log(`Bumped marketplace.json plugins[] versions → ${version}: ${bumped.join(', ')}`);
+  }
+  shInherit('git add CHANGELOG.md .claude-plugin/marketplace.json');
   shInherit(`git commit -m "chore(release): ${tag}"`);
   shInherit(`git push -u origin ${branch}`);
 
