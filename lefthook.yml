@@ -10,6 +10,14 @@ pre-commit:
     skill-versions:
       glob: 'plugins/*/skills/*/SKILL.md.tmpl'
       run: bun run check:versions {staged_files}
+    # Regenerate downstream artifacts (SKILL.md, skills.json, README.md,
+    # mcp/*.json) whenever a generator-input source is staged. Keeps the
+    # tree consistent so CI's --dry-run drift checks never trip.
+    regen-artifacts:
+      glob: '{plugins/*/skills/*/SKILL.md.tmpl,plugins/*/_snippets/*.md,snippets/*.md,plugins/*/.claude-plugin/plugin.json}'
+      run: |
+        bun run gen:all
+        git add plugins/*/skills/*/SKILL.md skills.json README.md mcp/*.json
 
 commit-msg:
   commands:
