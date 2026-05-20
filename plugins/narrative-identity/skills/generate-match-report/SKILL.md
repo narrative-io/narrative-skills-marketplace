@@ -231,7 +231,8 @@ narrative_dataset_set_column_stats_config(
 ```
 
 Trigger a stats recalculation (the MCP tool surface should expose
-`recalculate_statistics` — if not, see Appendix D's fallback). Then
+`recalculate_statistics` — if not, see
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)). Then
 re-fetch column stats and poll until the histogram populates.
 
 Bind `CUSTOMER_ID_TYPES` = set of histogram keys (e.g.
@@ -442,7 +443,8 @@ If MCP exposes a workflow-submit tool, call it with:
 - `specification` = the substituted YAML
 - `tags` = `["_nio_ci_match_report_workflow", "<RUN_SLUG_LOWER>"]`
 
-Otherwise see **Appendix D** for the API fallback.
+Otherwise see [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
+for the API fallback.
 
 Capture `workflowId` and `runId`. Poll the run status until terminal
 (`completed`, `failed`, or `terminated`).
@@ -575,8 +577,9 @@ authored; for now, the rules below are self-contained.
 
 - **No `narrative_workflows_create` MCP tool available.** The
   workflow submission and run-polling steps run over the raw
-  Narrative API instead. See Appendix D for endpoint shapes, auth,
-  and the call template.
+  Narrative API instead. See
+  [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
+  for endpoint shapes, auth, and the call template.
 - **No `narrative_nql_validate` MCP tool available.** Skip the
   pre-flight validation in Phase 6 and surface the gap to the user
   before submit. Do not auto-resort to running NQL via
@@ -599,7 +602,10 @@ authored; for now, the rules below are self-contained.
   — the `IDENTIFIER_ATTRIBUTE_IDS` lookup table used to partition AR
   mappings into identifiers vs enrichment.
 - Appendix C — identity-only YAML variant.
-- Appendix D — API fallback for the workflow submission MCP gap.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
+  — API fallback for the `narrative_workflows_create` MCP gap, plus
+  prose-mode fallbacks for `narrative_nql_validate` and
+  `AskUserQuestion`.
 - Sibling skills: `/generate-identity-graph` (build the graph),
   `/create-mapping` (author a Rosetta Stone mapping),
   `/share-enclave-dataset` (expose your data to a partner).
@@ -686,114 +692,6 @@ long-term solution. For now, the substitution code can branch.)
 
 ---
 
-## Appendix D: MCP-gap fallback (Narrative API)
-
-> **Goal:** remove this section as the MCP server gains coverage.
-> Every endpoint listed here should eventually be wrapped by a
-> first-class MCP tool. Until then, this is the documented escape
-> hatch — use it only when no MCP tool covers the call you need to
-> make.
-
-### Authentication
-
-Read the bearer token from a `.env` file in the current working
-directory (or its parent). Look for one of:
-
-- `NARRATIVE_API_TOKEN` — primary
-- Any `NARRATIVE_API_TOKEN_<COMPANY_SLUG>` for cross-company runs
-
-The token format is base64 (`r9UUut6RORv6LFK1lHItbw==`-style). Pass
-it as `Authorization: Bearer <token>`. **Never log, echo, or write the
-token to a non-secret file.**
-
-### Base URL
-
-`https://api.narrative.io` (production). For app-dev,
-`https://api-dev.narrative.io`. Confirm via the `NARRATIVE_API_URL`
-env var if present.
-
-### Endpoints used by this skill
-
-**Submit workflow** (the gap most likely to bite — MCP has no
-workflow tool today):
-
-```
-POST /workflows
-Headers:
-  Authorization: Bearer <token>
-  Content-Type: application/json
-Body:
-{
-  "specification": "<full YAML as a single string>",
-  "tags": ["_nio_ci_match_report_workflow", "<RUN_SLUG_LOWER>"]
-}
-Response (200):
-{ "id": "<workflowId UUID>" }
-```
-
-**Submit and immediately run** (most APIs accept a `?run=true`):
-
-```
-POST /workflows?run=true
-... same body ...
-Response (200):
-{ "id": "<workflowId>", "run": { "run_id": "<runId>", "status": "running", "start_time": "..." } }
-```
-
-**Poll run status:**
-
-```
-GET /workflows/<workflowId>/runs
-Headers: Authorization: Bearer <token>
-Response (200):
-{
-  "runs": [
-    { "run_id": "<runId>", "status": "running" | "completed" | "failed" | "terminated",
-      "start_time": "...", "close_time": null | "..." }
-  ]
-}
-```
-
-Poll every 15–30 seconds. Total runtime is typically 5–25 minutes.
-
-**Fetch a workflow spec** (debugging):
-
-```
-GET /workflows/<workflowId>
-Response (200):
-{ "id": "...", "name": "...", "specification": "<YAML string>" }
-```
-
-### Calling convention
-
-If the host environment has a generic HTTP tool, use it. If only
-shell is available, the canonical call is:
-
-```
-curl -s -X POST "$NARRATIVE_API_URL/workflows?run=true" \
-  -H "Authorization: Bearer $NARRATIVE_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @/tmp/workflow-body.json
-```
-
-Where `/tmp/workflow-body.json` contains the JSON body with the YAML
-embedded as the `specification` string. **Avoid here-docs**; write
-the body to a file first, then point `curl` at it with `@`. YAML
-indentation breaks otherwise.
-
-### Documenting what you did
-
-After every API-fallback call, log:
-
-- The HTTP method + endpoint
-- The response status + (redacted) body
-- A one-line reason this used the fallback instead of MCP
-
-Surface the log at the end of the skill so the human reviewing it
-knows which MCP gaps to file tickets for.
-
----
-
 ## Open questions for review
 
 1. **Decompose threshold.** Candidates for sub-skills:
@@ -805,5 +703,6 @@ knows which MCP gaps to file tickets for.
 3. **AskUserQuestion option cap.** Default is 4; multi-select large
    attribute lists need bucket-chunking — is that acceptable UX, or
    do we want a custom multi-select tool first?
-4. **Workflow MCP tool.** Track the MCP-gap (Appendix D) and remove
+4. **Workflow MCP tool.** Track the MCP-gap
+   (`references/HARNESS_FALLBACK.md`) and remove
    it once Marko's plugin gets a `narrative_workflows_submit` tool.
