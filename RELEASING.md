@@ -16,10 +16,13 @@ to announce. There is no fixed schedule.
 
 ## Process
 
+Two steps, separated by a code review: open a release PR, then tag
+the merged commit. Branch protection blocks direct pushes to `main`,
+so releases never bypass review.
+
 1. Make sure `main` is green and you're up to date:
    ```bash
-   git checkout main
-   git pull
+   git checkout main && git pull
    ```
 
 2. **Preview** the proposed release — version, commit list, and the
@@ -28,19 +31,27 @@ to announce. There is no fixed schedule.
    bun run release
    ```
 
-3. **Apply** — writes `CHANGELOG.md`, commits, and creates the tag
-   locally:
+3. **Open the release PR** — branches off `main` as
+   `chore/release-v<version>`, commits the `CHANGELOG.md` entry,
+   pushes, and opens the PR via `gh pr create`:
    ```bash
    bun run release:apply
    ```
+   Requires the [GitHub CLI](https://cli.github.com) on `PATH`.
 
-4. **Push** the commit and tag together:
+4. **Review + squash-merge** the PR via the normal flow. The merge
+   commit subject will be `chore(release): v<version>` — that's
+   what step 5 looks for.
+
+5. **Tag the merged commit** — pulls `main`, verifies HEAD is the
+   release commit, creates the annotated tag, and pushes it:
    ```bash
-   git push origin main --follow-tags
+   git checkout main && git pull
+   bun run release:tag
    ```
 
-5. The `release.yml` workflow turns the tag push into a published
-   GitHub Release with auto-generated notes. Confirm at
+6. The `release.yml` workflow fires on the tag push and creates the
+   public GitHub Release with auto-generated notes. Confirm at
    <https://github.com/narrative-io/narrative-skills-marketplace/releases>.
 
 ## Two release-note sources (deliberate)
@@ -88,10 +99,11 @@ If a release is bad:
 gh release delete v2026.05.0 --cleanup-tag --yes
 ```
 
-…then cut the next patch (`bun run release:apply` again — it'll see
-the deleted tag and reuse the same number, so revert that intent by
-either making sure you bumped a fix commit first, or by passing
-`--release-as 2026.05.1` to bump explicitly).
+…then cut the next patch via the normal flow (`bun run release:apply`
+once a fix has landed; it'll compute the next patch correctly from the
+remaining tags). If you need to skip a patch number (e.g. you yanked
+`v2026.05.1` and want the next one to be `v2026.05.3` not `v2026.05.2`),
+pass `--release-as=2026.05.3` to `release:apply`.
 
 ## What this process does *not* do
 
