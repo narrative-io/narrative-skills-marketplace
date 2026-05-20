@@ -1,6 +1,6 @@
 ---
 name: find-attribute
-version: 0.1.0
+version: 0.2.0
 description: |
   Find the canonical Rosetta Stone attribute that best matches a
   fuzzy description, semantic phrase, or required schema shape.
@@ -14,13 +14,14 @@ description: |
   (narrative-common)
 compatibility:
   requires:
-    tools:
-      - AskUserQuestion
     mcp-servers:
       - narrative-mcp
     mcp-tools:
       - narrative_attributes_search
       - narrative_attributes_describe
+  recommends:
+    tools:
+      - AskUserQuestion
 ---
 
 # Find Attribute
@@ -319,6 +320,8 @@ warnings, use first person and conversational language ("I found
 identical").
 
 ## Harness fallbacks
+
+{{SNIPPET:askuserquestion-fallback}}
 
 If `narrative-mcp` is unavailable, this skill cannot run — its
 entire value is searching the live catalog. The fallback:

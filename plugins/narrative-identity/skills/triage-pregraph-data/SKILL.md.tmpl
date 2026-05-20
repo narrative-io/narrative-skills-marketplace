@@ -1,6 +1,6 @@
 ---
 name: triage-pregraph-data
-version: 0.1.0
+version: 0.2.0
 description: |
   Audit a dataset before it joins an identity-graph build. Enumerates
   dataset-specific failure modes (hub identifiers, high-degree nodes,
@@ -15,10 +15,9 @@ description: |
   "quantify damage from <identifier_type>", "pre-graph DQ".
   (narrative-identity)
 compatibility:
-  requires:
+  recommends:
     tools:
       - AskUserQuestion
-  recommends:
     mcp-servers:
       - narrative-mcp
     mcp-tools:
@@ -428,6 +427,8 @@ Typical hypotheses worth pre-loading (still re-justify on the data):
   post-build-repair workflow (separate skill, not yet shipped).
 
 ## Harness fallbacks
+
+{{SNIPPET:askuserquestion-fallback}}
 
 If `narrative-mcp` is unavailable (or `--no-schema` was passed):
 

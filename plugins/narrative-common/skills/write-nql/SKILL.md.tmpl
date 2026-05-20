@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.2.0
+version: 0.3.0
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -13,8 +13,6 @@ description: |
   (narrative-common)
 compatibility:
   requires:
-    tools:
-      - AskUserQuestion
     mcp-servers:
       - narrative-mcp
     mcp-tools:
@@ -27,6 +25,8 @@ compatibility:
       - narrative_nql_run
       - narrative_jobs_describe
   recommends:
+    tools:
+      - AskUserQuestion
     mcp-servers:
       - narrative-knowledge-base
     mcp-tools:
@@ -419,6 +419,8 @@ keys with `CROSS JOIN UNNEST([...])` or `UNION` two single-key joins.
   platform may have updated the dataset mid-conversation.
 
 ## Harness fallbacks
+
+{{SNIPPET:askuserquestion-fallback}}
 
 If `narrative-mcp` is unavailable:
 

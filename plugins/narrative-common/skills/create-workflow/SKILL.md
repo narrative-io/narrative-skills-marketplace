@@ -1,6 +1,6 @@
 ---
 name: create-workflow
-version: 0.1.0
+version: 0.2.0
 description: |
   Author and submit a Narrative workflow from a natural-language
   intent. Picks the closest example from `assets/examples/`, adapts
@@ -15,7 +15,6 @@ description: |
 compatibility:
   requires:
     tools:
-      - AskUserQuestion
       - Read
     mcp-servers:
       - narrative-mcp
@@ -29,6 +28,8 @@ compatibility:
       - narrative_workflows_trigger
       - narrative_workflow_runs_list
   recommends:
+    tools:
+      - AskUserQuestion
     mcp-servers:
       - narrative-knowledge-base
     mcp-tools:
@@ -433,6 +434,14 @@ issues you spot and ask before changing anything.
   `document.version` (and ideally `document.name`) to disambiguate.
 
 ## Harness fallbacks
+
+If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
 
 If `narrative-mcp` is unavailable:
 
