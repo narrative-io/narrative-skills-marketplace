@@ -593,8 +593,9 @@ authored; for now, the rules below are self-contained.
   external workflow contract this skill submits.
 - Appendix A in this file — the macro table to substitute into the
   workflow YAML.
-- Appendix B — `IDENTIFIER_ATTRIBUTE_IDS` lookup table used to
-  partition AR mappings into identifiers vs enrichment.
+- [`references/IDENTIFIER_ATTRIBUTES.md`](references/IDENTIFIER_ATTRIBUTES.md)
+  — the `IDENTIFIER_ATTRIBUTE_IDS` lookup table used to partition AR
+  mappings into identifiers vs enrichment.
 - Appendix C — identity-only YAML variant.
 - Appendix D — API fallback for the workflow submission MCP gap.
 - Sibling skills: `/generate-identity-graph` (build the graph),
@@ -636,53 +637,27 @@ indentation in the template's `ARRAY(...)` block.
 
 ---
 
-## Appendix B: `IDENTIFIER_ATTRIBUTE_IDS`
+## Appendix B: Partitioning AR mappings
 
-Hand-curated against the Rosetta Stone catalog. Use to partition any
-AR's mappings into `{ identifiers, demographics, graphEdge }`.
+To pick the identity AR (Phase 4) and the enrichment AR (Phase 5),
+partition any access rule's mappings into identifiers, demographics,
+and the `graph_edge` container.
 
-```
-11   ip_address
-15   untyped_unique_id
-39   telephone_number
-69   apple_idfa
-70   android_advertising_id
-71   ttd_id
-74   md5_hashed_email
-75   sha1_hashed_email
-76   sha256_hashed_email
-77   hashed_email
-78   narrative_cookie
-79   nielsen_imr_id
-80   liveintent_id
-109  criteo_hmac_id
-116  twitter_handle_id
-118  raw_email
-146  dms_id
-233  disqus_id
-251  narrative_id
-259  sha256_hashed_phone_number
-260  e164_phone_number
-280  person_id
-281  household_id
-286  itil_ci_id
-291  normalized_email
-294  hashed_person_name
-346  untyped_device_id
-369  sha256_hashed_phone_number_nsn
-```
-
-`362` (`graph_edge`) is the structural container, treated separately.
-
-Partition pseudocode:
-
-```
+```python
 for m in ar.mappings:
-    if m.attribute_name.startswith("_nio_"): skip
-    elif m.attribute_id == 362: graphEdge = m
-    elif m.attribute_id in IDENTIFIER_ATTRIBUTE_IDS: identifiers.append(m)
-    else: demographics.append(m)
+    if m.attribute_name.startswith("_nio_"):
+        continue                              # internal — skip
+    elif m.attribute_id == 362:
+        graphEdge = m                         # structural
+    elif m.attribute_id in IDENTIFIER_ATTRIBUTE_IDS:
+        identifiers.append(m)                 # join-able
+    else:
+        demographics.append(m)                # enrichment
 ```
+
+The hand-curated `IDENTIFIER_ATTRIBUTE_IDS` set lives in
+[`references/IDENTIFIER_ATTRIBUTES.md`](references/IDENTIFIER_ATTRIBUTES.md).
+Load it on demand — these 30-odd IDs change rarely.
 
 ---
 
