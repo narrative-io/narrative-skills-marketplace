@@ -665,20 +665,3 @@ for m in ar.mappings:
 The hand-curated `IDENTIFIER_ATTRIBUTE_IDS` set lives in
 [`references/IDENTIFIER_ATTRIBUTES.md`](references/IDENTIFIER_ATTRIBUTES.md).
 Load it on demand — these 30-odd IDs change rarely.
-
----
-
-## Open questions for review
-
-1. **Decompose threshold.** Candidates for sub-skills:
-   (a) `find-graph-edge-datasets` (Phase 2),
-   (b) `compute-id-overlap` (Phase 4 ranking),
-   (c) `pick-enrichment-attributes` (Phase 5),
-   (d) `submit-workflow` (Phase 7).
-2. **Identity-only template.** Branch one template or ship two?
-3. **AskUserQuestion option cap.** Default is 4; multi-select large
-   attribute lists need bucket-chunking — is that acceptable UX, or
-   do we want a custom multi-select tool first?
-4. **Workflow MCP tool.** Track the MCP-gap
-   (`references/HARNESS_FALLBACK.md`) and remove
-   it once Marko's plugin gets a `narrative_workflows_submit` tool.
