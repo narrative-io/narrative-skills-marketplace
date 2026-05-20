@@ -1,0 +1,48 @@
+# Passing data between tasks via `export` and `${...}` variable
+# expressions.
+#
+# Use when:
+#   - A downstream task needs metadata from an upstream task (a dataset
+#     ID, a row count, a status flag), not just the dataset itself.
+#
+# Notes:
+#   - `export.as` is a jq expression. `.` is the current task's output,
+#     `$context` is the workflow's accumulated state (starts as `{}`).
+#   - In a parameter value, `${expr}` injects a value. If `${expr}` is
+#     the whole value, the JSON type is preserved. Inside a string,
+#     use jq interpolation `\(expr)` to embed values.
+#   - `.` in a downstream task refers to the IMMEDIATELY preceding
+#     task's output. Use `$context` to read values from further back.
+
+document:
+  dsl: '1.0.0'
+  namespace: etl
+  name: create-and-log
+  version: '1.0.0'
+
+do:
+  - createView:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW active_users AS
+          SELECT user_id, email
+          FROM company_data.users
+          WHERE is_active = true
+      export:
+        as: '$context + { datasetId: .datasetId }'
+
+  - logFromPrevious:
+      call: ExecuteDml
+      with:
+        # `.datasetId` reads the previous task's output directly.
+        nql: |
+          ${"INSERT INTO company_data.pipeline_log (dataset_id, status) VALUES (\(.datasetId), 'created')"}
+
+  - logFromContext:
+      call: ExecuteDml
+      with:
+        # `$context.datasetId` reads the value exported two tasks back.
+        # Useful when intervening tasks would otherwise shadow it.
+        nql: |
+          ${"INSERT INTO company_data.pipeline_log (dataset_id, status) VALUES (\($context.datasetId), 'logged')"}

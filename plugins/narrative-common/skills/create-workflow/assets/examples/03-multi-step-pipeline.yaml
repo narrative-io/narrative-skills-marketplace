@@ -1,0 +1,51 @@
+# Multi-step pipeline: create source view → derive a second view → refresh.
+#
+# Use when:
+#   - Tasks depend on each other and must run in order.
+#   - You want a one-shot "build the whole stack" pipeline.
+#
+# Notes:
+#   - Tasks run sequentially in `do` order. The next task does not start
+#     until the previous one completes successfully.
+#   - Workflows are fail-fast — if any task fails, the run stops and
+#     remaining tasks are skipped.
+#   - Reference datasets created in earlier tasks by their fully
+#     qualified name: `company_data.<dataset_name>`.
+#   - There is no parallel execution, no conditional branching, and no
+#     loops. If you need any of those, split the work across multiple
+#     workflows or use an upstream orchestrator.
+
+document:
+  dsl: '1.0.0'
+  namespace: analytics
+  name: user-comparison-pipeline
+  version: '1.0.0'
+
+do:
+  - createSourceData:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW active_users_source AS
+          SELECT
+            id,
+            name,
+            email
+          FROM company_data.users
+          WHERE active = true
+
+  - createDerivedView:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW active_users_with_names AS
+          SELECT
+            id,
+            name
+          FROM company_data.active_users_source
+          WHERE name IS NOT NULL
+
+  - refreshDerivedView:
+      call: RefreshMaterializedView
+      with:
+        datasetName: active_users_with_names

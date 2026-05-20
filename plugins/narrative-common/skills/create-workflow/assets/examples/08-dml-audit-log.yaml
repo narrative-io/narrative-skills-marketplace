@@ -1,0 +1,35 @@
+# Use ExecuteDml to write an INSERT / UPDATE / DELETE row alongside a
+# main step — typically an audit-log row that captures workflow state.
+#
+# Use when:
+#   - You want to record that a workflow run happened, with structured
+#     metadata about what it produced.
+#   - You need to upsert into a control / state table after another
+#     task.
+#
+# Notes:
+#   - `ExecuteDml` supports INSERT / UPDATE / DELETE only — no SELECT.
+#     For SELECT-and-persist, use `CreateMaterializedViewIfNotExists`.
+#   - Combine with `export` + `${...}` (see 04) to log values produced
+#     upstream.
+#   - The audit table must already exist; this task does not create it.
+
+document:
+  dsl: '1.0.0'
+  namespace: etl
+  name: refresh-with-audit
+  version: '1.0.0'
+
+do:
+  - refreshSourceView:
+      call: RefreshMaterializedView
+      with:
+        datasetName: raw_events
+      export:
+        as: '$context + { eventsDatasetId: .datasetId }'
+
+  - logAuditRow:
+      call: ExecuteDml
+      with:
+        nql: |
+          ${"INSERT INTO company_data.workflow_audit_log (dataset_id, action, run_at) VALUES (\($context.eventsDatasetId), 'raw_events_refreshed', CURRENT_TIMESTAMP)"}
