@@ -62,7 +62,7 @@ or the NQL inside it**.
 ## The hard rules
 
 1. **The workflow YAML is an external artifact.** Read it from
-   `workflow.yaml.tmpl` (sibling file). Macro-substitute the variables
+   `assets/workflow.yaml.tmpl`. Macro-substitute the variables
    listed in Appendix A. **Do not rewrite the YAML or the NQL.** The
    downstream report UI expects an exact output schema; any change to
    the queries risks breaking the rendered report.
@@ -360,7 +360,7 @@ timestamp is UTC now. (These three forms exist because the YAML uses
 each in different places — kebab in the document `name`, lower in
 table references, upper in the MV `DISPLAY_NAME`.)
 
-Read `workflow.yaml.tmpl`, substitute all macros from Appendix A,
+Read `assets/workflow.yaml.tmpl`, substitute all macros from Appendix A,
 and present the result:
 
 > **Plain English:** Ready to submit. Here's what we'll do:
@@ -464,7 +464,7 @@ Render:
 
 ---
 
-## Appendix A: Macros in `workflow.yaml.tmpl`
+## Appendix A: Macros in `assets/workflow.yaml.tmpl`
 
 | Macro | Example | Notes |
 |---|---|---|
