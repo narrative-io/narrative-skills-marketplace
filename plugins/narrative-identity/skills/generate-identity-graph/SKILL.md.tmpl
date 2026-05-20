@@ -51,10 +51,12 @@ third-party edge sources. You optimize for:
    UNION. No exceptions, no inline patching.
 2. Defer, don't re-implement — when an input dataset isn't mapped to
    the graph-edge attribute, hand off to
-   `/generate-rosetta-stone-mappings`; when the materialized-view
-   NQL needs to be written, hand off to `/write-nql`. Never write
-   graph-edge mappings or hand-author/validate NQL inside this
-   skill.
+   `/generate-rosetta-stone-mappings`; when the input data needs a
+   pre-graph quality audit, hand off to `/triage-pregraph-data` and
+   carry its approved filter expressions forward; when the
+   materialized-view NQL needs to be written, hand off to
+   `/write-nql`. Never write graph-edge mappings, audit hypotheses,
+   or hand-authored NQL inside this skill.
 3. Validation before delivery — every materialized-view DDL is
    server-validated (by `/write-nql`, which owns that step) before
    the YAML is shown to the user.
@@ -85,9 +87,15 @@ any tools.
 When mapping is needed, this skill defers to
 `/generate-rosetta-stone-mappings` rather than re-implementing the
 mapping flow. Don't try to write graph-edge mappings inline. When
-the materialized-view NQL needs to be drafted and validated, the
-skill defers to `/write-nql` — the body shows the exact contract in
-phase 7a. Don't hand-write or validate NQL inside this skill.
+the user wants to audit their inputs first, phase 0 hands off to
+`/triage-pregraph-data` and carries the approved filter expressions
+forward into phase 7a's materialized-view DDL — so audit and build
+are one continuous flow, not a clean restart. When the
+materialized-view NQL needs to be drafted and validated, the skill
+defers to `/write-nql` — the body shows the exact contract in
+phase 7a, including how audit filters are threaded into the
+per-dataset `SELECT` blocks. Don't hand-write or validate NQL
+inside this skill.
 
 ## When to use
 
@@ -110,10 +118,12 @@ Do NOT use for:
 
 ## Procedure
 
-Run phases in order. Phase 0 is an optional pre-flight; phases 1-3
-frame the problem; phases 4-6 prepare the inputs; phases 7-8 compose
-and submit. Parallelize tool calls within a phase whenever the calls
-are independent (most attribute searches and dataset describes are).
+Run phases in order. Phase 0 is an optional pre-flight that can
+collect audit filters; phases 1-3 frame the problem; phases 4-6
+prepare the inputs; phases 7-8 compose and submit, weaving any
+phase-0 filters into the materialized-view DDL. Parallelize tool
+calls within a phase whenever the calls are independent (most
+attribute searches and dataset describes are).
 
 ### Phase 0. Optional pre-flight data audit
 
@@ -129,14 +139,15 @@ Ask via `AskUserQuestion`:
 
 > "Before we design the graph workflow, would you like to audit any
 > of your input datasets for graph-quality issues (hub identifiers,
-> leaky sentinel values, over-connected nodes) first?"
+> leaky sentinel values, over-connected nodes) first? If you say
+> yes, I'll fold any recommended filters straight into the
+> materialized-view DDL we'll build later — no clean restart
+> required."
 
 Options:
 
-- **Yes — audit first.** Hand off to `/triage-pregraph-data`. That
-  skill has its own dataset-discovery flow, so you don't need to
-  surface dataset IDs here. Stop after the handoff — do not continue
-  to phase 1.
+- **Yes — audit first.** Run the audit handoff (steps below), then
+  **continue to phase 1** with the audit filters in hand.
 - **No — skip the audit.** Continue to phase 1.
 - **Not sure — what does the audit do?** Briefly explain:
   `/triage-pregraph-data` enumerates failure modes (hub identifiers,
@@ -146,18 +157,58 @@ Options:
   severity. It produces a report; it does not modify any data. Then
   re-ask the same question.
 
-If the user opts in, tell them:
+#### 0a. Hand off to `/triage-pregraph-data`
 
-> "I'll hand off to `/triage-pregraph-data` now. It will produce a
-> triage report with filter expressions ranked by severity. Once
-> you've applied the recommended filters (`/write-nql` can help with
-> the materialized-view DDL), re-run `/generate-identity-graph` —
-> I'll pick up from phase 1 with the cleaned dataset list."
+Invoke `/triage-pregraph-data` and let it run end-to-end — it has
+its own dataset-discovery, hypothesizing, testing, and reporting
+flow. Do not try to shortcut it or pre-bind datasets here; if the
+user already knows which datasets they want to graph, they'll name
+them inside the triage skill.
 
-Do not try to chain the two skills inside this run. The audit's
-output is filter expressions that have to be applied to source data
-before the graph build, which usually means a new materialized view
-and a fresh dataset ID — that's a clean restart, not a continuation.
+Wait for the triage skill to return its report. The report's
+findings include, per confirmed issue, a proposed filter expression
+(an NQL `WHERE`-clause-shaped condition like
+`email != 'null@example.com'` or `_degree_in_email_hub <= 100`)
+along with the source dataset, severity, and quantified damage.
+
+#### 0b. Review filters with the user and capture approvals
+
+Show the user the findings as a short table, default-selecting the
+`high` and `medium` severities:
+
+| Dataset | Finding | Severity | Filter expression | Apply? |
+|---------|---------|----------|-------------------|--------|
+| `<dataset_id>` | `<finding title>` | high | `<expression>` | yes / no |
+| … | … | … | … | … |
+
+Ask via `AskUserQuestion` per row whether to apply each filter, or
+batch the question if the user wants to accept all defaults. The
+default is "apply all `high`-severity, ask about each
+`medium`/`low`."
+
+Record the approved filters as an in-memory list:
+
+```
+audit_filters = [
+  { dataset_id: "<id>", expression: "<NQL WHERE-clause condition>", finding: "<title>" },
+  …
+]
+```
+
+This list is the contract phase 7a will consume. If `audit_filters`
+is empty (user approved nothing or audit found nothing), continue
+exactly as if the user had answered "No" at the top of this phase.
+
+#### 0c. Tell the user what's next
+
+Surface one line back to the user so they know the audit didn't
+disappear:
+
+> "I'll fold these filters into the materialized-view DDL we build
+> in phase 7. The graph build will see the cleaned edges, not the
+> raw input."
+
+Then continue to phase 1.
 
 ### Phase 1. Frame the use case
 
@@ -318,9 +369,10 @@ skill does not browse the catalog.
 
 ### Phase 7. Compose the workflow document
 
-Assemble the workflow YAML using the inputs from phases 1, 3, 5, 6.
-The shape is fixed; only the contents of the UNION and the source
-lists change.
+Assemble the workflow YAML using the inputs from phases 1, 3, 5, 6,
+and (when present) the `audit_filters` captured in phase 0. The
+shape is fixed; only the contents of the UNION, the per-dataset
+WHERE clauses, and the source lists change.
 
 Load the canonical template from
 [`assets/workflow.yaml`](assets/workflow.yaml) — it contains the
@@ -351,33 +403,49 @@ Input (the free-text question passed to `/write-nql`):
 >
 > The body should `SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE,
 > TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES` from each of
-> these datasets, `UNION ALL`'d together in the order listed:
+> these datasets, `UNION ALL`'d together in the order listed.
+> Apply the listed `WHERE`-clause conditions to each dataset as
+> given — they're pre-flight audit filters and must be preserved
+> verbatim (combine multiple conditions with `AND`):
 >
 > First-party datasets (use `COMPANY_DATA.<id>`):
 >   - `<first_party_dataset_id_1>`
+>     filters: `<expression>`, `<expression>`
 >   - `<first_party_dataset_id_2>`
+>     filters: (none)
 >   - …
 >
 > Third-party datasets (use `<provider>.<access_rule>`):
 >   - `<provider_1>.<access_rule_1>`
+>     filters: `<expression>`
 >   - …
 >
 > Validate the statement and return it. Don't run it.
 
+When building the prompt, look up each dataset's entries in
+`audit_filters` from phase 0. If a dataset has one or more approved
+filters, list them under that dataset; if it has none, write
+"filters: (none)" so `/write-nql` doesn't add anything it wasn't
+told to add. Do not silently drop filters — every approved filter
+must appear in the prompt.
+
 Contract:
 
 - **Input** to `/write-nql`: the prompt above with placeholders
-  filled from phases 1, 3, 5, 6. Pass `--no-explain` only.
+  filled from phases 0, 1, 3, 5, 6. Pass `--no-explain` only.
 - **Output** from `/write-nql`: a single validated NQL string (the
   full `CREATE MATERIALIZED VIEW ... AS ...` statement). Take the
   string as-is — do not edit it before embedding.
 
 If `/write-nql` reports validation failure after its own internal
 retries (a referenced dataset doesn't exist, a column is named
-differently than the contract expects), surface the verbatim error
-to the user, ask whether to drop the offending dataset or remap it,
-and re-invoke `/write-nql` with the corrected input list. Do **not**
-present an unvalidated workflow to the user.
+differently than the contract expects, an audit-filter expression
+references a column the dataset doesn't have), surface the verbatim
+error to the user, ask whether to drop the offending dataset / drop
+the offending filter / remap, and re-invoke `/write-nql` with the
+corrected input list. Do **not** present an unvalidated workflow to
+the user. Do **not** drop an audit filter without explicit user
+approval — the user already approved each one in phase 0b.
 
 #### 7b. Substitute and fill the rest of the workflow
 
@@ -574,8 +642,10 @@ live in
   invoking the skill outside the Narrative Platform UI.
 - `../triage-pregraph-data/SKILL.md` — the pre-graph data-quality
   audit this one hands off to in phase 0 when the user opts into a
-  pre-flight audit. Produces filter expressions; doesn't modify
-  data.
+  pre-flight audit. Produces filter expressions per dataset; this
+  skill captures the approved ones and threads them into phase 7a's
+  `/write-nql` prompt as `WHERE`-clause conditions on the
+  corresponding `SELECT` blocks.
 - `../../../narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md` —
   the mapping skill this one defers to in phase 5
   (`/generate-rosetta-stone-mappings`, lives in the
