@@ -58,26 +58,45 @@ the conventional-commit subject we enforce as the canonical
 
 ### Applying via `gh api`
 
+The branch-protection endpoint requires a JSON body with nested
+objects (`required_status_checks`, `required_pull_request_reviews`)
+and an explicit `null` for `restrictions`. `gh api -F` sends
+form-encoded fields and mishandles those shapes — use `--input -`
+with a here-doc:
+
 ```bash
-gh api -X PUT \
+cat <<'JSON' | gh api -X PUT \
   repos/narrative-io/narrative-skills-marketplace/branches/main/protection \
-  -F required_status_checks.strict=true \
-  -F 'required_status_checks.contexts[]=Lint, typecheck, knip, manifests' \
-  -F 'required_status_checks.contexts[]=Shellcheck setup script' \
-  -F 'required_status_checks.contexts[]=Conventional Commit' \
-  -F enforce_admins=false \
-  -F required_pull_request_reviews.required_approving_review_count=1 \
-  -F required_pull_request_reviews.dismiss_stale_reviews=true \
-  -F required_pull_request_reviews.require_code_owner_reviews=false \
-  -F restrictions= \
-  -F required_linear_history=true \
-  -F allow_force_pushes=false \
-  -F allow_deletions=false \
-  -F required_conversation_resolution=true
+  --input -
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": [
+      "Lint, typecheck, knip, manifests",
+      "Shellcheck setup script",
+      "Conventional Commit"
+    ]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 1,
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false
+  },
+  "restrictions": null,
+  "required_linear_history": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": true
+}
+JSON
 ```
 
-(The context names match the `name:` fields in the job definitions —
-keep them in sync if you rename a job.)
+The context names (`Lint, typecheck, knip, manifests`,
+`Shellcheck setup script`, `Conventional Commit`) match the `name:`
+fields in the job definitions — keep them in sync if you rename a
+job. `restrictions` must be `null` on non-organization repos; an
+empty string fails schema validation.
 
 ## Going public — one-time checklist
 
