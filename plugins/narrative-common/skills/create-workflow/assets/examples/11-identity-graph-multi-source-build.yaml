@@ -27,6 +27,16 @@
 #     object_mapping with one propertyMapping per contract column —
 #     resolve the canonical attribute ID via `/find-attribute --phrase
 #     "graph edge" --shape "SOURCE_ID,SOURCE_ID_TYPE,..." `.
+#   - The schema is bipartite. SOURCE_ID is an identifier that is
+#     unique within one source system and does NOT recur across other
+#     sources (UUIDs, local-namespace customer IDs, auto-increment
+#     keys). SOURCE_ID_TYPE names that source system. TARGET_ID is
+#     the JOIN KEY — a value that recurs across sources and lets
+#     components be stitched together (hashed emails, phone hashes,
+#     MAIDs). TARGET_ID_TYPE names the join-key type. The mappings
+#     below follow that pattern: SOURCE_ID gets the per-dataset
+#     unique ID (customer_id, member_id), TARGET_ID gets the shared
+#     join key (hashed email, MAID).
 #   - Once mapped, a dataset's edges are queried via the
 #     `_rosetta_stone.graph_edge.<property>` access pattern. The
 #     mapping persists across SELECTs that don't transform the value,
@@ -45,6 +55,18 @@
 #     component — run `/triage-pregraph-data` and fold any approved
 #     filter expressions into per-source WHERE clauses on the
 #     `createEdges` SELECT.
+#   - `firstPartySources` / `thirdPartySources` hold **distinct
+#     SOURCE_ID_TYPE values only** — the values that appear in the
+#     unioned edges' SOURCE_ID_TYPE column, partitioned by which
+#     inputs are first-party vs third-party (e.g. `first_party_crm`,
+#     `acxiom`, `experian`). TARGET_ID_TYPE values (`sha256_email`,
+#     `maid`, `household_id`) never appear in either list — those
+#     are the join keys the graph stitches *around*, not sources.
+#   - Don't guess the SOURCE_ID_TYPE values. Discover them
+#     empirically from dataset statistics on the materialized edges
+#     table or by running `SELECT DISTINCT SOURCE_ID_TYPE FROM
+#     <edges_view>` (optionally split by contributing dataset) and
+#     copy the result set verbatim.
 #   - `firstPartySources` is ordered by priority — the first source
 #     in the list whose ID appears in a component wins the
 #     representative ID. Put higher-trust systems first.
@@ -169,11 +191,26 @@ do:
         sourceSystemCol: SOURCE_ID_TYPE
         bridgeKeyCol: TARGET_ID
         bridgeKeyTypeCol: TARGET_ID_TYPE
+        # Both lists are SOURCE_ID_TYPE values only — the distinct
+        # values that appear in the unioned edges' SOURCE_ID_TYPE
+        # column, partitioned by which inputs are first-party vs
+        # third-party. NEVER TARGET_ID_TYPE — those are the join
+        # keys components are stitched around, not sources.
+        #
+        # Don't guess these values: discover them empirically once
+        # the edge view exists, either from dataset statistics on
+        # the materialized edges table or by running
+        # `SELECT DISTINCT SOURCE_ID_TYPE FROM <edges_view>` against
+        # each contributing source. Use the result set verbatim.
+        #
+        # `firstPartySources` is ordered by priority: the first
+        # source whose ID appears in a component wins the
+        # representative ID. Put higher-trust systems first.
         firstPartySources:
-          - first_party_crm
-          - first_party_loyalty
+          - first_party_crm       # SOURCE_ID_TYPE from mapFirstPartyCrm
+          - first_party_loyalty   # SOURCE_ID_TYPE from mapFirstPartyLoyalty
         thirdPartySources:
-          - acxiom
+          - acxiom                # SOURCE_ID_TYPE values from acxiom.consumer_identity_v3
         maxDegreeThreshold: 100
         maxComponentSize: 100
         maxIterations: 25

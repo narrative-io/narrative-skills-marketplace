@@ -7,6 +7,18 @@
 #   - You want one canonical component ID per resolved identity.
 #
 # Notes:
+#   - `firstPartySources` / `thirdPartySources` hold **distinct
+#     SOURCE_ID_TYPE values only** — the values that appear in the
+#     edges table's `sourceSystemCol` column, partitioned by
+#     first-party vs third-party origin (e.g. AFTERPAY, EXPERIAN
+#     below). They are NEVER bridge-key types (the values in
+#     `bridgeKeyTypeCol` like `sha256_email`, `device_id`,
+#     `phone_hash`) — bridge keys are what the graph stitches
+#     around, not sources.
+#   - Discover the values empirically: ask for column statistics
+#     on `sourceSystemCol` in the edges dataset, or run
+#     `SELECT DISTINCT <sourceSystemCol> FROM <edgeDataset>` and
+#     use the result verbatim. Don't hand-author from memory.
 #   - `firstPartySources` is ordered by priority — the first source in
 #     the list whose ID appears in a component wins the representative
 #     ID. Put your higher-trust systems first.
@@ -36,10 +48,14 @@ do:
         sourceSystemCol: source_system
         bridgeKeyCol: bridge_key
         bridgeKeyTypeCol: bridge_key_type
+        # Distinct SOURCE_ID_TYPE values (from `sourceSystemCol`)
+        # for first-party data — never bridge-key types. Pull these
+        # from edges-table column stats or a SELECT DISTINCT.
         firstPartySources:
           - AFTERPAY
           - CASHAPP
           - SQUARE
+        # Same column, third-party-origin values.
         thirdPartySources:
           - EXPERIAN
           - ACXIOM

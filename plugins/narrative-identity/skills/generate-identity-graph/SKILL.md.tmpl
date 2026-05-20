@@ -1,6 +1,6 @@
 ---
 name: generate-identity-graph
-version: 0.3.1
+version: 0.3.2
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -47,6 +47,30 @@ third-party edge sources. You optimize for:
    graph-edge schema `{ SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID,
    TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }` before it joins the
    UNION. No exceptions, no inline patching.
+
+   The schema is **bipartite**. Generally `SOURCE_ID` is the *less
+   shared* side of the edge — often an identifier unique within one
+   source system (a UUID, an auto-increment customer_id, a local-
+   namespace member ID), with `SOURCE_ID_TYPE` naming that source
+   (e.g. `first_party_crm`, `acxiom`, `experian`). `TARGET_ID` is
+   typically the **join key** — the value that recurs across sources
+   and lets components be stitched together (a hashed email, a phone
+   hash, a MAID), with `TARGET_ID_TYPE` naming the join-key type
+   (`sha256_email`, `e164_phone`, `maid`). The convention isn't a
+   hard structural rule — third-party providers occasionally invert
+   it — so the reliable move is always to inspect the data.
+
+   This dictates everything else:
+   `firstPartySources` / `thirdPartySources` hold the distinct
+   **SOURCE_ID_TYPE** values from the unioned edges, partitioned by
+   first-party vs third-party origin. `bridgeKeyTypeCol` is filled
+   by TARGET_ID_TYPE values (the join keys). Don't guess either —
+   pull them from dataset statistics on the edges table or run
+   `SELECT DISTINCT SOURCE_ID_TYPE FROM <edges_view>` (and the same
+   for `TARGET_ID_TYPE`) and use the result set verbatim. Putting a
+   TARGET_ID_TYPE value in `firstPartySources` / `thirdPartySources`
+   silently breaks resolution — the graph builds but those sources
+   match zero edges.
 2. Defer, don't re-implement — when the graph-edge attribute ID
    needs to be resolved, hand off to `/find-attribute`; when an
    input dataset isn't mapped to that attribute, hand off to
@@ -295,9 +319,13 @@ batch these — the answers gate later phases.
 
 2. **What's the primary identifier you want to resolve to?**
    Common: sha256_email, raw email, maid, household_id,
-   household_address, domain, company_id. The user's answer drives
-   which `firstPartySources` / `thirdPartySources` lists you build in
-   phase 7.
+   household_address, domain, company_id. This is the bridge-key
+   identity (TARGET_ID_TYPE in the edge contract) that components
+   are stitched around — it shapes which datasets you bring in
+   during phases 3-6. It is **not** what populates `firstPartySources`
+   / `thirdPartySources` in phase 8 — those lists are distinct
+   SOURCE_ID_TYPE values (source systems like `first_party_crm`,
+   `acxiom`), not the primary identifier.
 
 3. **What's the use case downstream?** (Activation, measurement,
    modeling, analytics?) This is context for the workflow `description`
@@ -650,12 +678,21 @@ example 11 explicitly and supplies every substitution. The shape:
 >   view created by `createEdges` above)
 > - `labelComponents.with.outputDataset`: `<graph-output-dataset-name>`
 > - `labelComponents.with.firstPartySources`: `[<distinct
->   SOURCE_ID_TYPE / TARGET_ID_TYPE values emitted by the
->   first-party datasets, verbatim from phase 4-5 mapping work>]`
->   — if you don't know the canonical list, **ask the user**;
->   never guess.
-> - `labelComponents.with.thirdPartySources`: `[<equivalent
->   identifier-type values from phase 6; empty array if none>]`
+>   **SOURCE_ID_TYPE** values emitted by the first-party datasets>]`.
+>   **Only SOURCE_ID_TYPE values belong here** — TARGET_ID_TYPE
+>   bridge keys (`sha256_email`, `maid`, `household_id`, etc.) must
+>   not appear in either list. Discover the values empirically: ask
+>   for column statistics on the edges materialized view, or have
+>   `/write-nql --run` execute `SELECT DISTINCT SOURCE_ID_TYPE FROM
+>   <edges_view>` (split by contributing dataset) once the view
+>   exists. On a first build where the view doesn't exist yet, derive
+>   the candidate values from the mapping expressions in phase 5
+>   (the literal each `SOURCE_ID_TYPE` `propertyMapping` emits) and
+>   ask the user to confirm; never invent values.
+> - `labelComponents.with.thirdPartySources`: `[<distinct
+>   **SOURCE_ID_TYPE** values emitted by the third-party access
+>   rules; empty array if none>]`. Same discovery rule as above —
+>   query the data, never the bridge-key types.
 > - `labelComponents.with.maxDegreeThreshold`: `100` (default)
 > - `labelComponents.with.maxComponentSize`: `100` (default — surface
 >   the default in your approval summary so the user can override
@@ -741,19 +778,27 @@ want to inspect edge counts — do not auto-run.
 ### Person graph (the default)
 
 User wants to resolve people across two or more first-party CRM /
-event datasets, typically keyed on `sha256_email` and `maid`. Run
-phases 1-8 in order. Expect `firstPartySources` to include
-`sha256_email`, `maid`, and possibly `raw_email`; `thirdPartySources`
-to be empty unless the user explicitly named providers.
+event datasets, typically keyed on `sha256_email` and `maid` (those
+are TARGET_ID_TYPE bridge keys, not source list entries). Run
+phases 1-8 in order. Expect `firstPartySources` to be the distinct
+SOURCE_ID_TYPE values of the user's first-party systems (e.g.
+`first_party_crm`, `first_party_loyalty`); `thirdPartySources` to
+be empty unless the user explicitly named providers, in which case
+it's the providers' SOURCE_ID_TYPE values (e.g. `acxiom`,
+`experian`).
 
 ### Household graph
 
 Same shape as a person graph, plus one dataset (often a third-party
 householding edge source) that produces edges with
 `TARGET_ID_TYPE = 'household_id'` or `'household_address'`. The UNION
-gains one or two more `SELECT` blocks; `firstPartySources` /
-`thirdPartySources` gain the household identifier types. Output
-dataset name defaults to `household_identity_graph`.
+gains one or two more `SELECT` blocks. If that new dataset emits a
+new SOURCE_ID_TYPE (the household provider's system name), append
+it to `thirdPartySources` (or `firstPartySources` if the user owns
+the household source). Do **not** add `household_id` or
+`household_address` to either list — those are TARGET_ID_TYPE
+bridge keys, not source systems. Output dataset name defaults to
+`household_identity_graph`.
 
 ### Device graph
 
