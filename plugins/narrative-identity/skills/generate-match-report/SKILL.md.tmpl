@@ -316,7 +316,9 @@ single-quoted strings: `'normalized_email', 'e164_phone_number'`.
 >   breakdowns)
 
 If B, **skip step 4** in the YAML and use the identity-only template
-variant (see Appendix C).
+variant — see
+[`references/IDENTITY_ONLY_VARIANT.md`](references/IDENTITY_ONLY_VARIANT.md)
+for the exact diff against `assets/workflow.yaml.tmpl`.
 
 If A, find non-owned ARs with **demographic** mappings (any mapping
 whose `attribute_id` is not in `IDENTIFIER_ATTRIBUTE_IDS` and is not
@@ -521,7 +523,8 @@ on. Expected runtime 5–25 minutes.
 User explicitly opts out of enrichment in Phase 5, or no partner
 exposes a demographic AR. Run via `--no-enrichment` or the
 interactive "No — identity-only" option; the renderer drops step 4
-and the attribute-related step-5 CTEs (see Appendix C).
+and the attribute-related step-5 CTEs (see
+[`references/IDENTITY_ONLY_VARIANT.md`](references/IDENTITY_ONLY_VARIANT.md)).
 
 ### Narrow id-type subset
 
@@ -599,7 +602,8 @@ authored; for now, the rules below are self-contained.
 - [`references/IDENTIFIER_ATTRIBUTES.md`](references/IDENTIFIER_ATTRIBUTES.md)
   — the `IDENTIFIER_ATTRIBUTE_IDS` lookup table used to partition AR
   mappings into identifiers vs enrichment.
-- Appendix C — identity-only YAML variant.
+- [`references/IDENTITY_ONLY_VARIANT.md`](references/IDENTITY_ONLY_VARIANT.md)
+  — exact diff to apply when running identity-only (no enrichment AR).
 - [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
   — API fallback for the `narrative_workflows_create` MCP gap, plus
   prose-mode fallbacks for `narrative_nql_validate` and
@@ -664,29 +668,6 @@ for m in ar.mappings:
 The hand-curated `IDENTIFIER_ATTRIBUTE_IDS` set lives in
 [`references/IDENTIFIER_ATTRIBUTES.md`](references/IDENTIFIER_ATTRIBUTES.md).
 Load it on demand — these 30-odd IDs change rarely.
-
----
-
-## Appendix C: Identity-only variant
-
-If the user picks "no enrichment" in Phase 5, the workflow needs a
-modified YAML:
-
-- **Drop** the entire `step_4_match_enriched` block.
-- **Drop** the step-5 CTEs that reference step 4:
-  `match_attribute_unnest`, `match_attribute_counts`,
-  `match_attribute_ranked`, `match_attribute_top10`,
-  `match_attribute_freq`, `match_attribute_results`,
-  `match_attribute_type_totals`, `match_attribute_coverage`.
-- **Drop** the final `UNION ALL` lines for `match_attribute_results`
-  and `match_attribute_coverage`.
-
-Everything else in step 5 stays — identifier-counts, KPI rows, and
-the `customer_*` / `match_totals` / `supplier_*` aggregations are
-all still meaningful in identity-only mode.
-
-(A separate `workflow.identity-only.yaml.tmpl` is the cleaner
-long-term solution. For now, the substitution code can branch.)
 
 ---
 
