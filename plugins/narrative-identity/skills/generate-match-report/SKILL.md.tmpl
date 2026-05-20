@@ -103,26 +103,37 @@ could attach to each person if they bought the data.
    mapped attributes, not from your imagination. The user unchecks
    what they don't want.
 
-## Assumptions
+## When to use
 
-This skill assumes:
+Trigger when the user types `/generate-match-report` or asks any of:
+
+- "how does my data compare to your marketplace"
+- "how much overlap do I have with [supplier]"
+- "compare my data to [partner]"
+- "run a match report", "match my customers against 3P data"
+- "see what enrichment is available for my dataset"
+
+**Required prerequisites.** This skill assumes:
 
 1. The user owns a dataset registered on their data plane.
 2. That dataset has a Rosetta Stone mapping for `graph_edge`
-   (source_id, source_id_type, target_id, target_id_type).
+   (`source_id`, `source_id_type`, `target_id`, `target_id_type`).
 3. One or more partner access rules are already shared with them.
 
-If any are missing, route to:
+If a prerequisite is missing, hand off — don't reimplement:
 
-- No dataset → ask the user to register one first.
-- No `graph_edge` mapping → route to `create-mapping`.
-- No partner ARs → route to `share-enclave-dataset`.
+| Missing | Hand off to |
+|---|---|
+| No dataset | Ask the user to register one first |
+| No `graph_edge` mapping | `/create-mapping` |
+| No partner ARs | `/share-enclave-dataset` |
 
-## User-invocable
+**Do NOT use this skill for:**
 
-When the user types `/generate-match-report`, or asks a free-form
-question that matches the description (e.g., "how does my data compare
-to your marketplace?"), run this skill.
+- Building the partner-facing graph itself → use `/generate-identity-graph`.
+- Auditing pre-graph data quality → use `/triage-pregraph-data`.
+- Authoring a new Rosetta Stone mapping → use `/create-mapping`.
+- Exposing your own data to a partner → use `/share-enclave-dataset`.
 
 ## Arguments
 
@@ -136,7 +147,14 @@ to your marketplace?"), run this skill.
 
 ---
 
-## Phase 1: Confirm the working company
+## Procedure
+
+The interactive flow is eight phases: pin the company, pick the
+customer dataset, ground the customer id-types from column stats,
+pick the partner identity AR, optionally pick an enrichment AR, render
+and confirm the workflow YAML, submit + poll, and summarize the result.
+
+### Phase 1. Confirm the working company
 
 Run `narrative_context_get`. If multiple companies are accessible
 (`narrative_context_get_companies`), confirm:
@@ -156,7 +174,7 @@ If B, list via `narrative_context_search_companies` and switch via
 
 ---
 
-## Phase 2: Pick the customer dataset
+### Phase 2. Pick the customer dataset
 
 Find datasets the user owns that have a `graph_edge` mapping. Use
 `narrative_datasets_search` filtered to owned + has-mapping, or
@@ -180,7 +198,7 @@ Bind `CUSTOMER_DATASET_NAME` (the bare table name used in
 
 ---
 
-## Phase 3: Compute customer identifier-type coverage
+### Phase 3. Compute customer identifier-type coverage
 
 Match reports filter on the `target_id_type` values your dataset
 actually emits. Read the column-stats histogram for
@@ -223,7 +241,7 @@ This step is informational — no question to the user. Just note:
 
 ---
 
-## Phase 4: Pick the partner identity source
+### Phase 4. Pick the partner identity source
 
 Find non-owned datasets/ARs on the data plane with `graph_edge`
 mapped. For each candidate, compute the **overlap** with
@@ -266,7 +284,7 @@ Bind `SUPPLIER_AR_TABLE` = the qualified `<company_slug>.<ar_name>`
 (human-readable name for the report description), and
 `OVERLAP_ID_TYPES`.
 
-### Narrowing the overlap (only if `len(OVERLAP_ID_TYPES) > 2`)
+#### Narrowing the overlap (only if `len(OVERLAP_ID_TYPES) > 2`)
 
 > **Plain English:** We can match on any of these identifier types.
 > Which should count? More = wider net but more compute.
@@ -284,7 +302,7 @@ single-quoted strings: `'normalized_email', 'e164_phone_number'`.
 
 ---
 
-## Phase 5: Pick the enrichment source (optional)
+### Phase 5. Pick the enrichment source (optional)
 
 > **Plain English:** Want demographic and behavioral data attached to
 > each match (age, gender, income, interests, etc.)? That needs a
@@ -315,7 +333,7 @@ whose `attribute_id` is not in `IDENTIFIER_ATTRIBUTE_IDS` and is not
 
 Bind `ENRICHMENT_AR_TABLE` = `<company_slug>.<ar_name>`.
 
-### Enrichment join key
+#### Enrichment join key
 
 Partition the enrichment AR's mappings; the identifier-typed ones are
 join-key candidates. Preference order for the default:
@@ -340,7 +358,7 @@ includes `"value"`), the leaf SQL path is
 
 Bind `ENRICHMENT_JOIN_PATH`. **Critical:** must not start with `e.`.
 
-### Enrichment attributes (multi-select, all pre-checked)
+#### Enrichment attributes (multi-select, all pre-checked)
 
 Expand the enrichment AR's demographic mappings into **leaf paths**:
 for each object-typed mapping, one entry per mapped property (e.g.
@@ -368,7 +386,7 @@ Build `ATTRIBUTE_STRUCTS` and `ATTRIBUTE_NAMES_LIST` (Appendix A).
 
 ---
 
-## Phase 6: Render and confirm
+### Phase 6. Render and confirm
 
 Compute the run identifiers:
 
@@ -399,7 +417,7 @@ and present the result:
 
 If `--dry-run`, stop here, print the YAML, and exit.
 
-### Pre-flight: validate each NQL block
+#### Pre-flight: validate each NQL block
 
 Before submit, run each step's NQL through `narrative_nql_validate`.
 The validator catches the cheap mistakes (mis-quoted columns,
@@ -415,7 +433,7 @@ whether to:
 
 ---
 
-## Phase 7: Submit the workflow
+### Phase 7. Submit the workflow
 
 If MCP exposes a workflow-submit tool, call it with:
 
@@ -433,7 +451,7 @@ modified NQL.
 
 ---
 
-## Phase 8: Sample the final report and summarize
+### Phase 8. Sample the final report and summarize
 
 When the run completes, the final MV's dataset ID is in the
 workflow's exported `finalDatasetId` context. Kick a sample:
@@ -474,7 +492,7 @@ Render:
 
 ---
 
-## Completion Status
+## Completion status
 
 - **DONE** — Workflow completed, sample fetched, summary shown.
 - **DONE_WITH_CONCERNS** — Completed but some attribute had unexpectedly
@@ -482,6 +500,106 @@ Render:
 - **BLOCKED** — Overlap was 0, or a validation/run step failed.
 - **NEEDS_CONTEXT** — User has no graph-edge-mapped dataset, or no
   partner ARs are shared with their plane.
+
+---
+
+## Common cases
+
+### Default — identity + enrichment from the same partner
+
+User has a CRM dataset mapped to `graph_edge`. A single partner ships
+both an identity AR and a demographic AR. Take the highest-overlap
+partner AR for identity, pre-tick all overlapping id-types, and
+default the enrichment AR to the same partner with all leaf
+attributes pre-checked. One submit, both runs of step 4 and step 5
+on. Expected runtime 5–25 minutes.
+
+### Identity-only run
+
+User explicitly opts out of enrichment in Phase 5, or no partner
+exposes a demographic AR. Run via `--no-enrichment` or the
+interactive "No — identity-only" option; the renderer drops step 4
+and the attribute-related step-5 CTEs (see Appendix C).
+
+### Narrow id-type subset
+
+Partner overlaps on 3+ id-types but the user wants to scope the run
+(e.g., email only). In Phase 4's narrowing sub-prompt, user unchecks
+the unwanted types. Bind only the remaining types into
+`SELECTED_ID_TYPES_QUOTED`. Match count drops; runtime unchanged.
+
+### Dry-run preview
+
+User passes `--dry-run`. Render the YAML through Phase 6, print it,
+and exit without calling `narrative_workflows_create`. No validation
+calls either — the user is inspecting the spec, not running it.
+
+### Cross-company run
+
+The user belongs to multiple companies. Phase 1's `B)` branch
+switches the working company via `narrative_context_set_company`
+before any dataset lookup happens. All subsequent calls inherit the
+new company context.
+
+---
+
+## Edge cases and gotchas
+
+One-line cheat sheet. The full prose and example flows live in
+[`references/EDGE_CASES.md`](references/EDGE_CASES.md) when
+authored; for now, the rules below are self-contained.
+
+- **Zero-overlap partner.** Surface a blocker; do not submit an empty
+  comparison. Offer to switch partners or route to `/create-mapping`.
+- **Missing column-stats histogram on `graph_edge.target_id_type`.**
+  Call `narrative_dataset_set_column_stats_config` then
+  `narrative_dataset_recalculate_statistics`; poll for completion
+  before reading id-types. Don't proceed without ground truth.
+- **AskUserQuestion 4-option cap.** Bucket large enrichment attribute
+  lists into 4 named groups; offer a follow-up drill-down per group.
+- **Pre-flight NQL validation fails.** STOP. Surface the validator's
+  error verbatim. Do not "fix" the templated NQL — the YAML is an
+  external contract.
+- **Workflow runner returns `failed`.** Surface the runner's error
+  verbatim and STOP. Do not re-render with modified NQL; route the
+  user to the workflow's run-detail view instead.
+- **`ENRICHMENT_JOIN_PATH` starts with `e.`.** Template prepends the
+  alias; a leading `e.` produces `e.e._rosetta_stone...` and the join
+  fails silently. Validate before binding.
+
+---
+
+## Harness fallbacks
+
+- **No `narrative_workflows_create` MCP tool available.** The
+  workflow submission and run-polling steps run over the raw
+  Narrative API instead. See Appendix D for endpoint shapes, auth,
+  and the call template.
+- **No `narrative_nql_validate` MCP tool available.** Skip the
+  pre-flight validation in Phase 6 and surface the gap to the user
+  before submit. Do not auto-resort to running NQL via
+  `narrative_nql_run` — it allocates compute.
+- **No `AskUserQuestion`.** Ask the same options as a numbered list
+  in prose ("**Pick one — reply 1, 2, or 3:**"). Default selections
+  are still pre-ticked; the user replies with the numbers to leave
+  on. Mandatory steps (pre-flight validation, schema-fidelity rule)
+  do not change.
+
+---
+
+## Further reading
+
+- [`assets/workflow.yaml.tmpl`](assets/workflow.yaml.tmpl) — the
+  external workflow contract this skill submits.
+- Appendix A in this file — the macro table to substitute into the
+  workflow YAML.
+- Appendix B — `IDENTIFIER_ATTRIBUTE_IDS` lookup table used to
+  partition AR mappings into identifiers vs enrichment.
+- Appendix C — identity-only YAML variant.
+- Appendix D — API fallback for the workflow submission MCP gap.
+- Sibling skills: `/generate-identity-graph` (build the graph),
+  `/create-mapping` (author a Rosetta Stone mapping),
+  `/share-enclave-dataset` (expose your data to a partner).
 
 ---
 
