@@ -14,6 +14,35 @@ the two views are deliberately redundant.
 
 <!-- RELEASES BELOW -->
 
+## [2026.05.1] - 2026-05-20
+
+### ✨ Features
+
+- **narrative-identity:** add generate-identity-graph skill (#3) (b5c04b0)
+- **triage-pregraph-data:** return validated clean-view NQL as audit deliverable (#30) (513405e)
+- portable-harness support for non-Claude-Code installs (#29) (2c673b8)
+- require version bumps on SKILL.md.tmpl edits (#26) (9751a09)
+- **release:** switch to PR-based flow with CI auto-tagging (#25) (25e3a8f)
+
+### 🐛 Bug Fixes
+
+- **release:** resolve last tag via tag list, not ancestry (#33) (4beb279)
+- **write-nql:** drop default BUDGET clause and lengthen polling cap (#28) (5baf70b)
+
+### 📚 Documentation
+
+- **snippets:** strengthen agent-feedback to discourage skipping (#27) (37e9197)
+
+### 🤖 CI / Tooling
+
+- add check:readme step to keep plugin catalog in sync (#31) (6d2ad13)
+
+### 🧹 Maintenance
+
+- public-readiness governance and identity cleanup (#32) (1773c23)
+- **release:** v2026.05.0 (#24) (388c920)
+
+
 ## [2026.05.0] - 2026-05-20
 
 ### ✨ Features
