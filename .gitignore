@@ -26,4 +26,4 @@ npm-debug.log*
 bun-debug.log*
 
 # Local Claude state (per-user)
-.claude/settings.local.json
+.claude/

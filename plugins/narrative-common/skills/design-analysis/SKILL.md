@@ -1,6 +1,6 @@
 ---
 name: design-analysis
-version: 0.1.0
+version: 0.2.0
 description: |
   Translate a fuzzy analytical question into a rigorous investigation
   plan. Interrogates the ask, grounds the plan in the available data
@@ -13,10 +13,9 @@ description: |
   this analytical question".
   (narrative-common)
 compatibility:
-  requires:
+  recommends:
     tools:
       - AskUserQuestion
-  recommends:
     mcp-servers:
       - narrative-mcp
     mcp-tools:
@@ -509,6 +508,14 @@ analysis, a "rate vs. volume" split if applicable.
   better source; let the user override.
 
 ## Harness fallbacks
+
+If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
 
 If `narrative-mcp` is unavailable (or `--no-schema` was passed):
 

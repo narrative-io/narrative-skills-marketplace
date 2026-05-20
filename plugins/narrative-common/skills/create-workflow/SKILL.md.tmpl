@@ -1,6 +1,6 @@
 ---
 name: create-workflow
-version: 0.1.0
+version: 0.2.0
 description: |
   Author and submit a Narrative workflow from a natural-language
   intent. Picks the closest example from `assets/examples/`, adapts
@@ -15,7 +15,6 @@ description: |
 compatibility:
   requires:
     tools:
-      - AskUserQuestion
       - Read
     mcp-servers:
       - narrative-mcp
@@ -29,6 +28,8 @@ compatibility:
       - narrative_workflows_trigger
       - narrative_workflow_runs_list
   recommends:
+    tools:
+      - AskUserQuestion
     mcp-servers:
       - narrative-knowledge-base
     mcp-tools:
@@ -414,6 +415,8 @@ issues you spot and ask before changing anything.
   `document.version` (and ideally `document.name`) to disambiguate.
 
 ## Harness fallbacks
+
+{{SNIPPET:askuserquestion-fallback}}
 
 If `narrative-mcp` is unavailable:
 

@@ -1,38 +1,60 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# narrative-skills-marketplace setup: register marketplace + install plugins.
+# narrative-skills-marketplace setup.
+#
+# Default mode (no args): register the marketplace + install plugins via
+# the `claude` CLI. Use this on Claude Code.
+#
+# Portable mode (`bash setup --portable`): render everything but skip
+# the `claude` CLI entirely. Produces dist/skills/, dist/mcp/, and
+# dist/skills.json, then prints copy-paste instructions for Claude.ai
+# Skills, Claude Desktop, Cursor, and other agentskills.io-compliant
+# harnesses. Requires Bun; does not require the `claude` CLI.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MARKETPLACE_JSON="$SCRIPT_DIR/.claude-plugin/marketplace.json"
 
-echo "=== narrative-skills-marketplace setup ==="
-echo ""
+MODE="claude-code"
+for arg in "$@"; do
+  case "$arg" in
+    --portable) MODE="portable" ;;
+    -h|--help)
+      cat <<EOF
+Usage: bash setup [--portable]
 
-if ! command -v claude >/dev/null 2>&1; then
-  echo "error: the 'claude' CLI is not on PATH. Install Claude Code first." >&2
-  exit 1
-fi
+  (no flag)    Install via Claude Code CLI (default).
+  --portable   Build dist/ for non-Claude-Code harnesses.
+EOF
+      exit 0
+      ;;
+    *)
+      echo "error: unknown flag '$arg' (run 'bash setup --help')." >&2
+      exit 1
+      ;;
+  esac
+done
+
+echo "=== narrative-skills-marketplace setup ($MODE) ==="
+echo ""
 
 if [ ! -f "$MARKETPLACE_JSON" ]; then
   echo "error: $MARKETPLACE_JSON not found." >&2
   exit 1
 fi
 
-MARKETPLACE_NAME=$(grep -m1 '"name"' "$MARKETPLACE_JSON" | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-
-# Render SKILL.md files from SKILL.md.tmpl templates. Skills using shared
-# snippets (e.g. {{SNIPPET:pin-company-context}}) need this step to
-# produce the SKILL.md that the plugin loader actually reads. See
-# scripts/gen-skill-docs.ts and AGENTS.md ("Template system") for details.
+# ─── Render templates + derived artifacts (both modes) ────────
+# Skills using shared snippets (e.g. {{SNIPPET:pin-company-context}}) need
+# this step to produce the SKILL.md that the plugin loader actually reads.
+# See scripts/gen-skill-docs.ts and AGENTS.md ("Template system") for details.
 if command -v bun >/dev/null 2>&1; then
   if [ ! -d "$SCRIPT_DIR/node_modules" ] && [ -f "$SCRIPT_DIR/package.json" ]; then
     echo "Installing template-renderer dependencies..."
     (cd "$SCRIPT_DIR" && bun install --silent)
   fi
   if [ -f "$SCRIPT_DIR/scripts/gen-skill-docs.ts" ]; then
-    echo "Rendering SKILL.md from templates..."
-    (cd "$SCRIPT_DIR" && bun run gen:skill-docs)
+    echo "Rendering SKILL.md from templates + mcp.json + skills.json..."
+    (cd "$SCRIPT_DIR" && bun run gen:all)
   fi
   # Install local git hooks (commitlint) for contributors. Silently
   # skip outside a git working tree or when lefthook isn't installed
@@ -53,6 +75,30 @@ else
     exit 1
   fi
 fi
+
+# ─── Portable mode: build dist/ and exit ──────────────────────
+if [ "$MODE" = "portable" ]; then
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "error: --portable requires Bun (https://bun.sh)." >&2
+    exit 1
+  fi
+  (cd "$SCRIPT_DIR" && bun run build:portable)
+  echo ""
+  echo "=== Portable build complete ==="
+  echo "See $SCRIPT_DIR/dist/ for the rendered artifacts and the README"
+  echo "for per-harness installation recipes."
+  exit 0
+fi
+
+# ─── Claude Code mode (default): register + install ───────────
+if ! command -v claude >/dev/null 2>&1; then
+  echo "error: the 'claude' CLI is not on PATH. Install Claude Code first," >&2
+  echo "       or re-run with 'bash setup --portable' to build a harness-" >&2
+  echo "       agnostic distribution under dist/." >&2
+  exit 1
+fi
+
+MARKETPLACE_NAME=$(grep -m1 '"name"' "$MARKETPLACE_JSON" | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
 
 echo "Registering plugin marketplace..."
 claude plugin marketplace add "$SCRIPT_DIR"

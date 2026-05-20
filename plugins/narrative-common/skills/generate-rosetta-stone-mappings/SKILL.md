@@ -1,6 +1,6 @@
 ---
 name: generate-rosetta-stone-mappings
-version: 0.1.0
+version: 0.2.0
 description: |
   Generate, evaluate, and improve Rosetta Stone attribute mappings for
   a Narrative dataset.
@@ -11,8 +11,6 @@ description: |
   (narrative-common)
 compatibility:
   requires:
-    tools:
-      - AskUserQuestion
     mcp-servers:
       - narrative-mcp
     mcp-tools:
@@ -29,6 +27,8 @@ compatibility:
       - narrative_nql_run
       - narrative_jobs_describe
   recommends:
+    tools:
+      - AskUserQuestion
     mcp-servers:
       - narrative-knowledge-base
     mcp-tools:
@@ -509,6 +509,14 @@ Use first person ("I analyzed 12 columns…") and conversational language
 Platform UI's Rosetta Stone normalization tab.
 
 ## Harness fallbacks
+
+If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
 
 If `narrative-mcp` is unavailable:
 

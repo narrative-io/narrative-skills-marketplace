@@ -1,6 +1,6 @@
 ---
 name: find-attribute
-version: 0.1.0
+version: 0.2.0
 description: |
   Find the canonical Rosetta Stone attribute that best matches a
   fuzzy description, semantic phrase, or required schema shape.
@@ -14,13 +14,14 @@ description: |
   (narrative-common)
 compatibility:
   requires:
-    tools:
-      - AskUserQuestion
     mcp-servers:
       - narrative-mcp
     mcp-tools:
       - narrative_attributes_search
       - narrative_attributes_describe
+  recommends:
+    tools:
+      - AskUserQuestion
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -321,6 +322,14 @@ warnings, use first person and conversational language ("I found
 identical").
 
 ## Harness fallbacks
+
+If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
 
 If `narrative-mcp` is unavailable, this skill cannot run — its
 entire value is searching the live catalog. The fallback:
