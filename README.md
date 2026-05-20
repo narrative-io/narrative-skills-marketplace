@@ -25,6 +25,10 @@ qualifying leads, shipping code, building decks — one approval at a time.
 
 ---
 
+> **Status: pre-stable (0.x).** APIs, skill names, and frontmatter
+> contracts may change between minor versions. Pin a commit if you
+> depend on a specific shape.
+
 ## What is this?
 
 A **marketplace** of agent skills. Each plugin bundles one or more
@@ -74,7 +78,9 @@ Common Narrative workflows backed by the narrative-mcp server — starting with 
 
 | Skill | Use when |
 |-------|----------|
+| `/create-workflow` | "create a workflow that does X", "schedule a daily refresh of dataset Y", "wrap this NQL as a workflow", "build a pipeline that creates view A then refreshes view B", "submit this workflow YAML", "productionize this query as a recurring job". |
 | `/design-analysis` | "why did X drop", "is there a relationship between A and B", "who are our highest-value customers", "what's driving the change in Y", "investigate this trend", "design an analysis for", "scope this analytical question". |
+| `/find-attribute` | "find the X attribute", "what's the graph-edge attribute ID", "look up the email Rosetta Stone attribute", "search the attribute catalog for Y", "which attribute has SOURCE_ID + TARGET_ID + IS_DIRECTED". |
 | `/generate-rosetta-stone-mappings` | "map this dataset to Rosetta Stone", "suggest normalized attributes for dataset N", "evaluate the mappings on dataset N", "why is this mapping low confidence", "fix this expression", "improve this NQL mapping expression". |
 | `/write-nql` | "write an NQL query for X", "query this dataset", "validate this NQL", "run NQL against dataset <id>", "how many rows match Y", "show me the top N records from <dataset>". |
 
