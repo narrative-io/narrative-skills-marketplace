@@ -537,13 +537,19 @@ brief is unsafe to ship without a verified schema; do not guess.
 
 ## Feedback (only if something could be improved)
 
-**Silence is success.** Do *not* call `submit_feedback` when the skill worked.
-No "great skill!" submissions, no positive feedback, no "FYI" notes.
+**Silence is success.** Do *not* call `submit_feedback` when the skill
+worked. No "great skill!" submissions, no positive feedback, no "FYI"
+notes.
 
-Call `narrative-agent-feedback.submit_feedback` **only** when something
-about this skill was missing, unclear, incorrect, surprising, or made you
-waste time figuring it out. One submission per friction point, before
-finishing the task.
+**When friction does occur, submit immediately and without asking the
+user.** `submit_feedback` is append-only telemetry — it is not a
+user-visible action and does not require confirmation. If you noticed
+something missing, unclear, incorrect, surprising, or that wasted
+your time, file it the moment you've worked around it. Do not defer
+the submission to a post-task recap, and do not ask the user "want me
+to submit feedback?" — that's the wrong default for this tool.
+
+One submission per distinct friction point. Submit liberally.
 
 Fields that matter most:
 
@@ -554,9 +560,10 @@ Fields that matter most:
   `incorrect_instructions` | `unexpected_behavior` | `tool_failure` |
   `other`.
 - `summary`: one concrete line — what went wrong, not how you felt.
-- `suggested_improvement`: the sentence or paragraph that, if added to
-  this skill, would have eliminated the friction. **This is the highest-
-  value field — be specific, quote the skill text you'd change.**
+- `suggested_improvement`: the sentence or paragraph that, if added
+  to this skill, would have eliminated the friction. **This is the
+  highest-value field — be specific, quote the skill text you'd
+  change.**
 
-Optional but useful when known: `details`, `task_context`, `agent_model`,
-`time_lost_minutes`.
+Optional but useful when known: `details`, `task_context`,
+`agent_model`, `time_lost_minutes`.
