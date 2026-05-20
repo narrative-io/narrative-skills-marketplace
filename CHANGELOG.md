@@ -14,6 +14,24 @@ the two views are deliberately redundant.
 
 <!-- RELEASES BELOW -->
 
+## [2026.05.2] - 2026-05-20
+
+### ✨ Features
+
+- **release:** bump marketplace.json plugin versions to release tag (#40) (7643d38)
+
+### 🐛 Bug Fixes
+
+- **generate-identity-graph:** clarify source-list rule (#39) (34b6786)
+- **generate-identity-graph:** enforce strict interactive mode (#38) (f9075af)
+- **write-nql:** correct CMV gotchas from agent feedback (#36) (8992620)
+- **release:** pipe PR body via stdin to avoid shell evaluation (#35) (d55e225)
+
+### 🧹 Maintenance
+
+- auto-regenerate skill artifacts in pre-commit hook (#37) (ace528c)
+
+
 ## [2026.05.1] - 2026-05-20
 
 ### ✨ Features
