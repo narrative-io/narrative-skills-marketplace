@@ -1,7 +1,6 @@
 ---
 name: generate-match-report
-preamble-tier: 3
-version: 0.2.0-draft
+version: 0.1.0
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -14,23 +13,38 @@ description: |
   "run a match report", "match my customers against 3P data", "see
   what enrichment is available for my dataset", or any open-ended
   question about marketplace overlap.
-allowed-tools:
-  - AskUserQuestion
-  - Read
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_attributes_describe
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_attributes_search
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_context_get
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_context_get_companies
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_context_search_companies
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_context_set_company
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_dataset_get_column_stats
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_dataset_request_sample
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_dataset_set_column_stats_config
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_datasets_describe
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_datasets_search
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_jobs_describe
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_nql_run
-  - mcp__plugin_narrative-solutions_narrative-mcp__narrative_nql_validate
+  (narrative-identity)
+compatibility:
+  requires:
+    tools:
+      - Read
+    mcp-servers:
+      - narrative-mcp
+    mcp-tools:
+      - narrative_context_get
+      - narrative_datasets_search
+      - narrative_datasets_describe
+      - narrative_dataset_get_column_stats
+      - narrative_dataset_set_column_stats_config
+      - narrative_dataset_recalculate_statistics
+      - narrative_dataset_request_sample
+      - narrative_jobs_describe
+      - narrative_nql_validate
+      - narrative_workflows_create
+      - narrative_workflow_runs_list
+  recommends:
+    tools:
+      - AskUserQuestion
+    mcp-servers:
+      - narrative-mcp
+    mcp-tools:
+      - narrative_context_get_companies
+      - narrative_context_search_companies
+      - narrative_context_set_company
+      - narrative_attributes_describe
+      - narrative_attributes_search
+      - narrative_nql_run
+      - narrative_workflows_trigger
 ---
 
 # /generate-match-report — Compare your data to a marketplace partner
