@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.3.1
+version: 0.3.2
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -314,18 +314,21 @@ before validating; consult the KB for the long form.
 | Gotcha | Rule | KB page |
 | --- | --- | --- |
 | **Wildcards / `COUNT(*)`** | NQL does **not** support `SELECT *`, `SELECT t.*`, or `COUNT(*)`. Always list columns explicitly. Use `COUNT(1)` for row counts, `COUNT(<col>)` for non-null counts. This rule applies inside CTEs and subqueries too. | `/nql/general/explicit-columns` |
-| **Naked `SELECT` is not runnable** | You cannot submit a bare `SELECT` to `narrative_nql_run` and expect rows back. Every executed query must land somewhere — wrap the `SELECT` in `CREATE MATERIALIZED VIEW "<name>" AS (SELECT …)` (optionally with `REFRESH_SCHEDULE`, `EXPIRE`, `BUDGET`, etc.), then read the rows via `narrative_dataset_request_sample` + `narrative_datasets_describe(include=["sample"])`. Use `EXPLAIN <SELECT …>` for forecasts. Bare-`SELECT` validation passes, but execution requires the materialized-view wrapper. | `/nql/commands/create-materialized-view`, `/guides/nql/creating-materialized-views` |
+| **Naked `SELECT` is not runnable** | You cannot submit a bare `SELECT` to `narrative_nql_run` and expect rows back. Every executed query must land somewhere — wrap the `SELECT` in `CREATE MATERIALIZED VIEW "<name>" AS SELECT …` (optionally with `REFRESH_SCHEDULE`, `EXPIRE`, `BUDGET`, etc.), then read the rows via `narrative_dataset_request_sample` + `narrative_datasets_describe(include=["sample"])`. Use `EXPLAIN <SELECT …>` for forecasts. Bare-`SELECT` validation passes, but execution requires the materialized-view wrapper. | `/nql/commands/create-materialized-view`, `/guides/nql/creating-materialized-views` |
+| **No outer parens on the CMV body** | Write `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`, **not** `… AS (SELECT …)`. The validator accepts the parenthesized form, but `narrative_nql_run` returns HTTP 500 at execution time. | `/nql/commands/create-materialized-view` |
 | **Reserved keywords** | Reserved words (`type`, `value`, `user`, `order`, `group`, `select`, etc.) must be double-quoted when used as identifiers — including nested property paths like `data."value"`. | `/nql/general/reserved-keywords` |
 | **Dataset IDs are numeric** | Dataset IDs in `company_data` are numeric and must be double-quoted: `company_data."123"`. Bare `company_data.123` parses as a numeric literal. | `/concepts/nql/sql-comparison` |
 | **Fully qualify columns in joins** | Use `company_data."123".col` (or aliased equivalents) in `JOIN`s and `WHERE`s — ambiguous column references fail at parse. | `/guides/nql/filtering-transforming` |
 | **`GEOMETRY` cannot be in `SELECT`** | Geometry types (e.g. the output of `STCIRCLE`) cannot be returned in result sets. Keep geometry expressions inside `JOIN` and `WHERE` clauses; return `latitude` / `longitude` / identifiers instead. | `/guides/nql/troubleshooting/unsupported-type-error` |
 | **`\|\|` concatenation is string-only** | The `\|\|` operator requires both operands to be strings. Structured fields need `.value` extracted first; non-string types need `CAST(... AS VARCHAR)`. | `/guides/nql/troubleshooting/unsupported-type-error` |
 | **Cross-data-plane queries fail** | A single query cannot reference datasets that live in different data planes. Verify dataset plane assignments before drafting joins; either query each plane separately or materialize into a common plane. | `/guides/nql/troubleshooting/cross-data-plane-queries` |
-| **Pass `data_plane_id` matching the dataset's plane** | `narrative_nql_run` and `narrative_nql_get_job` default to the company default plane when `data_plane_id` is omitted — usually wrong on multi-plane tenants. Capture the dataset's plane from `narrative_datasets_describe` (or `narrative_data_planes_list`), and pass the same `data_plane_id` to both run and poll. Validate is plane-agnostic — it only catches schema issues, not wrong-plane mistakes. | `/reference/integrations/mcp-server`, `/guides/nql/troubleshooting/cross-data-plane-queries` |
+| **Pass `data_plane_id` to validate, run, and get_job** | All three tools accept `data_plane_id` and all three default to the company default plane when it's omitted — usually wrong on multi-plane tenants. Capture the dataset's plane from `narrative_datasets_describe` (or `narrative_data_planes_list`) once, and pass the same value to every call. Omitting it on validate is the common cause of validator-only "Unknown Table" errors on numeric-id references like `company_data."38206"` (run accepts what validate rejects). | `/reference/integrations/mcp-server`, `/guides/nql/troubleshooting/cross-data-plane-queries` |
 | **`OR` in `JOIN` clauses** | `ON a.x = b.x OR a.y = b.y` defeats hash-join optimization and can run 100× slower. Restructure with `CROSS JOIN UNNEST([…])` on a flattened key column, or `UNION` two single-key joins. | `/guides/nql/query-optimization/avoid-or-in-join` |
 | **Filter before joining** | Push filters into CTEs / subqueries on each side of the join, not after. Cuts the rows hashed and the rows scanned. | `/cookbooks/nql/performance-patterns` |
 | **Prefer `APPROX_COUNT_DISTINCT`** | Cheaper and faster than `COUNT(DISTINCT col)`; exact at low cardinality, near-exact at scale. Reserve `COUNT(DISTINCT col)` for `HAVING` / `CASE WHEN` threshold logic. | `/cookbooks/nql/performance-patterns` |
 | **`QUALIFY` over subquery dedup** | `QUALIFY ROW_NUMBER() OVER (...) = 1` is the idiomatic NQL dedup; cheaper than a `WHERE rn = 1` wrapper around a `ROW_NUMBER()` subquery. | `/cookbooks/nql/performance-patterns` |
+| **Top-N inside a `CREATE MATERIALIZED VIEW`** | A materialized view stores an unordered bag of rows — `ORDER BY` in the body affects insertion order at best, not what later reads return. For "top N by aggregate" patterns inside a CMV, use `QUALIFY ROW_NUMBER() OVER (ORDER BY <measure> DESC) <= N` instead of `ORDER BY <measure> DESC LIMIT N`. Outside a CMV (an ad-hoc `SELECT` you'd then sample), `ORDER BY … LIMIT` is fine. | `/cookbooks/nql/performance-patterns` |
+| **Percentile / distribution summaries** | NQL on Snowflake does not currently support `APPROX_PERCENTILE` (function not registered, HTTP 422) or `PERCENTILE_CONT(p) WITHIN GROUP` (validates but 500s at run). Use bucketed counts (`SUM(CASE WHEN x >= threshold THEN 1 ELSE 0 END)`) or row-position derivation for exact percentiles. See the percentile reference below. | n/a — see `references/PERCENTILE_DISTRIBUTION.md` |
 
 ### Validation error → fix cheat sheet
 
@@ -335,6 +338,8 @@ before validating; consult the KB for the long form.
 | "column not found" | Wrong identifier name / casing | Re-check schema via `narrative_datasets_describe` |
 | "function does not exist" | Wrong function name (e.g., `LCASE`) | Use the function list above |
 | "No match found for function signature `date_parse`/`parse_datetime`" | Function not exposed | Use `to_timestamp(text, format)` or `CAST(... AS timestamp)` |
+| "No match found for function signature `APPROX_PERCENTILE`" or run-time 500 on `PERCENTILE_CONT` | Percentile functions not available on the Snowflake data plane | Bucketed counts or row-position derivation — see `references/PERCENTILE_DISTRIBUTION.md` |
+| Validate-only "Unknown Table" on `company_data."<numeric_id>"` that run accepts | Validate call omitted `data_plane_id` and fell back to the company default plane | Pass `data_plane_id` to `narrative_nql_validate` matching the dataset's plane — same value as you'll pass to `narrative_nql_run` |
 | "cannot cast string to long" | Implicit coercion | Wrap with `CAST(... AS long)` or `NULLIF` |
 | "unexpected ELSE without CASE" | Mismatched CASE/END | Count `CASE … END` pairs |
 | "wildcard not supported" / "SELECT \* not supported" | Used `SELECT *` or `COUNT(*)` | Enumerate columns; use `COUNT(1)` or `COUNT(<col>)` |
@@ -375,8 +380,13 @@ Drafting heuristics specific to this skill:
 ### 5. Validate — mandatory, with retry
 
 ```
-narrative_nql_validate(nql: '<your full query>')
+narrative_nql_validate(
+  nql: '<your full query>',
+  data_plane_id: '<plane captured in step 3>'
+)
 ```
+
+Pass `data_plane_id` (full rationale in step 8's async snippet).
 
 If validation fails:
 
@@ -457,7 +467,7 @@ immediately; the actual rows arrive only after the job finishes.
 
 ```
 narrative_nql_run(
-  query: 'CREATE MATERIALIZED VIEW "<name>" AS (SELECT … FROM company_data."<id>")',
+  query: 'CREATE MATERIALIZED VIEW "<name>" AS SELECT … FROM company_data."<id>"',
   data_plane_id: '<uuid-of-dataset-plane>'
 )
 → { job_id: "<uuid>", state: "queued", ... }
@@ -466,29 +476,17 @@ narrative_nql_run(
 ### Selecting `data_plane_id` — mandatory when it's not the company default
 
 NQL queries execute inside a single data plane and only see datasets
-that live there. `narrative_nql_run` and `narrative_nql_get_job` both
-accept an optional `data_plane_id`; when omitted, the request falls
-back to the **company default** plane, which is almost never the
-right choice for a multi-plane tenant. Pass the data plane of the
-dataset(s) being queried explicitly.
+that live there. `narrative_nql_validate`, `narrative_nql_run`, and
+`narrative_nql_get_job` all accept an optional `data_plane_id`; when
+omitted, each falls back to the **company default** plane, which is
+almost never the right choice for a multi-plane tenant. Pass the data
+plane of the dataset(s) being queried explicitly to all three.
 
 Resolution sequence:
 
 1. **Capture the dataset's data plane during describe.** `narrative_datasets_describe(dataset_ids: [<id>], include: ["metadata"])` exposes the dataset's plane assignment alongside its name and id. Record it next to the unique_name / id you'll use in the query.
 2. **Confirm every dataset on the query is on the same plane.** Cross-plane joins fail at execution; if a query references multiple datasets, all of them must share a plane. If they don't, that's the cross-data-plane gotcha — query each plane separately or materialize one side into the other plane first.
-3. **Pass `data_plane_id` to `narrative_nql_run` and `narrative_nql_get_job`.** Use the same value for both. If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first.
-4. **`narrative_nql_validate` is plane-agnostic.** The validate tool only takes `query`; it compiles the NQL against the control-plane schema catalog. It will **not** catch a wrong-plane mistake — that error surfaces only at run time, as a cross-data-plane or "dataset not found" failure.
-
-```
-narrative_nql_run(
-  query: 'CREATE MATERIALIZED VIEW "wn_check_20260519" EXPIRE = ''P1D'' AS (SELECT … FROM company_data."12345")',
-  data_plane_id: '<dataset_12345_plane_uuid>'
-)
-narrative_nql_get_job(
-  job_id: '<returned>',
-  data_plane_id: '<dataset_12345_plane_uuid>'
-)
-```
+3. **Pass the same `data_plane_id` to validate, run, and get_job.** If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first. See the gotchas table for the failure mode this prevents — most visibly, validator-only "Unknown Table" errors on numeric-id references that run accepts.
 
 If the dataset describe response doesn't include a plane field for
 your tenant, fall back to: `narrative_data_planes_list(include: ["metadata"])`
@@ -529,7 +527,7 @@ The `result` field on a finished job is shaped by the job `type`:
 | Job type | Triggered by | `result` payload | Where the rows live |
 | --- | --- | --- | --- |
 | `nql-forecast` | `narrative_nql_run` with `EXPLAIN …` | `{rows, cost}` — an estimate, not actual rows | n/a — forecasts return numbers only |
-| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS (SELECT …)`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
+| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. Do not put outer parens around the inner `SELECT`; the validator accepts them but execution 500s. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
 | `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
 
 ### Reading rows after a `materialize-view` job completes
@@ -545,7 +543,7 @@ is not a runnable form — you must explicitly wrap it in
 3. **Read the sample rows** with `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`. The sample lives in the control plane and is what `include=["sample"]` returns.
 
 ```
-narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS (SELECT …)")
+narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS SELECT …")
   → poll narrative_jobs_describe → result.dataset_id = 1234
 narrative_dataset_request_sample(dataset_id: 1234)
   → poll narrative_jobs_describe → completed
@@ -603,9 +601,8 @@ narrative_nql_run(
   query: '
     CREATE MATERIALIZED VIEW "wn_<short_slug>_<yyyymmddhhmm>"
     EXPIRE = ''P1D''
-    AS (
+    AS
       <the same validated SELECT>
-    )
   ',
   data_plane_id: '<plane captured in step 3>'
 )
@@ -630,13 +627,8 @@ In either case, query the Narrative knowledge base
 `query_docs_filesystem_narrative_i_o_knowledge_base`) for the current
 `BUDGET` syntax before submitting. Do not hardcode `BUDGET 5 USD`.
 
-Always pass `data_plane_id` matching the dataset's plane (captured in
-step 3). Use the **same** `data_plane_id` when polling with
-`narrative_nql_get_job` — otherwise the poll falls back to the company
-default plane and won't see your job. `narrative_nql_validate` is
-plane-agnostic and ignores the parameter; it cannot catch a wrong-plane
-mistake — that surfaces only when the run job fails with a
-cross-data-plane or "dataset not found" error.
+Pass the same `data_plane_id` to validate, run, and get_job (rule
+detailed in the async snippet above).
 
 For pure forecasts (cost / row-count estimates without materializing
 data), submit `EXPLAIN <SELECT …>` instead — the job is a
@@ -748,6 +740,11 @@ Platform UI.
   nonexistent columns, wildcard scans on huge datasets, cost
   warnings under `--run`, validator-vs-user disagreement, schema
   drift. Read when something doesn't add up.
+- `references/PERCENTILE_DISTRIBUTION.md` — patterns for percentile
+  and distribution summaries on the Snowflake data plane, where
+  `APPROX_PERCENTILE` and `PERCENTILE_CONT` are not currently usable.
+  Read when the user's question is about distribution shape, quartiles,
+  thresholds, or "how skewed is X."
 - `references/HARNESS_FALLBACK.md` — what to do when
   `narrative-mcp` is unavailable, and how to deliver the same flow
   when `AskUserQuestion` isn't exposed. Read when a tool call

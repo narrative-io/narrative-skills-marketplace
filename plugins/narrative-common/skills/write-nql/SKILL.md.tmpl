@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.3.1
+version: 0.3.2
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -186,8 +186,13 @@ Drafting heuristics specific to this skill:
 ### 5. Validate — mandatory, with retry
 
 ```
-narrative_nql_validate(nql: '<your full query>')
+narrative_nql_validate(
+  nql: '<your full query>',
+  data_plane_id: '<plane captured in step 3>'
+)
 ```
+
+Pass `data_plane_id` (full rationale in step 8's async snippet).
 
 If validation fails:
 
@@ -277,9 +282,8 @@ narrative_nql_run(
   query: '
     CREATE MATERIALIZED VIEW "wn_<short_slug>_<yyyymmddhhmm>"
     EXPIRE = ''P1D''
-    AS (
+    AS
       <the same validated SELECT>
-    )
   ',
   data_plane_id: '<plane captured in step 3>'
 )
@@ -304,13 +308,8 @@ In either case, query the Narrative knowledge base
 `query_docs_filesystem_narrative_i_o_knowledge_base`) for the current
 `BUDGET` syntax before submitting. Do not hardcode `BUDGET 5 USD`.
 
-Always pass `data_plane_id` matching the dataset's plane (captured in
-step 3). Use the **same** `data_plane_id` when polling with
-`narrative_nql_get_job` — otherwise the poll falls back to the company
-default plane and won't see your job. `narrative_nql_validate` is
-plane-agnostic and ignores the parameter; it cannot catch a wrong-plane
-mistake — that surfaces only when the run job fails with a
-cross-data-plane or "dataset not found" error.
+Pass the same `data_plane_id` to validate, run, and get_job (rule
+detailed in the async snippet above).
 
 For pure forecasts (cost / row-count estimates without materializing
 data), submit `EXPLAIN <SELECT …>` instead — the job is a
@@ -422,6 +421,11 @@ Platform UI.
   nonexistent columns, wildcard scans on huge datasets, cost
   warnings under `--run`, validator-vs-user disagreement, schema
   drift. Read when something doesn't add up.
+- `references/PERCENTILE_DISTRIBUTION.md` — patterns for percentile
+  and distribution summaries on the Snowflake data plane, where
+  `APPROX_PERCENTILE` and `PERCENTILE_CONT` are not currently usable.
+  Read when the user's question is about distribution shape, quartiles,
+  thresholds, or "how skewed is X."
 - `references/HARNESS_FALLBACK.md` — what to do when
   `narrative-mcp` is unavailable, and how to deliver the same flow
   when `AskUserQuestion` isn't exposed. Read when a tool call
