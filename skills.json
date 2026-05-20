@@ -227,6 +227,53 @@
       }
     },
     {
+      "name": "generate-match-report",
+      "version": "0.1.0",
+      "description": "Compare your data to a partner's data in the marketplace. Given a\ndataset you already own with person/edge data, this skill walks you\nthrough picking a partner data source to match against, choosing which\nidentifier types to match on, optionally selecting which enrichment\nattributes to attach, and then submits the report — returning overlap,\nmatch counts, and demographic coverage.\nUse when: \"how does my data compare to your marketplace\", \"compare my\ndata to [partner]\", \"how much overlap do I have with [supplier]\",\n\"run a match report\", \"match my customers against 3P data\", \"see\nwhat enrichment is available for my dataset\", or any open-ended\nquestion about marketplace overlap.\n(narrative-identity)",
+      "plugin": "narrative-identity",
+      "path": "plugins/narrative-identity/skills/generate-match-report/SKILL.md",
+      "compatibility": {
+        "requires": {
+          "tools": [
+            "Read"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_datasets_search",
+            "narrative_datasets_describe",
+            "narrative_dataset_get_column_stats",
+            "narrative_dataset_set_column_stats_config",
+            "narrative_dataset_recalculate_statistics",
+            "narrative_dataset_request_sample",
+            "narrative_jobs_describe",
+            "narrative_nql_validate",
+            "narrative_workflows_create",
+            "narrative_workflow_runs_list"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get_companies",
+            "narrative_context_search_companies",
+            "narrative_context_set_company",
+            "narrative_attributes_describe",
+            "narrative_attributes_search",
+            "narrative_nql_run",
+            "narrative_workflows_trigger"
+          ]
+        }
+      }
+    },
+    {
       "name": "triage-pregraph-data",
       "version": "0.3.1",
       "description": "Audit a dataset before it joins an identity-graph build. Enumerates\ndataset-specific failure modes (hub identifiers, high-degree nodes,\nbehaviorally suspicious values, over-connected identifiers, source-\nspecific quirks), tests every hypothesis in parallel against the\ndata, quantifies damage by rows / edges / entities affected, proposes\nminimal filter expressions ranked by severity, and — when the audit\nfinds issues — returns a validated `CREATE MATERIALIZED VIEW` NQL the\ncaller can run to produce a graph-ready clean source. If the data\npasses the audit, says so plainly and recommends the source table\nunchanged. Plans, reports, and authors the clean-view NQL; does not\nexecute it.\nUse when: \"audit this dataset before the graph build\", \"find bad\nedges in <dataset>\", \"check identity data quality\", \"recommend\nfilters for the graph build\", \"find hub identifiers in <dataset>\",\n\"quantify damage from <identifier_type>\", \"give me the clean-view\nNQL for the graph build\", \"pre-graph DQ\".\n(narrative-identity)",
