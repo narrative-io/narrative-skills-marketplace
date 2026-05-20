@@ -90,4 +90,5 @@ fi
 
 echo ""
 echo "=== Setup complete ==="
-echo "Try it: open Claude Code and type /hello"
+echo "Try it: open Claude Code and type / to browse installed skills,"
+echo "or run one directly, e.g. /write-nql or /generate-rosetta-stone-mappings."

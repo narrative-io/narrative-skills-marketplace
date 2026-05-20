@@ -1,3 +1,29 @@
+# Dependencies
 node_modules/
+
+# Build / TypeScript
 *.tsbuildinfo
+dist/
+build/
+coverage/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+bun-debug.log*
+
+# Local Claude state (per-user)
+.claude/settings.local.json
