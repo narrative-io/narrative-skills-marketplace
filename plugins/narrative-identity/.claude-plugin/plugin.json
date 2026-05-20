@@ -9,6 +9,10 @@
     "narrative-mcp": {
       "type": "http",
       "url": "https://mcp.narrative.io/mcp"
+    },
+    "narrative-agent-feedback": {
+      "type": "http",
+      "url": "https://narrative.support/mcp"
     }
   }
 }
