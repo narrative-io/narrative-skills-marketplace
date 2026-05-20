@@ -34,6 +34,15 @@ if command -v bun >/dev/null 2>&1; then
     echo "Rendering SKILL.md from templates..."
     (cd "$SCRIPT_DIR" && bun run gen:skill-docs)
   fi
+  # Install local git hooks (commitlint) for contributors. Silently
+  # skip outside a git working tree or when lefthook isn't installed
+  # (end users running `bash setup` just to install plugins don't
+  # need hooks).
+  if [ -d "$SCRIPT_DIR/.git" ] && [ -f "$SCRIPT_DIR/lefthook.yml" ]; then
+    if (cd "$SCRIPT_DIR" && bunx --bun lefthook install >/dev/null 2>&1); then
+      echo "Installed git hooks (commit-msg → commitlint)."
+    fi
+  fi
 else
   # Bun is required only when there are .tmpl files to render. Without
   # it, fail loudly only if any .tmpl exists; otherwise the install
