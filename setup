@@ -128,7 +128,7 @@ done
 echo ""
 echo "Regenerating README plugin catalog..."
 if command -v bun >/dev/null 2>&1; then
-  bun "$SCRIPT_DIR/scripts/regen-readme.ts" "$SCRIPT_DIR"
+  bun "$SCRIPT_DIR/scripts/gen-readme.ts" "$SCRIPT_DIR"
 else
   echo "  warning: bun not available, skipping README regen." >&2
   echo "  install bun from https://bun.sh and re-run this script." >&2

@@ -40,6 +40,9 @@ jobs:
       - name: skills.json index up to date
         run: bun run check:skills-index
 
+      - name: README plugin catalog up to date
+        run: bun run check:readme
+
       - name: Manifest validation
         run: bun run check:manifests
 
