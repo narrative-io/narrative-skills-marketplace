@@ -1,3 +1,4 @@
+import { generateSkillId } from './skill-id';
 import { generateSnippet } from './snippet';
 import type { ResolverFn } from './types';
 
@@ -14,4 +15,5 @@ import type { ResolverFn } from './types';
  */
 export const RESOLVERS: Record<string, ResolverFn> = {
   SNIPPET: generateSnippet,
+  SKILL_ID: generateSkillId,
 };
