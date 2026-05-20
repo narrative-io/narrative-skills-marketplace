@@ -154,23 +154,21 @@ customer dataset, ground the customer id-types from column stats,
 pick the partner identity AR, optionally pick an enrichment AR, render
 and confirm the workflow YAML, submit + poll, and summarize the result.
 
-### Phase 1. Confirm the working company
+### Phase 1. Pin the company / context
 
-Run `narrative_context_get`. If multiple companies are accessible
-(`narrative_context_get_companies`), confirm:
+{{SNIPPET:pin-company-context}}
+
+If the user names a different company than the one currently active,
+confirm before switching:
 
 > **Context:** We're about to compare your data to a partner's.
 > **Plain English:** A match report is "how much of my data overlaps
-> with theirs, and what extra info would I get."
-> **Recommend:** Run as `<current_company>` (from
-> `narrative_context_get`).
+> with theirs, and what extra info would I get." We'll run it as
+> the active company unless you say otherwise.
 >
 > Options:
-> - **A)** Yes, run as `<current_company>` (recommended)
+> - **A)** Run as `<current_company>` (recommended)
 > - **B)** Switch — show me the list
-
-If B, list via `narrative_context_search_companies` and switch via
-`narrative_context_set_company`.
 
 ---
 
@@ -228,10 +226,12 @@ narrative_dataset_set_column_stats_config(
 )
 ```
 
-Trigger a stats recalculation (the MCP tool surface should expose
-`recalculate_statistics` — if not, see
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)). Then
-re-fetch column stats and poll until the histogram populates.
+Trigger a stats recalculation via
+`narrative_dataset_recalculate_statistics(dataset_id=CUSTOMER_DATASET_ID)`.
+Poll the returned job with `narrative_jobs_describe` until it
+completes, then re-fetch column stats and read the histogram. If the
+MCP tool is unavailable, see
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 
 Bind `CUSTOMER_ID_TYPES` = set of histogram keys (e.g.
 `{normalized_email, e164_phone_number}`).
@@ -490,9 +490,6 @@ Render:
 > - **Matched persons:** `<M>` (`<M/N>%`)
 > - **Identifier types matched:** `<list with counts>`
 > - **Top enrichment coverage:** `<top 5 attrs with %>`
->
-> View the rendered report at:
-> `<graph-visualizer URL>/activation/match-reports?reportId=<FINAL_DATASET_ID>`
 
 ---
 
@@ -585,11 +582,11 @@ authored; for now, the rules below are self-contained.
   pre-flight validation in Phase 6 and surface the gap to the user
   before submit. Do not auto-resort to running NQL via
   `narrative_nql_run` — it allocates compute.
-- **No `AskUserQuestion`.** Ask the same options as a numbered list
-  in prose ("**Pick one — reply 1, 2, or 3:**"). Default selections
-  are still pre-ticked; the user replies with the numbers to leave
-  on. Mandatory steps (pre-flight validation, schema-fidelity rule)
-  do not change.
+- **No `AskUserQuestion`.** {{SNIPPET:askuserquestion-fallback}}
+  Multi-select prompts (id-type subsetting, enrichment attribute
+  groups) keep their pre-ticked defaults — ask the user for the
+  *numbers to uncheck* to keep prose short. Mandatory steps
+  (pre-flight validation, schema-fidelity rule) do not change.
 
 ---
 

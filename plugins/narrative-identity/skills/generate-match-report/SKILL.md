@@ -156,23 +156,38 @@ customer dataset, ground the customer id-types from column stats,
 pick the partner identity AR, optionally pick an enrichment AR, render
 and confirm the workflow YAML, submit + poll, and summarize the result.
 
-### Phase 1. Confirm the working company
+### Phase 1. Pin the company / context
 
-Run `narrative_context_get`. If multiple companies are accessible
-(`narrative_context_get_companies`), confirm:
+Most Narrative work is scoped to a company. Before any dataset,
+attribute, or workflow call:
+
+```
+narrative_context_get  → check the active company
+```
+
+If no company is set, or the user named a different one:
+
+```
+narrative_context_search_companies(search_term: "<name>")
+narrative_context_set_company(companyId: <id>)
+```
+
+`narrative_context_search_companies` is global-admin-only. Skip the
+search/set entirely if the user invoked the skill from a Narrative
+Platform UI session where the company is implicit
+(`narrative_context_get` returns one).
+
+If the user names a different company than the one currently active,
+confirm before switching:
 
 > **Context:** We're about to compare your data to a partner's.
 > **Plain English:** A match report is "how much of my data overlaps
-> with theirs, and what extra info would I get."
-> **Recommend:** Run as `<current_company>` (from
-> `narrative_context_get`).
+> with theirs, and what extra info would I get." We'll run it as
+> the active company unless you say otherwise.
 >
 > Options:
-> - **A)** Yes, run as `<current_company>` (recommended)
+> - **A)** Run as `<current_company>` (recommended)
 > - **B)** Switch — show me the list
-
-If B, list via `narrative_context_search_companies` and switch via
-`narrative_context_set_company`.
 
 ---
 
@@ -230,10 +245,12 @@ narrative_dataset_set_column_stats_config(
 )
 ```
 
-Trigger a stats recalculation (the MCP tool surface should expose
-`recalculate_statistics` — if not, see
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)). Then
-re-fetch column stats and poll until the histogram populates.
+Trigger a stats recalculation via
+`narrative_dataset_recalculate_statistics(dataset_id=CUSTOMER_DATASET_ID)`.
+Poll the returned job with `narrative_jobs_describe` until it
+completes, then re-fetch column stats and read the histogram. If the
+MCP tool is unavailable, see
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 
 Bind `CUSTOMER_ID_TYPES` = set of histogram keys (e.g.
 `{normalized_email, e164_phone_number}`).
@@ -492,9 +509,6 @@ Render:
 > - **Matched persons:** `<M>` (`<M/N>%`)
 > - **Identifier types matched:** `<list with counts>`
 > - **Top enrichment coverage:** `<top 5 attrs with %>`
->
-> View the rendered report at:
-> `<graph-visualizer URL>/activation/match-reports?reportId=<FINAL_DATASET_ID>`
 
 ---
 
@@ -587,11 +601,17 @@ authored; for now, the rules below are self-contained.
   pre-flight validation in Phase 6 and surface the gap to the user
   before submit. Do not auto-resort to running NQL via
   `narrative_nql_run` — it allocates compute.
-- **No `AskUserQuestion`.** Ask the same options as a numbered list
-  in prose ("**Pick one — reply 1, 2, or 3:**"). Default selections
-  are still pre-ticked; the user replies with the numbers to leave
-  on. Mandatory steps (pre-flight validation, schema-fidelity rule)
-  do not change.
+- **No `AskUserQuestion`.** If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
+  Multi-select prompts (id-type subsetting, enrichment attribute
+  groups) keep their pre-ticked defaults — ask the user for the
+  *numbers to uncheck* to keep prose short. Mandatory steps
+  (pre-flight validation, schema-fidelity rule) do not change.
 
 ---
 
