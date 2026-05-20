@@ -26,7 +26,7 @@
   "skills": [
     {
       "name": "create-workflow",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "description": "Author and submit a Narrative workflow from a natural-language\nintent. Picks the closest example from `assets/examples/`, adapts\nit to the user's case, walks the YAML against the spec, resolves\nthe data plane, and submits via `narrative_workflows_create` only\nafter the user has approved the rendered spec.\nUse when: \"create a workflow that does X\", \"schedule a daily\nrefresh of dataset Y\", \"wrap this NQL as a workflow\", \"build a\npipeline that creates view A then refreshes view B\", \"submit this\nworkflow YAML\", \"productionize this query as a recurring job\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/create-workflow/SKILL.md",
@@ -192,7 +192,7 @@
     },
     {
       "name": "generate-identity-graph",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Interactively build a Narrative identity graph workflow from one or\nmore first-party datasets and (optionally) third-party data sources.\nConfirms each input dataset is mapped to the Rosetta Stone graph\nedge attribute (mapping it via /generate-rosetta-stone-mappings if\nnot), then composes and submits a workflow that unions every edge\nsource and labels connected components.\nUse when: \"build an identity graph\", \"generate an identity graph\",\n\"create an identity graph\", \"stitch these datasets into a graph\",\n\"make a graph workflow\", \"label connected components on these\ndatasets\", \"I want a person graph / household graph / device graph\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-identity-graph/SKILL.md",

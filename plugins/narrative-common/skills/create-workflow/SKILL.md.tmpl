@@ -1,6 +1,6 @@
 ---
 name: create-workflow
-version: 0.3.0
+version: 0.4.0
 description: |
   Author and submit a Narrative workflow from a natural-language
   intent. Picks the closest example from `assets/examples/`, adapts

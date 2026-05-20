@@ -20,6 +20,24 @@ miss is `IS_DIRECTED` (gets silently dropped because the source
 column is implicit); another is `ATTRIBUTES` (often null but still
 required structurally).
 
+## The workflow owns mapping application
+
+The mapping draft `/generate-rosetta-stone-mappings` returns in
+phase 5 is **not** applied before the workflow runs. The workflow
+itself applies it via `CreateRosettaStoneMappingsIfNotExist` tasks
+chained before `createEdges`. That makes re-runs self-healing —
+adding a dataset just means appending another mapping task — but
+also means that if you delete the workflow before its first run,
+your draft mapping never lands. The mapping only persists when the
+workflow successfully executes.
+
+The task is idempotent: existing identical mappings show up in
+`conflictMappings` rather than as failures, so re-running the
+workflow is safe. `allowPartial: true` (default) lets one mapping
+fail without aborting the others — useful when one dataset's draft
+needs a small fix but the others are correct. Flip to `false` only
+if you want any mapping failure to fail the whole workflow.
+
 ## Identifier-type strings are case- and spelling-sensitive
 
 The values in `firstPartySources` / `thirdPartySources` must match
@@ -33,6 +51,15 @@ like "show me all the distinct values of SOURCE_ID_TYPE and
 TARGET_ID_TYPE in `<edges_view>`"). Use the result set verbatim
 to populate the source lists. Don't hand-author the probe — let
 `/write-nql` write and validate it.
+
+This matters more under the in-workflow mapping model:
+`labelComponents.with.firstPartySources` is set at workflow-author
+time (in phase 8's `/create-workflow` handoff), but the actual
+identifier-type values won't exist until the workflow has run for
+the first time. If you set the wrong values, `LabelConnectedComponents`
+will silently find zero edges from those sources — the graph builds
+but is empty in surprising ways. Spot-check the unioned edges view
+after the first run before relying on the graph.
 
 ## Don't mix directed and undirected edges silently
 

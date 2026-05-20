@@ -23,9 +23,14 @@ qualifying leads, shipping code, building decks — one approval at a time.
 
 ---
 
-> **Status: pre-stable (0.x).** APIs, skill names, and frontmatter
-> contracts may change between minor versions. Pin a commit if you
-> depend on a specific shape.
+> **Versioning.** The marketplace as a whole ships under
+> [CalVer](RELEASING.md) (`YYYY.MM.PATCH`) — see the
+> [latest release](https://github.com/narrative-io/narrative-skills-marketplace/releases/latest)
+> for what's stable today. Individual plugins and skills carry their
+> own SemVer in their manifests and may iterate between marketplace
+> releases. Pin a release tag (e.g.
+> `git checkout v2026.05.0`) — not `main` — if you depend on a
+> specific shape; `main` moves between tagged releases.
 
 ## What is this?
 
@@ -198,6 +203,13 @@ and covers:
 Pull requests go through the CI gauntlet above; the `Plugins`
 catalog in this README regenerates itself from each skill's
 frontmatter — edit the frontmatter, not the table.
+
+## Acknowledgements
+
+The interactive, phased structure of these skills was inspired by
+[Garry Tan's gstack](https://github.com/garrytan/gstack). Thanks
+to that project for the pattern of slash-command-driven workflows
+with explicit approval gates.
 
 ## License
 

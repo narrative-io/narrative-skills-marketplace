@@ -1,6 +1,6 @@
 ---
 name: generate-identity-graph
-version: 0.2.0
+version: 0.3.0
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -76,13 +76,22 @@ unvalidated workflow.
 
 Compose a Narrative identity-graph workflow end-to-end: interview the
 user on intent, identify the first-party datasets that will provide
-edges, confirm (or generate) Rosetta Stone graph-edge mappings on
-each, layer in third-party edge sources if the user wants them, draft
-and validate the edges-view DDL via `/write-nql`, then hand the
-collected inputs off to `/create-workflow` — which loads the canonical
-identity-graph example, substitutes every value this skill gathered,
-gates submission on user approval, and submits via
-`narrative_workflows_create`.
+edges, draft (but don't apply) Rosetta Stone graph-edge mappings for
+any unmapped datasets, layer in third-party edge sources if the user
+wants them, draft and validate the edges-view DDL via `/write-nql`,
+then hand the collected inputs off to `/create-workflow` — which
+loads the canonical identity-graph example, substitutes every value
+this skill gathered, gates submission on user approval, and submits
+via `narrative_workflows_create`.
+
+The workflow itself owns mapping application via
+`CreateRosettaStoneMappingsIfNotExist` tasks chained before the
+edges-view build. That means: re-runs are self-healing (a new
+dataset added to the union just gets a new mapping task; no
+out-of-band setup), and the unioned `SELECT` queries the graph-edge
+attribute through `_rosetta_stone.graph_edge.<property>` on every
+dataset rather than coupling to native column names that vary by
+source.
 
 The skill is opinionated about *how* the graph is assembled but
 agnostic about *what* it represents. A "person graph", "household
@@ -330,7 +339,7 @@ columns (`dataset`, `status: ready | needs mapping`) — and confirm
 before triggering phase 5. The user may opt to drop an unmapped
 dataset rather than map it.
 
-### Phase 5. Map any unmapped datasets
+### Phase 5. Draft mappings for unmapped datasets — do NOT apply
 
 For each dataset flagged "needs mapping" in phase 4, hand off to
 `/generate-rosetta-stone-mappings`, targeting the graph-edge
@@ -340,18 +349,51 @@ attribute specifically:
 > (`attribute_id: <id>`). I need every column that contributes to
 > SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED,
 > and ATTRIBUTES — this will be an `object_mapping` with
-> property_mappings, not a `value_mapping`."
+> property_mappings, not a `value_mapping`. **Return the draft;
+> do not apply it.** I'm threading the draft into a workflow that
+> applies the mapping via `CreateRosettaStoneMappingsIfNotExist`."
 
 Run that skill per-dataset, in parallel if more than one is unmapped.
 Wait for the user to approve each set of suggested mappings (or
-amend them) before resuming the graph workflow — the mapping skill
-emits drafts, not applied changes; the user (or a follow-up call)
-must persist them.
+amend them).
 
-If the user declines to map a flagged dataset, drop it from the input
-list and continue. If *every* candidate dataset is unmapped and the
-user declines to map any, stop and report — there's nothing to
-build a graph from.
+**Crucial:** this skill no longer requires the mappings to be applied
+before the workflow runs. The workflow itself owns application via
+`CreateRosettaStoneMappingsIfNotExist` (idempotent — existing
+identical mappings are conflict-skipped). What phase 5 collects is
+the *draft* per dataset: the `attributeId` and the list of
+`propertyMappings` (path + NQL expression for each contract column).
+
+Record approved drafts as an in-memory list, keyed by dataset:
+
+```
+pending_mappings = [
+  {
+    dataset_id: "<id>",
+    attributeId: <graph-edge attribute ID from phase 4>,
+    propertyMappings: [
+      { path: "SOURCE_ID",       expression: "<NQL>" },
+      { path: "SOURCE_ID_TYPE",  expression: "<NQL>" },
+      { path: "TARGET_ID",       expression: "<NQL>" },
+      { path: "TARGET_ID_TYPE",  expression: "<NQL>" },
+      { path: "IS_DIRECTED",     expression: "<NQL>" },
+      { path: "ATTRIBUTES",      expression: "<NQL>" },
+    ],
+  },
+  …
+]
+```
+
+Datasets that were "ready" in phase 4 do **not** need to appear in
+`pending_mappings` — `CreateRosettaStoneMappingsIfNotExist` is
+idempotent, so it's harmless to include them, but it's also wasted
+effort (the task would resolve to conflictMappings on every run).
+Default: only include datasets that phase 4 flagged.
+
+If the user declines to map a flagged dataset, drop it from both the
+input list and `pending_mappings`. If *every* candidate dataset is
+unmapped and the user declines to map any, stop and report —
+there's nothing to build a graph from.
 
 ### Phase 6. Identify third-party edge sources (optional)
 
@@ -398,14 +440,44 @@ Input (the free-text question passed to `/write-nql`):
 > - `TAGS = ('<graph-kind>', 'identity-graph')`
 > - `WRITE_MODE = 'overwrite'`
 >
-> The body should `SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE,
-> TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES` from each of
-> these datasets, `UNION ALL`'d together in the order listed.
-> Apply the listed `WHERE`-clause conditions to each dataset as
-> given — they're pre-flight audit filters and must be preserved
-> verbatim (combine multiple conditions with `AND`):
+> The body should `SELECT DISTINCT` the six graph-edge contract
+> columns (`SOURCE_ID`, `SOURCE_ID_TYPE`, `TARGET_ID`,
+> `TARGET_ID_TYPE`, `IS_DIRECTED`, `ATTRIBUTES`) from each dataset
+> using the Rosetta Stone graph-edge attribute access pattern, NOT
+> the dataset's raw column names. Alias the FROM clause (use a short
+> per-source slug) so the SELECT list doesn't have to repeat the
+> full dataset path on every column. Each `SELECT` block should
+> follow this exact shape:
 >
-> First-party datasets (use `COMPANY_DATA.<id>`):
+> ```
+> SELECT DISTINCT
+>   <alias>._rosetta_stone.<graph_edge_attribute_name>.SOURCE_ID       AS SOURCE_ID,
+>   <alias>._rosetta_stone.<graph_edge_attribute_name>.SOURCE_ID_TYPE  AS SOURCE_ID_TYPE,
+>   <alias>._rosetta_stone.<graph_edge_attribute_name>.TARGET_ID       AS TARGET_ID,
+>   <alias>._rosetta_stone.<graph_edge_attribute_name>.TARGET_ID_TYPE  AS TARGET_ID_TYPE,
+>   <alias>._rosetta_stone.<graph_edge_attribute_name>.IS_DIRECTED     AS IS_DIRECTED,
+>   <alias>._rosetta_stone.<graph_edge_attribute_name>.ATTRIBUTES      AS ATTRIBUTES
+> FROM <dataset_reference> AS <alias>
+> [WHERE <audit filters>]
+> ```
+>
+> Pick a 2–4 character alias per source that's mnemonic for the
+> dataset (e.g., `fpc` for `first_party_crm_events`, `aci` for
+> `acxiom.consumer_identity_v3`). Aliases must be unique within the
+> statement.
+>
+> Use the **graph-edge attribute name slug** returned by
+> `/find-attribute` in phase 4 (e.g., `graph_edge`) — not the
+> numeric attribute ID. UNION ALL every SELECT block in the order
+> listed. Apply the listed `WHERE`-clause conditions to each
+> dataset as given — they're pre-flight audit filters and must be
+> preserved verbatim (combine multiple conditions with `AND`):
+>
+> Graph-edge attribute name (use verbatim in the
+> `_rosetta_stone.<name>` access path): `<attribute name slug from
+> phase 4>`
+>
+> First-party datasets (use `company_data.<id>`):
 >   - `<first_party_dataset_id_1>`
 >     filters: `<expression>`, `<expression>`
 >   - `<first_party_dataset_id_2>`
@@ -418,6 +490,21 @@ Input (the free-text question passed to `/write-nql`):
 >   - …
 >
 > Validate the statement and return it. Don't run it.
+
+**Why the access pattern, not raw columns:** each first-party
+dataset is mapped to the graph-edge Rosetta Stone attribute as a
+preceding workflow task (see phase 8). Querying through the
+`_rosetta_stone.<name>` field gives the six contract columns
+without coupling the workflow to native column names — different
+datasets emit different native columns, but every mapped dataset
+exposes the same graph-edge access path.
+
+Third-party access rules are also queried through
+`_rosetta_stone.<name>`. The provider is responsible for mapping
+their access rule to the graph-edge attribute; the workflow does
+not map them. If a third party's access rule does not expose the
+graph-edge attribute, drop it from the input list — surface the
+gap to the user before continuing.
 
 When building the prompt, look up each dataset's entries in
 `audit_filters` from phase 0. If a dataset has one or more approved
@@ -467,6 +554,44 @@ example 11 explicitly and supplies every substitution. The shape:
 > - `document.name`: `<graph-kind>-identity-graph` (from phase 1 —
 >   `person-identity-graph`, `household-identity-graph`, etc.;
 >   append a qualifier if the user gave one, e.g. `us-person-identity-graph`)
+> - **Per-dataset mapping tasks** (one
+>   `CreateRosettaStoneMappingsIfNotExist` task per entry in
+>   `pending_mappings` from phase 5, in the order the datasets
+>   appear in the `createEdges` UNION). Use this shape, substituting
+>   the per-dataset `propertyMappings`:
+>
+>   ```yaml
+>   - map<DatasetSlug>:
+>       call: CreateRosettaStoneMappingsIfNotExist
+>       with:
+>         datasetName: <dataset id or slug>
+>         allowPartial: true
+>         mappings:
+>           - attributeId: <graph-edge attribute ID from phase 4>
+>             mapping:
+>               type: object_mapping
+>               propertyMappings:
+>                 - path: SOURCE_ID
+>                   expression: <NQL from phase 5>
+>                 - path: SOURCE_ID_TYPE
+>                   expression: <NQL from phase 5>
+>                 - path: TARGET_ID
+>                   expression: <NQL from phase 5>
+>                 - path: TARGET_ID_TYPE
+>                   expression: <NQL from phase 5>
+>                 - path: IS_DIRECTED
+>                   expression: <NQL from phase 5>
+>                 - path: ATTRIBUTES
+>                   expression: <NQL from phase 5>
+>   ```
+>
+>   Datasets that phase 4 reported as already-mapped do not need a
+>   task — `CreateRosettaStoneMappingsIfNotExist` is idempotent, but
+>   re-emitting an existing mapping is wasted effort.
+>
+>   Third-party access rules do NOT get mapping tasks — their
+>   schemas are the provider's contract.
+>
 > - The `createEdges.with.nql` block: replace verbatim with this
 >   already-validated NQL string. Do not modify it.
 >
