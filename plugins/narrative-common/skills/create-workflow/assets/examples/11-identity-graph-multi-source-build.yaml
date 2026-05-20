@@ -1,0 +1,179 @@
+# Build an identity graph end-to-end inside one workflow:
+#   1. Apply Rosetta Stone graph-edge mappings to every first-party
+#      source dataset (idempotent — existing mappings are conflict-
+#      skipped, not failures).
+#   2. UNION the mapped edges into a single materialized view by
+#      querying `_rosetta_stone.graph_edge.{SOURCE_ID,...}` from each
+#      dataset rather than raw column names.
+#   3. Run bipartite label propagation across the unioned edges.
+#
+# Use when:
+#   - You have N first-party datasets that should contribute edges
+#     to an identity graph, plus optional third-party access rules.
+#   - You want the workflow to own mapping application so re-runs are
+#     self-healing (a new dataset added to the union just gets a new
+#     mapping task; no out-of-band setup).
+#   - You're composing a person / household / device / B2B graph.
+#
+# Differs from example 06 (mapping-only workflow): this example
+# chains mapping → union → label-components into one document.
+# Differs from example 07 (label-components only): this example
+# builds the edge view inline rather than assuming it exists.
+#
+# Notes:
+#   - The graph-edge Rosetta Stone attribute has the schema
+#     { SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE,
+#       IS_DIRECTED, ATTRIBUTES }. Each per-dataset mapping is an
+#     object_mapping with one propertyMapping per contract column —
+#     resolve the canonical attribute ID via `/find-attribute --phrase
+#     "graph edge" --shape "SOURCE_ID,SOURCE_ID_TYPE,..." `.
+#   - Once mapped, a dataset's edges are queried via the
+#     `_rosetta_stone.graph_edge.<property>` access pattern. The
+#     mapping persists across SELECTs that don't transform the value,
+#     so the unioned materialized view inherits the contract schema
+#     without needing to alias every column.
+#   - `allowPartial: true` on CreateRosettaStoneMappingsIfNotExist
+#     means individual mapping failures don't abort the workflow.
+#     Re-runs will conflict-skip existing mappings (idempotent).
+#   - Third-party access rules are NOT mapped here — their schemas
+#     are the provider's contract. Append them to the UNION directly
+#     using the same `_rosetta_stone.graph_edge.X` access pattern;
+#     if a third party's access rule doesn't expose the graph-edge
+#     attribute, drop it from the workflow.
+#   - Pre-flight data quality matters. Hub identifiers and leaky
+#     sentinel values can collapse thousands of entities into one
+#     component — run `/triage-pregraph-data` and fold any approved
+#     filter expressions into per-source WHERE clauses on the
+#     `createEdges` SELECT.
+#   - `firstPartySources` is ordered by priority — the first source
+#     in the list whose ID appears in a component wins the
+#     representative ID. Put higher-trust systems first.
+#   - `maxDegreeThreshold` excludes supernodes; `maxComponentSize`
+#     caps any single resolved identity. Conservative defaults
+#     (100/100/25) are right for person graphs; B2B / household
+#     graphs frequently need larger values.
+#
+# This is the example /generate-identity-graph composes against.
+
+document:
+  dsl: '1.0.0'
+  namespace: identity
+  name: person-identity-graph
+  version: '1.0.0'
+
+do:
+  # ─── Map each first-party source to the graph-edge attribute ─────
+  # Idempotent: existing mappings are conflict-skipped. Run one task
+  # per source dataset that needs mapping. Skip datasets that have
+  # already been mapped (the workflow will still re-emit the task on
+  # an over-cautious draft; conflictMappings will absorb it).
+
+  - mapFirstPartyCrm:
+      call: CreateRosettaStoneMappingsIfNotExist
+      with:
+        datasetName: first_party_crm_events
+        allowPartial: true
+        mappings:
+          - attributeId: 408   # canonical graph_edge attribute ID
+            mapping:
+              type: object_mapping
+              propertyMappings:
+                - path: SOURCE_ID
+                  expression: customer_id
+                - path: SOURCE_ID_TYPE
+                  expression: '''first_party_crm'''
+                - path: TARGET_ID
+                  expression: SHA2(NORMALIZE_EMAIL(email), 256)
+                - path: TARGET_ID_TYPE
+                  expression: '''sha256_email'''
+                - path: IS_DIRECTED
+                  expression: 'false'
+                - path: ATTRIBUTES
+                  expression: 'NULL'
+
+  - mapFirstPartyLoyalty:
+      call: CreateRosettaStoneMappingsIfNotExist
+      with:
+        datasetName: first_party_loyalty_events
+        allowPartial: true
+        mappings:
+          - attributeId: 408
+            mapping:
+              type: object_mapping
+              propertyMappings:
+                - path: SOURCE_ID
+                  expression: member_id
+                - path: SOURCE_ID_TYPE
+                  expression: '''first_party_loyalty'''
+                - path: TARGET_ID
+                  expression: maid
+                - path: TARGET_ID_TYPE
+                  expression: '''maid'''
+                - path: IS_DIRECTED
+                  expression: 'false'
+                - path: ATTRIBUTES
+                  expression: 'NULL'
+
+  # ─── Universal edges ─────────────────────────────────────────────
+  # UNION ALL every input edge source — first- and third-party — by
+  # querying `_rosetta_stone.graph_edge.{SOURCE_ID,...}` from each.
+  # Once a dataset is mapped above, the graph_edge attribute resolves
+  # the per-row contract columns without coupling to native column
+  # names.
+
+  - createEdges:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW "person_identity_edges"
+          DISPLAY_NAME = 'Person identity edges'
+          DESCRIPTION = 'Unioned first- and third-party edges for the person identity graph.'
+          TAGS = ('person', 'identity-graph')
+          WRITE_MODE = 'overwrite'
+          AS
+          SELECT DISTINCT
+            fpc._rosetta_stone.graph_edge.SOURCE_ID       AS SOURCE_ID,
+            fpc._rosetta_stone.graph_edge.SOURCE_ID_TYPE  AS SOURCE_ID_TYPE,
+            fpc._rosetta_stone.graph_edge.TARGET_ID       AS TARGET_ID,
+            fpc._rosetta_stone.graph_edge.TARGET_ID_TYPE  AS TARGET_ID_TYPE,
+            fpc._rosetta_stone.graph_edge.IS_DIRECTED     AS IS_DIRECTED,
+            fpc._rosetta_stone.graph_edge.ATTRIBUTES      AS ATTRIBUTES
+          FROM company_data.first_party_crm_events AS fpc
+          UNION ALL
+          SELECT DISTINCT
+            fpl._rosetta_stone.graph_edge.SOURCE_ID       AS SOURCE_ID,
+            fpl._rosetta_stone.graph_edge.SOURCE_ID_TYPE  AS SOURCE_ID_TYPE,
+            fpl._rosetta_stone.graph_edge.TARGET_ID       AS TARGET_ID,
+            fpl._rosetta_stone.graph_edge.TARGET_ID_TYPE  AS TARGET_ID_TYPE,
+            fpl._rosetta_stone.graph_edge.IS_DIRECTED     AS IS_DIRECTED,
+            fpl._rosetta_stone.graph_edge.ATTRIBUTES      AS ATTRIBUTES
+          FROM company_data.first_party_loyalty_events AS fpl
+          UNION ALL
+          SELECT DISTINCT
+            aci._rosetta_stone.graph_edge.SOURCE_ID       AS SOURCE_ID,
+            aci._rosetta_stone.graph_edge.SOURCE_ID_TYPE  AS SOURCE_ID_TYPE,
+            aci._rosetta_stone.graph_edge.TARGET_ID       AS TARGET_ID,
+            aci._rosetta_stone.graph_edge.TARGET_ID_TYPE  AS TARGET_ID_TYPE,
+            aci._rosetta_stone.graph_edge.IS_DIRECTED     AS IS_DIRECTED,
+            aci._rosetta_stone.graph_edge.ATTRIBUTES      AS ATTRIBUTES
+          FROM acxiom.consumer_identity_v3 AS aci
+
+  # ─── Label connected components ──────────────────────────────────
+
+  - labelComponents:
+      call: LabelConnectedComponents
+      with:
+        edgeDataset: person_identity_edges
+        outputDataset: person_identity_graph
+        sourceIdCol: SOURCE_ID
+        sourceSystemCol: SOURCE_ID_TYPE
+        bridgeKeyCol: TARGET_ID
+        bridgeKeyTypeCol: TARGET_ID_TYPE
+        firstPartySources:
+          - first_party_crm
+          - first_party_loyalty
+        thirdPartySources:
+          - acxiom
+        maxDegreeThreshold: 100
+        maxComponentSize: 100
+        maxIterations: 25

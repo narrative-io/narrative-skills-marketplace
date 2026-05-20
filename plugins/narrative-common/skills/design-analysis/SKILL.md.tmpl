@@ -1,6 +1,6 @@
 ---
 name: design-analysis
-version: 0.2.0
+version: 0.2.1
 description: |
   Translate a fuzzy analytical question into a rigorous investigation
   plan. Interrogates the ask, grounds the plan in the available data
@@ -464,51 +464,33 @@ analysis, a "rate vs. volume" split if applicable.
 
 ## Edge cases and gotchas
 
-- **The question is too vague to plan.** Push back with the Phase 2
-  checklist — name the missing rows and ask the user to fill them
-  one at a time. Do not invent assumptions.
-- **The schema is missing the entity the question implies.** Surface
-  the gap explicitly. Either redirect (the data can't answer this) or
-  propose a proxy and name the limitation in the brief's "what this
-  will not answer" section.
-- **The question implies causal inference but the data is
-  observational.** Compose the brief, but lead with a clear note that
-  the analysis can only measure association. Suggest what
-  intervention / quasi-experimental design would be needed to claim
-  cause.
-- **The user insists on a specific query before the brief is done.**
-  Honor their judgment, but write the one-off into the brief as Q0
-  with the caveat that its result is informational only until Q1/Q2
-  validation passes. Don't skip Phase 2 entirely.
-- **A cohort window crosses a known data-quality break** (pipeline
-  migration, schema change, dedup-rule change). Add a "data-quality
-  caveat" row to the brief and split the window into a before/after
-  comparison rather than averaging across the break.
-- **Two tables could answer the same question, and the user picked
-  the wrong one.** State the tradeoff in the brief and recommend the
-  better source; let the user override.
+See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
+overly vague questions, schemas missing the implied entity,
+observational-vs-causal scoping, users insisting on Q0 before the
+brief is done, data-quality breaks inside a cohort window, and
+table-choice tradeoffs. Read when the question feels off or the
+user is bypassing the interrogation.
 
 ## Harness fallbacks
 
-{{SNIPPET:askuserquestion-fallback}}
-
-If `narrative-mcp` is unavailable (or `--no-schema` was passed):
-
-- Ask the user to paste the schema for each relevant table: name,
-  grain, primary key, columns + types, known caveats. A 20–60-line
-  paste is usually enough.
-- With that pasted, run Phases 2, 4, and 5 normally. Phase 3
-  becomes: "structure the user's pasted dictionary into the data-
-  sources table in the brief."
-- Add a global caveat to the brief: "schema not verified against
-  `narrative-mcp`; the query writer should re-validate column names
-  before running."
-
-If the user has *no* schema at all, stop and say so explicitly. The
-brief is unsafe to ship without a verified schema; do not guess.
+See
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
+covers `narrative-mcp` unavailable (paste-driven schema flow), the
+`--no-schema` invocation, and the `AskUserQuestion` fallback for
+harnesses that don't expose it. Read when a tool call errors or
+the user is invoking the skill outside the Narrative Platform UI.
 
 ## Further reading
 
+- `references/EDGE_CASES.md` — gotchas and framing pitfalls: vague
+  questions, observational-vs-causal scoping, data-quality breaks
+  inside cohort windows, table-choice tradeoffs. Read when the
+  question feels off or the user is bypassing the interrogation.
+- `references/HARNESS_FALLBACK.md` — what to do when `narrative-mcp`
+  is unavailable (paste-driven schema flow) and how to deliver the
+  same flow when `AskUserQuestion` isn't exposed. Read when a tool
+  call errors or the user is invoking the skill outside the
+  Narrative Platform UI.
 - `docs/authoring-skills.md` — house conventions this skill follows
   (persona, phased body, progressive disclosure, declared
   requirements).

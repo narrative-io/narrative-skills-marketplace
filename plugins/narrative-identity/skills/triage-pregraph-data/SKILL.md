@@ -1,6 +1,6 @@
 ---
 name: triage-pregraph-data
-version: 0.3.0
+version: 0.3.1
 description: |
   Audit a dataset before it joins an identity-graph build. Enumerates
   dataset-specific failure modes (hub identifiers, high-degree nodes,
@@ -535,90 +535,38 @@ Typical hypotheses worth pre-loading (still re-justify on the data):
 
 ## Edge cases and gotchas
 
-- **The dataset has no identifier columns.** Do not triage. Refuse,
-  point at `/generate-rosetta-stone-mappings` to map columns to
-  Rosetta Stone identifiers first.
-- **All identifiers are unique (degree = 1 everywhere).** No bridges
-  possible from this dataset alone, so the hub / high-degree /
-  over-connected hypotheses don't apply. Audit narrows to format /
-  malformed / encodes-session hypotheses.
-- **The dataset has < 10,000 rows.** Statistical hubs are hard to
-  spot at low volume. Flag in the headline; recommend re-running the
-  audit after the dataset reaches a meaningful scale.
-- **The source table mixes grains** (one row per event vs. one row
-  per session vs. one row per entity-snapshot). Stop and clarify
-  before hypothesizing — the unit of analysis must be one row = one
-  edge or all the degree math is wrong.
-- **User insists on a specific threshold without evidence.** Refuse.
-  Ask them to phrase the threshold as a falsifiable hypothesis and
-  run it through Phase 4 first.
-- **A confirmed issue removes > 10% of rows.** This is a "stop and
-  show the user" moment. Filters that big are sometimes correct
-  (whole-column garbage) but usually mean the hypothesis was too
-  broad and needs narrowing.
-- **Two hypotheses overlap** (same rows confirmed by H2 and H5).
-  Report the overlap. The total-rows-removed headline must dedupe
-  across filters, not sum naively.
-- **The graph builder is already running on this data.** This skill
-  is pre-graph. If the user is post-build, redirect to a
-  post-build-repair workflow (separate skill, not yet shipped).
-- **Zero confirmed issues.** Skip Phase 8's NQL composition. Report
-  the headline (hypotheses tested, all disproven) and state plainly
-  that the source table is graph-ready as-is. Do not invent a
-  no-op `CREATE MATERIALIZED VIEW` — copying the source verbatim
-  adds storage and refresh overhead with no quality gain.
-- **`/write-nql` cannot validate the materialization query.** Loop
-  back to Phase 6 (filters reference a missing column, function, or
-  type). If validation still fails after revision, ship the audit
-  findings without the NQL block and explicitly flag the
-  validation failure with the schema mismatch in the report — never
-  ship an unvalidated NQL block as if it were validated.
+See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
+datasets with no identifier columns, all-unique identifiers, very
+low row counts, mixed source-table grains, evidence-free threshold
+demands, filters that remove > 10% of rows, overlapping
+hypotheses, post-build invocations, zero-issue audits, and
+materialization queries `/write-nql` refuses to validate. Read
+when the dataset doesn't fit the audit's assumptions.
 
 ## Harness fallbacks
 
-If the harness does not expose `AskUserQuestion` as a named tool
-(Claude Code does; most others don't), ask the user the same question
-in plain prose — **one question per turn**, never batched — and wait
-for a reply before continuing. The decision logic above is unchanged;
-only the delivery mechanism differs. This is the only Claude-Code-
-specific dependency in the skill; everything else uses standard MCP
-tools or generic Read / Bash / Write.
-
-If `narrative-mcp` is unavailable (or `--no-schema` was passed):
-
-- Ask the user to paste the relevant table schema (name, grain,
-  identifier columns + types + known caveats) and a representative
-  sample.
-- With that pasted, run Phases 3, 5, 6, 7 normally; substitute
-  "imagined query" plain-English drafts in Phase 4 where the brief
-  would have gone to `/design-analysis`. Annotate the report:
-  "queries not executed against live MCP; the user must run them
-  through their query tool and feed results back."
-- Never silently skip the evidence-collection step. An audit with
-  no numbers is worse than no audit.
-
-If `/design-analysis` is unavailable:
-
-- This skill cannot run Phase 4 end-to-end without the analyst. The
-  separation of concerns is a hard architectural rule, not a
-  preference. Stop, surface the dependency, and hand the audit
-  framing + hypothesis list to the user as a manual brief they can
-  pass to whatever analytical tooling they have. Insist on the
-  parallel-execution pattern in that brief — serial execution
-  multiplies wall-clock time and erodes the audit's value.
-
-If `/write-nql` is unavailable for Phase 8:
-
-- Ship the audit findings (Phases 1–7) without the validated NQL
-  block. In the "Recommended clean-view NQL" section of the report,
-  include the consolidated filter set in plain English plus a draft
-  `CREATE MATERIALIZED VIEW` skeleton, and annotate it: "NOT
-  validated — `/write-nql` was unreachable. The caller must validate
-  before running." Better to ship a clearly unvalidated draft than to
-  block the audit's hand-off.
+See
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
+covers `narrative-mcp` unavailable (paste-driven flow, annotate the
+report), `/design-analysis` unavailable (hand the user a manual
+brief), `/write-nql` unavailable in Phase 8 (ship findings without
+the validated NQL block), and the `AskUserQuestion` fallback for
+harnesses that don't expose it. Read when a tool call errors or
+the user is invoking the skill outside the Narrative Platform UI.
 
 ## Further reading
 
+- `references/EDGE_CASES.md` — gotchas and audit assumptions:
+  no-identifier datasets, all-unique identifiers, low row counts,
+  mixed grains, evidence-free thresholds, oversized filters,
+  overlapping hypotheses, post-build invocations, zero-issue
+  outcomes, and unvalidatable materialization queries. Read when
+  the dataset doesn't fit the audit's assumptions.
+- `references/HARNESS_FALLBACK.md` — what to do when
+  `narrative-mcp`, `/design-analysis`, or `/write-nql` is
+  unavailable, and how to deliver the same flow when
+  `AskUserQuestion` isn't exposed. Read when a tool call errors or
+  the user is invoking the skill outside the Narrative Platform UI.
 - `docs/authoring-skills.md` — house conventions this skill follows.
 - `plugins/narrative-common/skills/design-analysis/` — the analyst.
   This skill hands the Phase 4 hypothesis-testing workload off to

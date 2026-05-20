@@ -1,0 +1,145 @@
+# Harness fallbacks
+
+What to do when the MCP servers this skill depends on aren't
+available — most commonly `narrative-mcp` itself, occasionally
+`narrative-knowledge-base`.
+
+Never silently degrade. If a tool is unavailable, say so explicitly
+in the final summary (or in the message handed to `/create-workflow`
+when only some MCP tools are degraded) and reduce confidence
+accordingly.
+
+## `narrative-mcp` unavailable
+
+This is the bad case — phases 2 through 7 of the main procedure
+all depend on it. Recover by switching to a paste-driven flow:
+
+1. **Skip phase 2 entirely.** Ask the user for the company name as
+   free text; record it for the `namespace` field. Don't try to
+   resolve company IDs.
+
+2. **Replace phase 3** (dataset identification) with a paste prompt.
+   For each input dataset, ask the user to paste:
+
+   - Dataset ID
+   - Dataset name and short description
+   - Whether the dataset is already mapped to the graph-edge
+     attribute (yes / no / don't know)
+
+   If the user has API access outside the MCP layer, suggest:
+
+   ```
+   curl https://api.narrative.io/datasets/<id>
+   ```
+
+   and paste the response — its `mappings[]` array is what phase 4
+   would have read.
+
+3. **Phase 4** becomes: trust the user's "is it mapped?" answer or
+   the pasted `mappings[]` JSON. There's no way to validate without
+   the MCP server.
+
+4. **Skip phase 5 entirely.** Without `narrative-mcp`, the
+   `/generate-rosetta-stone-mappings` skill is also degraded — and
+   you can't apply mappings anyway. Tell the user any unmapped
+   dataset has to be mapped separately before the workflow will run,
+   and stop trying to handle them in-band.
+
+5. **Phase 6** (third-party sources) is unchanged — it was already
+   user-driven.
+
+6. **Phase 7** cannot validate the `CREATE MATERIALIZED VIEW`
+   body — `/write-nql` is degraded too because it also needs
+   `narrative-mcp`. Hand-author the DDL directly from
+   `../../../narrative-common/skills/create-workflow/assets/examples/11-identity-graph-multi-source-build.yaml`
+   (the `createEdges.with.nql` block), filling per-source `SELECT`s
+   and `WHERE` clauses from the paste-driven input list. Mark the
+   DDL with a global "not server-validated" warning.
+
+7. **Phase 8** cannot submit — `/create-workflow` is also
+   degraded because it depends on `narrative_workflows_create`. The
+   canonical submission path is the `narrative_workflows_create`
+   MCP tool; with the MCP server down there is no other supported
+   submission path from inside the skill.
+
+   Instead of handing off, render the full workflow YAML inline by
+   reading example 11, performing the substitutions phase 8 would
+   have asked `/create-workflow` to perform, and pasting the result
+   into the chat. Tell the user:
+
+   - The YAML has NOT been server-validated; they will hit the
+     validator only when it eventually runs through
+     `narrative_workflows_create`.
+   - To submit, they (or this skill) must re-invoke
+     `/create-workflow --spec <paste>` once `narrative-mcp` is
+     available again.
+
+Always produce the workflow YAML as the deliverable, even in fallback
+mode. The user can submit a manually-vetted file via
+`/create-workflow` when the MCP server returns; they can't submit
+what they don't have.
+
+## `narrative-knowledge-base` unavailable
+
+This is the mild case — the KB server is only used for optional
+research on identity-graph concepts, `LabelConnectedComponents`
+parameter calibration, and Rosetta Stone normalization model
+questions. The main procedure does not require it.
+
+When unavailable:
+
+- Fall back to the local reference files (`EDGE_CASES.md`, the
+  rosetta-stone skill's `EXPRESSION_SYNTAX.md` and `ENUM_HANDLING.md`).
+- Note in the final summary that KB lookups were skipped if any
+  user question would normally have warranted one (e.g., the user
+  asked "what does `maxDegreeThreshold` actually do" and the local
+  references don't fully answer it).
+- Do not block the workflow on KB unavailability.
+
+## Partial degradation
+
+If `narrative-mcp` is available but a *specific* downstream call
+errors (e.g., `/write-nql` reports repeated validation failures, or
+a dataset/attribute MCP tool returns 500s):
+
+- For `/write-nql` failures after its own internal retries: surface
+  the verbatim error to the user, ask whether to drop the offending
+  dataset or remap it, and re-invoke. Don't try to bypass validation
+  — that's the rule `/write-nql` exists to enforce.
+- For dataset describe errors: retry once with a smaller `include`
+  list (drop `mappings` and `stats`; keep `metadata` and `schema`).
+  If still failing, fall back to asking the user to paste schema
+  details for the affected dataset.
+- For attribute search errors: ask the user for the graph-edge
+  attribute ID directly. They almost always know it (or can pull
+  it from a previous successful run).
+
+## Confidence in the output
+
+Workflow YAML emitted in degraded mode is structurally correct but
+not server-validated. Always tell the user which steps were
+skipped, so they know what to double-check before submission. A
+checklist is better than a paragraph:
+
+```
+Skipped because narrative-mcp was unavailable:
+  • Company-context resolution (namespace was taken from your input)
+  • Dataset mapping-status verification
+  • /write-nql handoff for the materialized-view DDL — statement was
+    hand-authored from example 11 and is not server-validated
+  • /create-workflow handoff for submission — workflow YAML was
+    rendered inline; submit it yourself with the curl recipe above
+  • Identifier-type discovery (source lists came from your input)
+
+Please verify these manually before submitting the workflow.
+```
+
+## `AskUserQuestion` not available
+
+If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same
+question in plain prose — **one question per turn**, never batched
+— and wait for a reply before continuing. The decision logic in the
+main procedure is unchanged; only the delivery mechanism differs.
+This is the only Claude-Code-specific dependency in the skill;
+everything else uses standard MCP tools or generic Read.

@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.3.0
+version: 0.3.1
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -727,47 +727,32 @@ keys with `CROSS JOIN UNNEST([...])` or `UNION` two single-key joins.
 
 ## Edge cases and gotchas
 
-- **The user asks about a column that doesn't exist.** Don't fabricate
-  a similarly named column. Surface the closest matches from the
-  schema with `AskUserQuestion` and let them confirm.
-- **The user asks for a wildcard scan against a huge dataset.** If
-  `metadata.record_count` is large (>50M) and no filter is present,
-  warn explicitly in the explanation and propose a sample (`TABLESAMPLE
-  BERNOULLI(1)`) or a tighter filter before running.
-- **`--run` plus a query that scans everything.** Honor `--run`, but
-  still surface the cost warning in the explanation *before*
-  submitting the job.
-- **Validator says the query is fine but the user disagrees.** Treat
-  the user's interpretation as the source of truth for intent. Loop
-  back to step 4; do not argue.
-- **MCP gives a non-deterministic schema.** Re-describe before
-  blaming the validator if columns "disappear" between calls; the
-  platform may have updated the dataset mid-conversation.
+See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
+nonexistent columns, wildcard scans against huge datasets,
+`--run` plus cost warnings, validator-vs-user disagreement, and
+schema drift mid-conversation. Read when something doesn't add up.
 
 ## Harness fallbacks
 
-If the harness does not expose `AskUserQuestion` as a named tool
-(Claude Code does; most others don't), ask the user the same question
-in plain prose — **one question per turn**, never batched — and wait
-for a reply before continuing. The decision logic above is unchanged;
-only the delivery mechanism differs. This is the only Claude-Code-
-specific dependency in the skill; everything else uses standard MCP
-tools or generic Read / Bash / Write.
-
-If `narrative-mcp` is unavailable:
-
-- Ask the user to paste the dataset's schema (column names + types)
-  and 10-25 sample rows.
-- With that context pasted in, draft the query and apply the syntax
-  rules above manually. You cannot validate without the server — add
-  a global caveat in the explanation that the query has *not* been
-  server-validated and the user should sanity-check before running it
-  through the Narrative UI.
-- Never silently degrade. If validation was skipped, say so
-  explicitly.
+See
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
+covers `narrative-mcp` unavailable (paste-driven schema flow, no
+server validation, caveat the user) and the `AskUserQuestion`
+fallback for harnesses that don't expose it. Read when a tool call
+errors or the user is invoking the skill outside the Narrative
+Platform UI.
 
 ## Further reading
 
+- `references/EDGE_CASES.md` — gotchas and authoring pitfalls:
+  nonexistent columns, wildcard scans on huge datasets, cost
+  warnings under `--run`, validator-vs-user disagreement, schema
+  drift. Read when something doesn't add up.
+- `references/HARNESS_FALLBACK.md` — what to do when
+  `narrative-mcp` is unavailable, and how to deliver the same flow
+  when `AskUserQuestion` isn't exposed. Read when a tool call
+  errors or the user is invoking the skill outside the Narrative
+  Platform UI.
 - `narrative-knowledge-base` MCP — `/concepts/nql/…`,
   `/cookbooks/nql/…`, `/api-reference/nql/…`,
   `/reference/integrations/mcp-server` (parameter contracts for
