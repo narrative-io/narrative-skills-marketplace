@@ -34,8 +34,17 @@ jobs:
       - name: SKILL.md docs up to date
         run: bun run check:skill-docs
 
+      - name: mcp.json up to date
+        run: bun run check:mcp
+
+      - name: skills.json index up to date
+        run: bun run check:skills-index
+
       - name: Manifest validation
         run: bun run check:manifests
+
+      - name: agentskills.io spec validation
+        run: bun run check:spec
 
       - name: Skill version bumps
         if: github.event_name == 'pull_request'
