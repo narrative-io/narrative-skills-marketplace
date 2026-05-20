@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.1.0
+version: 0.2.0
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -481,7 +481,7 @@ Resolution sequence:
 
 ```
 narrative_nql_run(
-  query: 'CREATE MATERIALIZED VIEW "wn_check_20260519" EXPIRE = ''P1D'' AS (SELECT … FROM company_data."12345") BUDGET 5 USD',
+  query: 'CREATE MATERIALIZED VIEW "wn_check_20260519" EXPIRE = ''P1D'' AS (SELECT … FROM company_data."12345")',
   data_plane_id: '<dataset_12345_plane_uuid>'
 )
 narrative_nql_get_job(
@@ -502,8 +502,14 @@ is terminal. Use a short, bounded backoff — most queries finish in a
 few seconds; very few should need more than 60s of polling.
 
 Suggested polling cadence: 1s, 2s, 3s, 5s, 5s, 5s, 10s, 10s, 10s, 15s,
-15s, … cap at ~15s between polls, give up at 5 minutes total wall
-time and surface the partial state to the user.
+15s, … cap at ~15s between polls. **Give-up rule: 15 minutes per
+state, with the timer reset whenever the job's `state` field
+transitions** (e.g. `pending` → `running`, `running` → `processing`).
+Only abandon polling if the same state has persisted for 15 minutes
+without progress. Cold compute pools can sit in `pending` for several
+minutes before promoting; a flat 5-minute total cap kills jobs that
+haven't actually started. When you do give up, surface the
+`job_id` and partial state to the user so they can check on it later.
 
 Terminal states:
 
@@ -539,7 +545,7 @@ is not a runnable form — you must explicitly wrap it in
 3. **Read the sample rows** with `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`. The sample lives in the control plane and is what `include=["sample"]` returns.
 
 ```
-narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS (SELECT …) BUDGET 5 USD")
+narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS (SELECT …)")
   → poll narrative_jobs_describe → result.dataset_id = 1234
 narrative_dataset_request_sample(dataset_id: 1234)
   → poll narrative_jobs_describe → completed
@@ -588,9 +594,9 @@ not find it — surface that to the user rather than polling forever.
 Before submitting, wrap your validated `SELECT` in `CREATE MATERIALIZED
 VIEW` — a bare `SELECT` is not a runnable form against
 `narrative_nql_run`, even when it passes validation. Use the smallest
-viable wrapper (no schedule, short `EXPIRE`, low `BUDGET`) for one-off
-analytical queries; promote to a real refresh schedule only when the
-view is intended to persist.
+viable wrapper (no schedule, short `EXPIRE`) for one-off analytical
+queries; promote to a real refresh schedule only when the view is
+intended to persist.
 
 ```
 narrative_nql_run(
@@ -600,11 +606,29 @@ narrative_nql_run(
     AS (
       <the same validated SELECT>
     )
-    BUDGET 5 USD
   ',
   data_plane_id: '<plane captured in step 3>'
 )
 ```
+
+**Do not add a `BUDGET` clause to the default wrapper.** The validator
+accepts `BUDGET … USD`, but `narrative_nql_run` returns HTTP 500 when
+the query reads the user's own data (`company_data.<id>`). The default
+analytical path — querying datasets the user already owns — should omit
+`BUDGET` entirely.
+
+**Buying-data is the exception.** `BUDGET` is meaningful only when the
+query reads data the user is buying. The two triggers:
+
+- the FROM/JOIN touches `narrative.rosetta_stone`, **or**
+- the FROM/JOIN touches another company's namespace (e.g.
+  `other_company_slug.<table>` resolved via an `access_rule` — not
+  your own `company_data.*`).
+
+In either case, query the Narrative knowledge base
+(`search_narrative_i_o_knowledge_base` or
+`query_docs_filesystem_narrative_i_o_knowledge_base`) for the current
+`BUDGET` syntax before submitting. Do not hardcode `BUDGET 5 USD`.
 
 Always pass `data_plane_id` matching the dataset's plane (captured in
 step 3). Use the **same** `data_plane_id` when polling with
