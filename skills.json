@@ -18,6 +18,7 @@
       "description": "Identity-graph workflows backed by the narrative-mcp server — pre-graph data-quality auditing, edge-quality analysis, and graph-build hygiene.",
       "mcpServers": [
         "narrative-agent-feedback",
+        "narrative-knowledge-base",
         "narrative-mcp"
       ]
     }
@@ -173,6 +174,43 @@
             "narrative_nql_validate",
             "narrative_nql_run",
             "narrative_jobs_describe"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-knowledge-base"
+          ],
+          "mcp-tools": [
+            "search_narrative_i_o_knowledge_base",
+            "query_docs_filesystem_narrative_i_o_knowledge_base"
+          ]
+        }
+      }
+    },
+    {
+      "name": "generate-identity-graph",
+      "version": "0.1.1",
+      "description": "Interactively build a Narrative identity graph workflow from one or\nmore first-party datasets and (optionally) third-party data sources.\nConfirms each input dataset is mapped to the Rosetta Stone graph\nedge attribute (mapping it via /generate-rosetta-stone-mappings if\nnot), then composes and submits a workflow that unions every edge\nsource and labels connected components.\nUse when: \"build an identity graph\", \"generate an identity graph\",\n\"create an identity graph\", \"stitch these datasets into a graph\",\n\"make a graph workflow\", \"label connected components on these\ndatasets\", \"I want a person graph / household graph / device graph\".\n(narrative-identity)",
+      "plugin": "narrative-identity",
+      "path": "plugins/narrative-identity/skills/generate-identity-graph/SKILL.md",
+      "compatibility": {
+        "requires": {
+          "tools": [
+            "Read",
+            "Write"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_context_search_companies",
+            "narrative_context_set_company",
+            "narrative_datasets_search",
+            "narrative_datasets_describe"
           ]
         },
         "recommends": {

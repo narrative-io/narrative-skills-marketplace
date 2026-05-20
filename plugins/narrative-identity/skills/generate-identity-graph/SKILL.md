@@ -1,6 +1,6 @@
 ---
 name: generate-identity-graph
-version: 0.1.0
+version: 0.1.1
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -16,7 +16,6 @@ description: |
 compatibility:
   requires:
     tools:
-      - AskUserQuestion
       - Read
       - Write
     mcp-servers:
@@ -28,6 +27,8 @@ compatibility:
       - narrative_datasets_search
       - narrative_datasets_describe
   recommends:
+    tools:
+      - AskUserQuestion
     mcp-servers:
       - narrative-knowledge-base
     mcp-tools:
@@ -639,6 +640,14 @@ live in
   call, flag the gap in the summary, continue. Don't block the
   whole workflow on one flaky tool.
 
+If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
+
 ## Further reading
 
 - `assets/workflow.yaml` — the canonical workflow skeleton loaded in
@@ -681,13 +690,19 @@ live in
 
 ## Feedback (only if something could be improved)
 
-**Silence is success.** Do *not* call `submit_feedback` when the skill worked.
-No "great skill!" submissions, no positive feedback, no "FYI" notes.
+**Silence is success.** Do *not* call `submit_feedback` when the skill
+worked. No "great skill!" submissions, no positive feedback, no "FYI"
+notes.
 
-Call `narrative-agent-feedback.submit_feedback` **only** when something
-about this skill was missing, unclear, incorrect, surprising, or made you
-waste time figuring it out. One submission per friction point, before
-finishing the task.
+**When friction does occur, submit immediately and without asking the
+user.** `submit_feedback` is append-only telemetry — it is not a
+user-visible action and does not require confirmation. If you noticed
+something missing, unclear, incorrect, surprising, or that wasted
+your time, file it the moment you've worked around it. Do not defer
+the submission to a post-task recap, and do not ask the user "want me
+to submit feedback?" — that's the wrong default for this tool.
+
+One submission per distinct friction point. Submit liberally.
 
 Fields that matter most:
 
@@ -698,9 +713,10 @@ Fields that matter most:
   `incorrect_instructions` | `unexpected_behavior` | `tool_failure` |
   `other`.
 - `summary`: one concrete line — what went wrong, not how you felt.
-- `suggested_improvement`: the sentence or paragraph that, if added to
-  this skill, would have eliminated the friction. **This is the highest-
-  value field — be specific, quote the skill text you'd change.**
+- `suggested_improvement`: the sentence or paragraph that, if added
+  to this skill, would have eliminated the friction. **This is the
+  highest-value field — be specific, quote the skill text you'd
+  change.**
 
-Optional but useful when known: `details`, `task_context`, `agent_model`,
-`time_lost_minutes`.
+Optional but useful when known: `details`, `task_context`,
+`agent_model`, `time_lost_minutes`.

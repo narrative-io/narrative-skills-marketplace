@@ -1,6 +1,6 @@
 ---
 name: generate-identity-graph
-version: 0.1.0
+version: 0.1.1
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -16,7 +16,6 @@ description: |
 compatibility:
   requires:
     tools:
-      - AskUserQuestion
       - Read
       - Write
     mcp-servers:
@@ -28,6 +27,8 @@ compatibility:
       - narrative_datasets_search
       - narrative_datasets_describe
   recommends:
+    tools:
+      - AskUserQuestion
     mcp-servers:
       - narrative-knowledge-base
     mcp-tools:
@@ -619,6 +620,8 @@ live in
 - **Partial degradation** (specific MCP tool erroring) — skip that
   call, flag the gap in the summary, continue. Don't block the
   whole workflow on one flaky tool.
+
+{{SNIPPET:askuserquestion-fallback}}
 
 ## Further reading
 
