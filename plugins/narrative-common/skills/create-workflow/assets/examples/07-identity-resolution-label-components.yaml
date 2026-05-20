@@ -1,0 +1,45 @@
+# Cross-system customer identity resolution via bipartite label
+# propagation.
+#
+# Use when:
+#   - You have an edge table linking customer IDs (per source) to
+#     shared "bridge keys" (hashed emails, device IDs, phone numbers).
+#   - You want one canonical component ID per resolved identity.
+#
+# Notes:
+#   - `firstPartySources` is ordered by priority — the first source in
+#     the list whose ID appears in a component wins the representative
+#     ID. Put your higher-trust systems first.
+#   - `maxDegreeThreshold` excludes "supernodes" — bridge keys that
+#     touch more connections than the threshold. Lower this if you see
+#     accidental mega-merges; raise it if real identities are getting
+#     split.
+#   - `maxComponentSize` caps how large a single resolved identity can
+#     get before the algorithm gives up on it.
+
+document:
+  dsl: '1.0.0'
+  namespace: identity
+  name: resolve-connected-components
+  version: '1.0.0'
+
+do:
+  - resolveIdentities:
+      call: LabelConnectedComponents
+      with:
+        edgeDataset: customer_identity_edges
+        outputDataset: resolved_customer_components
+        maxDegreeThreshold: 500
+        maxComponentSize: 10000
+        maxIterations: 50
+        sourceIdCol: customer_id
+        sourceSystemCol: source_system
+        bridgeKeyCol: bridge_key
+        bridgeKeyTypeCol: bridge_key_type
+        firstPartySources:
+          - AFTERPAY
+          - CASHAPP
+          - SQUARE
+        thirdPartySources:
+          - EXPERIAN
+          - ACXIOM

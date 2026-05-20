@@ -1,0 +1,47 @@
+# Run a model inference job inside a workflow.
+#
+# Use when:
+#   - You want to classify, summarize, or extract structured fields with
+#     an LLM as part of an automated pipeline.
+#
+# Notes:
+#   - `model` is one of the platform-supported model IDs:
+#       anthropic.claude-haiku-4.5
+#       anthropic.claude-sonnet-4.5
+#       anthropic.claude-opus-4.5
+#       openai.gpt-oss-120b
+#       openai.gpt-4.1
+#       openai.o4-mini
+#   - `inferenceConfig.outputFormatSchema` is a JSON Schema — the
+#     model's structured output is validated against it before the task
+#     returns. Define exactly the shape you want downstream tasks to
+#     consume.
+#   - `RunModelInference` is not tied to a dataset, so when
+#     `computePoolId` is omitted, the data plane's default compute pool
+#     is used.
+
+document:
+  dsl: '1.0.0'
+  namespace: ml
+  name: classify-records
+  version: '1.0.0'
+
+do:
+  - classifyRecord:
+      call: RunModelInference
+      with:
+        model: anthropic.claude-sonnet-4.5
+        messages:
+          - role: user
+            text: 'Classify the following record as spam or not spam: <RECORD>'
+        inferenceConfig:
+          outputFormatSchema:
+            type: object
+            properties:
+              classification:
+                type: string
+                enum:
+                  - spam
+                  - not_spam
+            required:
+              - classification

@@ -1,0 +1,33 @@
+# Scheduled daily refresh.
+#
+# Use when:
+#   - You want the workflow to run on a cron schedule without manual
+#     triggering.
+#
+# Notes:
+#   - The `schedule:` block declares the cron expression. It is NOT
+#     activated automatically on create — pass `schedule_immediately:
+#     true` to `narrative_workflows_create` (or call the schedule
+#     endpoint later) to turn it on.
+#   - Run the workflow manually at least once before scheduling, to
+#     confirm it succeeds before the cron starts firing on its own.
+#   - Cron is UTC. Common patterns:
+#       `0 * * * *`   every hour on the hour
+#       `0 0 * * *`   daily at 00:00 UTC
+#       `0 0 * * 0`   weekly, Sunday at 00:00 UTC
+#       `0 0 1 * *`   monthly, on the 1st at 00:00 UTC
+
+document:
+  dsl: '1.0.0'
+  namespace: etl
+  name: daily-active-users-refresh
+  version: '1.0.0'
+
+schedule:
+  cron: '0 0 * * *'
+
+do:
+  - refreshActiveUsers:
+      call: RefreshMaterializedView
+      with:
+        datasetName: active_users

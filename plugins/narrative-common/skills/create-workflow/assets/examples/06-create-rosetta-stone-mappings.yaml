@@ -1,0 +1,53 @@
+# Create Rosetta Stone attribute mappings after building a dataset.
+#
+# Use when:
+#   - You are productionizing the output of
+#     `/generate-rosetta-stone-mappings` so the mappings are created
+#     idempotently as part of a workflow rather than ad-hoc.
+#
+# Notes:
+#   - `allowPartial: true` (the default) lets individual mapping
+#     failures pass without aborting the others. Set to `false` if any
+#     failure should fail the workflow.
+#   - The task is idempotent: existing identical mappings show up in
+#     `conflictMappings` rather than as failures.
+#   - `attributeId` is the canonical Rosetta Stone attribute ID — resolve
+#     with `/find-attribute` if you only have a fuzzy description.
+
+document:
+  dsl: '1.0.0'
+  namespace: etl
+  name: map-identity-seed
+  version: '1.0.0'
+
+do:
+  - createIdentitySeed:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW identity_seed AS
+          SELECT
+            customer_id,
+            email,
+            country_code
+          FROM company_data.crm_users
+          WHERE email IS NOT NULL
+
+  - mapToRosettaStone:
+      call: CreateRosettaStoneMappingsIfNotExist
+      with:
+        datasetName: identity_seed
+        allowPartial: true
+        mappings:
+          - attributeId: 92
+            mapping:
+              type: object_mapping
+              propertyMappings:
+                - path: value
+                  expression: SHA2(NORMALIZE_EMAIL(email), 256)
+                - path: type
+                  expression: '''sha256_email'''
+          - attributeId: 50
+            mapping:
+              type: value_mapping
+              expression: country_code

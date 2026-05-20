@@ -1,0 +1,24 @@
+# Refresh an existing materialized view.
+#
+# Use when:
+#   - The view already exists and you want to pull in newer source rows.
+#   - You are setting up a scheduled refresh (combine with 05).
+#
+# Notes:
+#   - `datasetName` must contain only alphanumerics + underscores
+#     (max 256 chars). It refers to the existing materialized view's
+#     dataset name, NOT a numeric dataset ID.
+#   - On Snowflake data planes the task returns real `rowStats`; on
+#     AWS data planes `rowStats` is null today.
+
+document:
+  dsl: '1.0.0'
+  namespace: analytics
+  name: refresh-active-users
+  version: '1.0.0'
+
+do:
+  - refreshActiveUsers:
+      call: RefreshMaterializedView
+      with:
+        datasetName: active_users

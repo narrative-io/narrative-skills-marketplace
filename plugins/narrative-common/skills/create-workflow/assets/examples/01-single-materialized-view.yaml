@@ -1,0 +1,33 @@
+# Single materialized view — the smallest useful workflow.
+#
+# Use when:
+#   - You want to persist the result of a SELECT as a queryable dataset.
+#   - The view does not exist yet (this task is a no-op if it does).
+#
+# Notes:
+#   - `CreateMaterializedViewIfNotExists` is idempotent on the dataset
+#     name embedded in the NQL; rerunning won't error if it already
+#     exists, but it won't refresh either — use `RefreshMaterializedView`
+#     for that (see 02).
+#   - No `schedule:` block means the workflow only runs when triggered.
+#   - Direct `SELECT` execution is not a supported task — wrapping the
+#     query in `CREATE MATERIALIZED VIEW` is how you persist its output.
+
+document:
+  dsl: '1.0.0'
+  namespace: analytics
+  name: create-active-users-view
+  version: '1.0.0'
+
+do:
+  - createActiveUsersView:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW active_users AS
+          SELECT
+            user_id,
+            email,
+            last_login
+          FROM company_data.users
+          WHERE is_active = true

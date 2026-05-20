@@ -1,0 +1,32 @@
+# Minimum-viable workflow scaffold. Fill in the bracketed values, drop
+# the comment block, and validate with `narrative_workflows_create`.
+#
+# Required structure:
+#   document:   metadata (dsl, namespace, name, version)
+#   schedule:   optional cron block — omit if the workflow is
+#               triggered manually
+#   do:         ordered list of tasks
+#
+# Naming guidance:
+#   - namespace: a short logical group (`analytics`, `etl`, `identity`,
+#                `ml`, `governance`). Reuse across related workflows.
+#   - name:      kebab-case, describes what the workflow does
+#                (`daily-active-users-refresh`).
+#   - version:   semver. Bump every time you change the spec.
+
+document:
+  dsl: '1.0.0'
+  namespace: <namespace>
+  name: <kebab-case-name>
+  version: '1.0.0'
+
+# schedule:
+#   cron: '0 0 * * *'
+
+do:
+  - <firstTaskName>:
+      call: <TaskName>            # see assets/examples/ for options
+      with:
+        <param>: <value>
+      # export:
+      #   as: '$context + { someKey: .someField }'

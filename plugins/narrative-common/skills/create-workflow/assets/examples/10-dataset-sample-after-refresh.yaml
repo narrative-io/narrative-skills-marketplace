@@ -1,0 +1,28 @@
+# Refresh a materialized view and capture a sample.
+#
+# Use when:
+#   - You want a small representative slice of a refreshed view (e.g.
+#     for stats / preview in the UI) without scanning the whole table.
+#
+# Notes:
+#   - `CreateDatasetSample` runs after the refresh task, so the sample
+#     reflects the just-refreshed snapshot.
+#   - The sample is associated with the dataset and surfaces via the
+#     normal dataset-sample APIs.
+
+document:
+  dsl: '1.0.0'
+  namespace: analytics
+  name: refresh-and-sample-active-users
+  version: '1.0.0'
+
+do:
+  - refreshActiveUsers:
+      call: RefreshMaterializedView
+      with:
+        datasetName: active_users
+
+  - sampleActiveUsers:
+      call: CreateDatasetSample
+      with:
+        datasetName: active_users
