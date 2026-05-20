@@ -140,15 +140,26 @@ function nextVersion(override: string | null): string {
 }
 
 function lastTag(): string | null {
-  try {
-    return execSync(`git describe --tags --abbrev=0 --match "${TAG_PREFIX}[0-9]*"`, {
-      cwd: REPO_ROOT,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
+  // List tags directly rather than `git describe`, which only finds tags
+  // reachable from HEAD. A release tag placed on the pre-squash branch tip
+  // ends up orphaned from main's history, but should still anchor the
+  // changelog range for the next release.
+  const tags = sh(`git tag --list "${TAG_PREFIX}[0-9]*"`)
+    .split('\n')
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const parsed = tags
+    .map((tag) => {
+      const m = tag.match(/^v(\d{4})\.(\d{2})\.(\d+)$/);
+      if (!m?.[1] || !m[2] || !m[3]) return null;
+      return { tag, year: Number(m[1]), month: Number(m[2]), patch: Number(m[3]) };
+    })
+    .filter((x): x is { tag: string; year: number; month: number; patch: number } => x !== null);
+  if (parsed.length === 0) {
     return null;
   }
+  parsed.sort((a, b) => b.year - a.year || b.month - a.month || b.patch - a.patch);
+  return parsed[0]?.tag ?? null;
 }
 
 function commitLog(since: string | null): Commit[] {
