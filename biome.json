@@ -140,6 +140,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["commitlint.config.mjs"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
     }
   ]
 }

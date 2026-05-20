@@ -2,9 +2,12 @@
   "name": "narrative-skills-marketplace",
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
     "@types/bun": "latest",
     "gray-matter": "^4.0.3",
     "knip": "^6.14.1",
+    "lefthook": "^2.1.8",
     "typescript": "^6.0.0"
   },
   "private": true,
@@ -21,7 +24,9 @@
     "typecheck": "tsc --noEmit",
     "knip": "knip",
     "knip:fix": "knip --fix",
-    "ci": "bun run check:skill-docs && bun run check:manifests && bun run check && bun run typecheck && bun run knip"
+    "ci": "bun run check:skill-docs && bun run check:manifests && bun run check && bun run typecheck && bun run knip",
+    "commitlint": "commitlint",
+    "hooks:install": "lefthook install"
   },
   "type": "module"
 }
