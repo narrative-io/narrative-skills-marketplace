@@ -27,8 +27,6 @@ compatibility:
       - narrative_context_set_company
       - narrative_datasets_search
       - narrative_datasets_describe
-      - narrative_attributes_search
-      - narrative_attributes_describe
   recommends:
     mcp-servers:
       - narrative-knowledge-base
@@ -51,14 +49,16 @@ third-party edge sources. You optimize for:
    graph-edge schema `{ SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID,
    TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }` before it joins the
    UNION. No exceptions, no inline patching.
-2. Defer, don't re-implement — when an input dataset isn't mapped to
-   the graph-edge attribute, hand off to
+2. Defer, don't re-implement — when the graph-edge attribute ID
+   needs to be resolved, hand off to `/find-attribute`; when an
+   input dataset isn't mapped to that attribute, hand off to
    `/generate-rosetta-stone-mappings`; when the input data needs a
    pre-graph quality audit, hand off to `/triage-pregraph-data` and
    carry its approved filter expressions forward; when the
    materialized-view NQL needs to be written, hand off to
-   `/write-nql`. Never write graph-edge mappings, audit hypotheses,
-   or hand-authored NQL inside this skill.
+   `/write-nql`. Never resolve attribute IDs, write graph-edge
+   mappings, audit hypotheses, or hand-author NQL inside this
+   skill.
 3. Validation before delivery — every materialized-view DDL is
    server-validated (by `/write-nql`, which owns that step) before
    the YAML is shown to the user.
@@ -305,27 +305,22 @@ here are expensive because phase 5 may trigger a full mapping flow.
 
 The graph-edge target is a Rosetta Stone attribute whose schema is
 the edge contract `{ SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID,
-TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }`. Don't guess its ID — look
-it up:
+TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }`. Resolve its canonical ID
+by delegating to `/find-attribute`:
 
-```
-narrative_attributes_search(
-  search_term: "graph edge",
-  per_page: 5
-)
-```
+> `/find-attribute --phrase "graph edge" --shape "SOURCE_ID,SOURCE_ID_TYPE,TARGET_ID,TARGET_ID_TYPE,IS_DIRECTED,ATTRIBUTES" --no-confirm`
 
-Walk additional pages if the first batch doesn't surface a
-graph-edge-shaped attribute. Describe the top candidate to confirm
-the schema:
+`/find-attribute` searches the catalog with pagination, batch-
+describes the shortlist, ranks by name + shape, and returns the
+canonical `attribute_id` plus alternatives. Pass `--no-confirm` so
+it returns directly without prompting (this skill owns the user-
+facing surface for graph builds).
 
-```
-narrative_attributes_describe(attribute_ids: [<id>])
-```
-
-The right attribute will have properties matching the edge contract
-above (names may be lowercase / snake_case in the catalog — match on
-shape, not exact casing).
+Take the returned `attribute_id` as the graph-edge target. If
+`/find-attribute` returns an empty result (no Rosetta Stone
+attribute matched the shape after walking the search), surface the
+warning verbatim and stop — without a graph-edge attribute, this
+skill cannot proceed.
 
 Then, for each dataset from phase 3, inspect the `mappings[]` array
 returned by `narrative_datasets_describe(include: ["mappings"])`:
@@ -665,6 +660,11 @@ live in
   skill captures the approved ones and threads them into phase 7a's
   `/write-nql` prompt as `WHERE`-clause conditions on the
   corresponding `SELECT` blocks.
+- `../../../narrative-common/skills/find-attribute/SKILL.md` — the
+  attribute-lookup skill this one defers to in phase 4
+  (`/find-attribute`, lives in the `narrative-common` plugin) to
+  resolve the canonical graph-edge attribute ID. Invoked with
+  `--phrase`, `--shape`, and `--no-confirm`.
 - `../../../narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md` —
   the mapping skill this one defers to in phase 5
   (`/generate-rosetta-stone-mappings`, lives in the
