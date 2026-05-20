@@ -3,7 +3,7 @@ immediately; the actual rows arrive only after the job finishes.
 
 ```
 narrative_nql_run(
-  query: 'CREATE MATERIALIZED VIEW "<name>" AS (SELECT … FROM company_data."<id>")',
+  query: 'CREATE MATERIALIZED VIEW "<name>" AS SELECT … FROM company_data."<id>"',
   data_plane_id: '<uuid-of-dataset-plane>'
 )
 → { job_id: "<uuid>", state: "queued", ... }
@@ -12,29 +12,17 @@ narrative_nql_run(
 ### Selecting `data_plane_id` — mandatory when it's not the company default
 
 NQL queries execute inside a single data plane and only see datasets
-that live there. `narrative_nql_run` and `narrative_nql_get_job` both
-accept an optional `data_plane_id`; when omitted, the request falls
-back to the **company default** plane, which is almost never the
-right choice for a multi-plane tenant. Pass the data plane of the
-dataset(s) being queried explicitly.
+that live there. `narrative_nql_validate`, `narrative_nql_run`, and
+`narrative_nql_get_job` all accept an optional `data_plane_id`; when
+omitted, each falls back to the **company default** plane, which is
+almost never the right choice for a multi-plane tenant. Pass the data
+plane of the dataset(s) being queried explicitly to all three.
 
 Resolution sequence:
 
 1. **Capture the dataset's data plane during describe.** `narrative_datasets_describe(dataset_ids: [<id>], include: ["metadata"])` exposes the dataset's plane assignment alongside its name and id. Record it next to the unique_name / id you'll use in the query.
 2. **Confirm every dataset on the query is on the same plane.** Cross-plane joins fail at execution; if a query references multiple datasets, all of them must share a plane. If they don't, that's the cross-data-plane gotcha — query each plane separately or materialize one side into the other plane first.
-3. **Pass `data_plane_id` to `narrative_nql_run` and `narrative_nql_get_job`.** Use the same value for both. If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first.
-4. **`narrative_nql_validate` is plane-agnostic.** The validate tool only takes `query`; it compiles the NQL against the control-plane schema catalog. It will **not** catch a wrong-plane mistake — that error surfaces only at run time, as a cross-data-plane or "dataset not found" failure.
-
-```
-narrative_nql_run(
-  query: 'CREATE MATERIALIZED VIEW "wn_check_20260519" EXPIRE = ''P1D'' AS (SELECT … FROM company_data."12345")',
-  data_plane_id: '<dataset_12345_plane_uuid>'
-)
-narrative_nql_get_job(
-  job_id: '<returned>',
-  data_plane_id: '<dataset_12345_plane_uuid>'
-)
-```
+3. **Pass the same `data_plane_id` to validate, run, and get_job.** If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first. See the gotchas table for the failure mode this prevents — most visibly, validator-only "Unknown Table" errors on numeric-id references that run accepts.
 
 If the dataset describe response doesn't include a plane field for
 your tenant, fall back to: `narrative_data_planes_list(include: ["metadata"])`
@@ -75,7 +63,7 @@ The `result` field on a finished job is shaped by the job `type`:
 | Job type | Triggered by | `result` payload | Where the rows live |
 | --- | --- | --- | --- |
 | `nql-forecast` | `narrative_nql_run` with `EXPLAIN …` | `{rows, cost}` — an estimate, not actual rows | n/a — forecasts return numbers only |
-| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS (SELECT …)`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
+| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. Do not put outer parens around the inner `SELECT`; the validator accepts them but execution 500s. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
 | `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
 
 ### Reading rows after a `materialize-view` job completes
@@ -91,7 +79,7 @@ is not a runnable form — you must explicitly wrap it in
 3. **Read the sample rows** with `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`. The sample lives in the control plane and is what `include=["sample"]` returns.
 
 ```
-narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS (SELECT …)")
+narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS SELECT …")
   → poll narrative_jobs_describe → result.dataset_id = 1234
 narrative_dataset_request_sample(dataset_id: 1234)
   → poll narrative_jobs_describe → completed
