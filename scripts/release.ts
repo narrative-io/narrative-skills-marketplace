@@ -151,8 +151,11 @@ function lastTag(): string | null {
   const parsed = tags
     .map((tag) => {
       const m = tag.match(/^v(\d{4})\.(\d{2})\.(\d+)$/);
-      if (!m?.[1] || !m[2] || !m[3]) return null;
-      return { tag, year: Number(m[1]), month: Number(m[2]), patch: Number(m[3]) };
+      if (!m) {
+        return null;
+      }
+      const [, year, month, patch] = m as unknown as [string, string, string, string];
+      return { tag, year: Number(year), month: Number(month), patch: Number(patch) };
     })
     .filter((x): x is { tag: string; year: number; month: number; patch: number } => x !== null);
   if (parsed.length === 0) {
