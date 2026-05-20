@@ -16,9 +16,9 @@ to announce. There is no fixed schedule.
 
 ## Process
 
-Two steps, separated by a code review: open a release PR, then tag
-the merged commit. Branch protection blocks direct pushes to `main`,
-so releases never bypass review.
+Open a release PR, get it reviewed, squash-merge it. CI handles
+tagging + publishing the GitHub Release from there. Branch protection
+keeps direct pushes to `main` out of the picture.
 
 1. Make sure `main` is green and you're up to date:
    ```bash
@@ -40,19 +40,31 @@ so releases never bypass review.
    Requires the [GitHub CLI](https://cli.github.com) on `PATH`.
 
 4. **Review + squash-merge** the PR via the normal flow. The merge
-   commit subject will be `chore(release): v<version>` — that's
-   what step 5 looks for.
+   commit subject will be `chore(release): v<version> (#NN)` — that's
+   what the automation looks for.
 
-5. **Tag the merged commit** — pulls `main`, verifies HEAD is the
-   release commit, creates the annotated tag, and pushes it:
-   ```bash
-   git checkout main && git pull
-   bun run release:tag
-   ```
-
-6. The `release.yml` workflow fires on the tag push and creates the
-   public GitHub Release with auto-generated notes. Confirm at
+5. **CI takes it from there.** The `auto-release.yml` workflow runs
+   on every push to `main`, detects the release-commit subject, tags
+   the commit with `v<version>`, and creates the GitHub Release with
+   auto-generated notes. Confirm at
    <https://github.com/narrative-io/narrative-skills-marketplace/releases>.
+
+That's it — no client-side tag step.
+
+### Escape hatch
+
+If `auto-release.yml` fails or is disabled and you need to finish a
+release manually after the PR merged:
+
+```bash
+git checkout main && git pull
+bun run release:tag           # tags HEAD and pushes
+```
+
+That falls through to `release.yml` (the tag-triggered workflow),
+which publishes the Release the same way. Use this only when the
+automation didn't fire — under normal circumstances, step 5 above is
+fully automatic.
 
 ## Two release-note sources (deliberate)
 
