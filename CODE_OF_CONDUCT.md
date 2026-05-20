@@ -9,7 +9,7 @@ discrimination, or personal attacks are not tolerated.
 ## Reporting
 
 If you experience or witness conduct that violates this code, please
-contact the maintainers at <conduct@narrative.io>. Reports will be
+contact the maintainers at <dev@narrative.io>. Reports will be
 reviewed promptly and confidentially.
 
 The full text and enforcement guidelines live at:

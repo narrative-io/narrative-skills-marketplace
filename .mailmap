@@ -1,0 +1,10 @@
+# Canonical author identities for `git log` / `git shortlog`.
+#
+# Format: Canonical Name <canonical-email> <commit-email>
+# See: https://git-scm.com/docs/gitmailmap
+#
+# Maps personal/legacy emails to the GitHub noreply alias so the public
+# git history doesn't expose personal inboxes.
+
+Nick Jordan <NJordan72@users.noreply.github.com> <njordan@gmail.com>
+Nick Jordan <NJordan72@users.noreply.github.com>

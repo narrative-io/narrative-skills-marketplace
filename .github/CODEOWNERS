@@ -1,0 +1,10 @@
+# Code owners for narrative-skills-marketplace.
+#
+# These users are automatically requested for review on PRs that touch
+# the matching paths. The catch-all line below covers every file; add
+# more specific rules above it (they take precedence — last match wins
+# per path, so put the broader rules at the bottom).
+#
+# Syntax: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @NJordan72
