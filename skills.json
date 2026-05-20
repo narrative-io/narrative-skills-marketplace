@@ -191,8 +191,8 @@
     },
     {
       "name": "triage-pregraph-data",
-      "version": "0.2.0",
-      "description": "Audit a dataset before it joins an identity-graph build. Enumerates\ndataset-specific failure modes (hub identifiers, high-degree nodes,\nbehaviorally suspicious values, over-connected identifiers, source-\nspecific quirks), tests every hypothesis in parallel against the\ndata, quantifies damage by rows / edges / entities affected, and\nproposes minimal filter expressions ranked by severity. Plans and\nreports; the downstream query-writing skill executes.\nUse when: \"audit this dataset before the graph build\", \"find bad\nedges in <dataset>\", \"check identity data quality\", \"recommend\nfilters for the graph build\", \"find hub identifiers in <dataset>\",\n\"quantify damage from <identifier_type>\", \"pre-graph DQ\".\n(narrative-identity)",
+      "version": "0.3.0",
+      "description": "Audit a dataset before it joins an identity-graph build. Enumerates\ndataset-specific failure modes (hub identifiers, high-degree nodes,\nbehaviorally suspicious values, over-connected identifiers, source-\nspecific quirks), tests every hypothesis in parallel against the\ndata, quantifies damage by rows / edges / entities affected, proposes\nminimal filter expressions ranked by severity, and — when the audit\nfinds issues — returns a validated `CREATE MATERIALIZED VIEW` NQL the\ncaller can run to produce a graph-ready clean source. If the data\npasses the audit, says so plainly and recommends the source table\nunchanged. Plans, reports, and authors the clean-view NQL; does not\nexecute it.\nUse when: \"audit this dataset before the graph build\", \"find bad\nedges in <dataset>\", \"check identity data quality\", \"recommend\nfilters for the graph build\", \"find hub identifiers in <dataset>\",\n\"quantify damage from <identifier_type>\", \"give me the clean-view\nNQL for the graph build\", \"pre-graph DQ\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/triage-pregraph-data/SKILL.md",
       "compatibility": {
@@ -209,7 +209,8 @@
             "narrative_context_set_company",
             "narrative_datasets_search",
             "narrative_datasets_describe",
-            "narrative_dataset_get_column_stats"
+            "narrative_dataset_get_column_stats",
+            "narrative_nql_validate"
           ]
         }
       }
