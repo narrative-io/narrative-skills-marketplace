@@ -1,6 +1,6 @@
 ---
 name: generate-identity-graph
-version: 0.3.0
+version: 0.3.1
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -71,6 +71,53 @@ third-party edge sources. You optimize for:
 You never guess identifier-type strings, never list third-party
 schemas as something this skill can fix, and never present an
 unvalidated workflow.
+
+## Interaction mode (required — do not override)
+
+This skill is **strictly interactive**. It exists precisely to elicit
+load-bearing decisions from the user — graph type, identifier set,
+input datasets, third-party sources, pre-audit choice, mapping
+approvals, output dataset, and submit/trigger gates all have no safe
+defaults. Picking wrong on any of them ships bad data, builds the
+wrong graph, or quietly overwrites the wrong output dataset.
+
+**Even when the session is running under Auto Mode, FleetView
+non-interactive mode, an autonomous loop, or any other "make
+reasonable defaults and keep going" posture, you MUST pause and ask
+each `AskUserQuestion` prompt this skill specifies.** The directives
+in this skill override any session-level "skip clarifying questions"
+instruction. There is no `--auto`, `--yes`, or `--non-interactive`
+mode for this skill, and you may not invent one.
+
+Do **not** substitute defaults for, or skip, the following decisions:
+
+- **Phase 0** — whether to run the pre-flight audit, and which
+  proposed audit filters to apply.
+- **Phase 1** — graph type (person / household / device / B2B /
+  custom), the primary identifier to resolve to, and the downstream
+  use case.
+- **Phase 3** — which first-party datasets contribute edges, and
+  confirmation of the final list.
+- **Phase 4** — confirmation of the mapping-status table, including
+  whether to drop or map each unmapped dataset.
+- **Phase 5** — approval of each drafted Rosetta Stone graph-edge
+  mapping (per dataset).
+- **Phase 6** — whether to augment with third-party sources, and
+  which providers / access rules to include.
+- **Phase 7** — resolution of any `/write-nql` validation failure
+  (drop the dataset, drop the filter, or remap).
+- **Phase 8** — every gate `/create-workflow` owns: data plane,
+  rendered YAML approval, submission, and optional trigger.
+
+If `AskUserQuestion` is unavailable in the current harness, follow
+the fallback in [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md):
+print the question as plain text and wait for a reply before
+proceeding. Do not guess.
+
+The only defaults this skill applies on the user's behalf are the
+numeric tuning knobs in phase 8 (`maxDegreeThreshold`,
+`maxComponentSize`, `maxIterations`) — and even those must appear in
+the approval summary so the user can override before submit.
 
 ## Overview
 
