@@ -21,7 +21,9 @@
     "typecheck": "tsc --noEmit",
     "knip": "knip",
     "knip:fix": "knip --fix",
-    "ci": "bun run check:skill-docs && bun run check:manifests && bun run check && bun run typecheck && bun run knip"
+    "ci": "bun run check:skill-docs && bun run check:manifests && bun run check && bun run typecheck && bun run knip",
+    "release": "bun run scripts/release.ts",
+    "release:apply": "bun run scripts/release.ts --apply"
   },
   "type": "module"
 }
