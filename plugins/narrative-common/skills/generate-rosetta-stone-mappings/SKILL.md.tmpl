@@ -1,6 +1,6 @@
 ---
 name: generate-rosetta-stone-mappings
-version: 0.2.0
+version: 0.2.1
 description: |
   Generate, evaluate, and improve Rosetta Stone attribute mappings for
   a Narrative dataset.
@@ -463,41 +463,13 @@ Do not re-run the full generation flow for a one-line improvement.
 
 ## Edge cases and gotchas
 
-- **Reserved SQL identifiers MUST be double-quoted.** `type`, `value`,
-  `user`, `order`, `group`, `select` are reserved. Write
-  `column."type"`, never `column.type`. See `references/EXPRESSION_SYNTAX.md`.
-- **Enum constraints are case-sensitive.** `'SHA256'` does NOT match
-  `'sha256_email'`. When source values don't match the enum, generate
-  a `CASE WHEN` and lower confidence. See `references/ENUM_HANDLING.md`.
-- **Null handling is automatic at runtime.** Do NOT add `COALESCE` to
-  mask nulls and do NOT flag null inputs as edge cases. Nulls in test
-  results from null inputs are expected.
-- **Object-mapping property_mappings is replace-all.** When suggesting
-  a fix to one property of an object mapping, include *every* existing
-  property_mapping in the suggested mapping — the API replaces the whole
-  array.
-- **Custom attributes are a fallback, not a primary path.** Only mention
-  them in the summary when (a) zero Rosetta Stone matches exist for the
-  dataset, or (b) several columns are clearly proprietary
-  (internal_id, custom_metric_x, etc.).
-- **Don't paraphrase the attribute catalog.** If you'd benefit from the
-  attribute description, just call `narrative_attributes_describe` —
-  don't reason from the search snippet alone.
-- **Mapping confidence ≠ NQL validity.** A 100% valid NQL expression
-  can still be a low-confidence mapping (e.g., `name` column → first
-  name attribute vs full name attribute). Validate syntactically, then
-  score semantically.
-- **Token economy.** Prefer the existing sample returned by
-  `narrative_datasets_describe(include: ["sample"])` over enqueuing a
-  fresh `narrative_dataset_request_sample` job. The existing sample is
-  almost always enough to spot the patterns this skill needs, and
-  re-sampling costs a job round-trip.
-- **Skip underscore-prefixed columns.** Columns starting with `_`
-  (e.g., `_nio_last_modified_at`, `_nio_sample_128`) are reserved
-  platform-managed columns. The platform auto-generates mappings for
-  them when needed (tagged `nio_system` / `nio_dataset_implicit_attribute`
-  in `mappings[]`). Don't propose mappings for them and don't list
-  them as unmapped in warnings.
+See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
+reserved-identifier quoting, enum case sensitivity, null handling,
+object-mapping replace-all semantics, custom-attribute fallback,
+confidence-vs-validity, token economy, and underscore-prefixed
+column handling. Read when an expression won't validate or a
+mapping is failing for a reason the body procedure doesn't
+address.
 
 ## Voice
 
@@ -508,23 +480,27 @@ Platform UI's Rosetta Stone normalization tab.
 
 ## Harness fallbacks
 
-{{SNIPPET:askuserquestion-fallback}}
-
-If `narrative-mcp` is unavailable:
-
-- Ask the user to paste the dataset's schema + 10-25 sample rows + the
-  Rosetta Stone attribute IDs they're considering (or to run
-  `curl https://api.narrative.io/datasets/<id>` and paste the response).
-- With that context pasted in, apply steps 5-8 of the procedure
-  manually — you can't validate NQL syntactically without the server,
-  so add a global warning saying expressions were not
-  server-validated and confidence is reduced by 10 points across the
-  board.
-- Never silently degrade. If you can't validate, say so explicitly in
-  the summary.
+See
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
+covers `narrative-mcp` unavailable (paste-driven schema + sample
+flow, confidence haircut for unvalidated expressions) and the
+`AskUserQuestion` fallback for harnesses that don't expose it.
+Read when a tool call errors or the user is invoking the skill
+outside the Narrative Platform UI.
 
 ## Further reading
 
+- `references/EDGE_CASES.md` — gotchas and authoring pitfalls:
+  reserved-identifier quoting, enum case sensitivity, null
+  handling, object-mapping replace-all semantics, custom-attribute
+  fallback, confidence-vs-validity, token economy, and
+  underscore-prefixed columns. Read when an expression won't
+  validate or a mapping feels off.
+- `references/HARNESS_FALLBACK.md` — what to do when
+  `narrative-mcp` is unavailable, and how to deliver the same flow
+  when `AskUserQuestion` isn't exposed. Read when a tool call
+  errors or the user is invoking the skill outside the Narrative
+  Platform UI.
 - `../find-attribute/SKILL.md` — the attribute-lookup skill this one
   defers to in step 4 (`/find-attribute`) to resolve candidate
   Rosetta Stone attributes per column cluster. Invoked in parallel,

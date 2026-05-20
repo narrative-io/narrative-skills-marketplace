@@ -1,6 +1,6 @@
 ---
 name: find-attribute
-version: 0.2.0
+version: 0.2.1
 description: |
   Find the canonical Rosetta Stone attribute that best matches a
   fuzzy description, semantic phrase, or required schema shape.
@@ -280,36 +280,12 @@ phase 4 will rank it `high` and the user just confirms. This is the
 
 ## Edge cases and gotchas
 
-- **Catalog snippets lie about enum constraints.** The search result
-  description is truncated and may omit enum values. Always call
-  `narrative_attributes_describe` (phase 3) before claiming any
-  enum-constrained attribute matches the user's intent.
-- **Shape matching is by name, casing-insensitive.** A catalog
-  attribute with `source_id` matches `--shape SOURCE_ID`. But
-  matching is structural — extra columns are allowed (and counted
-  in the tiebreaker), missing columns are disqualifying.
-- **Pagination is opt-in.** `narrative_attributes_search` returns
-  the first `--per-page` results. Walk pages 2+ only when the first
-  page is thin; an attribute that doesn't surface in the top 50
-  results almost certainly doesn't exist.
-- **Ambiguous phrases.** "email" is genuinely ambiguous (raw,
-  sha256, md5, sha1, …). Don't pick one silently when alternatives
-  cluster within 1-2 ranking points; surface the alternatives and
-  let the user choose, or — if `--no-confirm` — return `medium`
-  confidence with a warning.
-- **Empty result is a legitimate answer.** If walking all pages
-  yields nothing, return the empty-result shape from phase 5. Do
-  not loop on more pages, do not invent an ID. The caller will
-  decide whether to author a custom attribute or refine.
-- **Custom attributes are not in scope.** This skill finds Rosetta
-  Stone attributes only. Custom attributes (per-company,
-  `custom.<name>`) need a different lookup path; if a caller needs
-  them, they should call `narrative_attributes_search` directly
-  with the custom namespace.
-- **Don't paraphrase the catalog.** The user's downstream skill
-  cares about the exact `attribute_id` and `schema`. Return the
-  describe payload's values verbatim — no rewording display names,
-  no rounding column types.
+See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
+truncated catalog snippets and enum constraints, shape-matching
+semantics, pagination, ambiguous phrases, empty-result handling,
+custom-attribute scope, and the don't-paraphrase rule. Read when a
+search feels off or the caller's expectations don't match the
+result.
 
 ## Voice
 
@@ -321,33 +297,25 @@ identical").
 
 ## Harness fallbacks
 
-{{SNIPPET:askuserquestion-fallback}}
-
-If `narrative-mcp` is unavailable, this skill cannot run — its
-entire value is searching the live catalog. The fallback:
-
-- Ask the user for the attribute ID directly. They almost always
-  know it (or can copy it from a previous successful run, or pull
-  it from `https://api.narrative.io/attributes/<id>` via `curl`).
-- If the user provides an ID, return a `final_answer` with
-  `attribute_id` set, `confidence: low`, and a warning that the
-  schema could not be verified because `narrative-mcp` was
-  unavailable.
-- If the user can't provide an ID either, return the empty-result
-  shape from phase 5 with the warning explaining the harness gap.
-
-For partial degradation (a single MCP call errors mid-flow):
-
-- `narrative_attributes_search` errors: retry once. If it still
-  fails, ask the user for any candidate IDs they remember, then
-  jump to phase 3.
-- `narrative_attributes_describe` errors: retry once with a smaller
-  ID batch (split into halves). If still failing, return the
-  search-only ranking with `confidence: low` and a warning that
-  schemas were not verified.
+See
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
+covers `narrative-mcp` unavailable (ask the user for the ID;
+read-only `curl` for paste-driven GETs), per-tool partial
+degradation, and the `AskUserQuestion` fallback for harnesses that
+don't expose it. Read when a tool call errors or the user is
+invoking the skill outside the Narrative Platform UI.
 
 ## Further reading
 
+- `references/EDGE_CASES.md` — gotchas and ranking pitfalls:
+  truncated snippets and enums, shape-matching semantics,
+  pagination strategy, ambiguity, empty results, custom-attribute
+  scope. Read when a search feels off.
+- `references/HARNESS_FALLBACK.md` — what to do when `narrative-mcp`
+  is unavailable, per-tool partial degradation, and how to deliver
+  the same flow when `AskUserQuestion` isn't exposed. Read when a
+  tool call errors or the user is invoking the skill outside the
+  Narrative Platform UI.
 - `../generate-rosetta-stone-mappings/SKILL.md` — the mapping skill
   that calls `/find-attribute` per semantic cluster when resolving
   candidate attributes for a source dataset's columns.

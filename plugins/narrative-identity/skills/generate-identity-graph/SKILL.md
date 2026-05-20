@@ -1,6 +1,6 @@
 ---
 name: generate-identity-graph
-version: 0.1.1
+version: 0.2.0
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -17,7 +17,6 @@ compatibility:
   requires:
     tools:
       - Read
-      - Write
     mcp-servers:
       - narrative-mcp
     mcp-tools:
@@ -57,14 +56,19 @@ third-party edge sources. You optimize for:
    pre-graph quality audit, hand off to `/triage-pregraph-data` and
    carry its approved filter expressions forward; when the
    materialized-view NQL needs to be written, hand off to
-   `/write-nql`. Never resolve attribute IDs, write graph-edge
-   mappings, audit hypotheses, or hand-author NQL inside this
-   skill.
+   `/write-nql`; when the workflow YAML needs to be composed,
+   validated, submitted, and (optionally) triggered, hand off to
+   `/create-workflow`. Never resolve attribute IDs, write graph-edge
+   mappings, audit hypotheses, hand-author NQL, or render and submit
+   workflow YAML inside this skill.
 3. Validation before delivery — every materialized-view DDL is
    server-validated (by `/write-nql`, which owns that step) before
-   the YAML is shown to the user.
+   it is handed to `/create-workflow`, which performs an independent
+   workflow-spec validation pass at submit time.
 4. Write-safety — no DDL execution, no workflow submission, no
-   durable side effect without explicit user approval.
+   durable side effect without explicit user approval. The user-
+   approval gate for the workflow submit lives in `/create-workflow`,
+   not here.
 
 You never guess identifier-type strings, never list third-party
 schemas as something this skill can fix, and never present an
@@ -75,9 +79,12 @@ unvalidated workflow.
 Compose a Narrative identity-graph workflow end-to-end: interview the
 user on intent, identify the first-party datasets that will provide
 edges, confirm (or generate) Rosetta Stone graph-edge mappings on
-each, layer in third-party edge sources if the user wants them, and
-emit a runnable workflow YAML that unions every edge dataset into a
-materialized view and runs `LabelConnectedComponents` over it.
+each, layer in third-party edge sources if the user wants them, draft
+and validate the edges-view DDL via `/write-nql`, then hand the
+collected inputs off to `/create-workflow` — which loads the canonical
+identity-graph example, substitutes every value this skill gathered,
+gates submission on user approval, and submits via
+`narrative_workflows_create`.
 
 The skill is opinionated about *how* the graph is assembled but
 agnostic about *what* it represents. A "person graph", "household
@@ -92,13 +99,17 @@ When mapping is needed, this skill defers to
 mapping flow. Don't try to write graph-edge mappings inline. When
 the user wants to audit their inputs first, phase 0 hands off to
 `/triage-pregraph-data` and carries the approved filter expressions
-forward into phase 7a's materialized-view DDL — so audit and build
+forward into phase 7's materialized-view DDL — so audit and build
 are one continuous flow, not a clean restart. When the
 materialized-view NQL needs to be drafted and validated, the skill
 defers to `/write-nql` — the body shows the exact contract in
-phase 7a, including how audit filters are threaded into the
-per-dataset `SELECT` blocks. Don't hand-write or validate NQL
-inside this skill.
+phase 7, including how audit filters are threaded into the
+per-dataset `SELECT` blocks. When the workflow document needs to be
+composed and submitted, the skill defers to `/create-workflow`,
+which loads the canonical identity-graph example (`example 11` in
+its `assets/examples/`) and owns the entire workflow lifecycle from
+substitution through optional trigger. Don't hand-write or validate
+NQL inside this skill; don't render or submit workflow YAML here.
 
 ## When to use
 
@@ -123,10 +134,12 @@ Do NOT use for:
 
 Run phases in order. Phase 0 is an optional pre-flight that can
 collect audit filters; phases 1-3 frame the problem; phases 4-6
-prepare the inputs; phases 7-8 compose and submit, weaving any
-phase-0 filters into the materialized-view DDL. Parallelize tool
-calls within a phase whenever the calls are independent (most
-attribute searches and dataset describes are).
+prepare the inputs; phase 7 drafts the validated edges-view NQL with
+the phase-0 filters woven in; phase 8 hands every collected value off
+to `/create-workflow` for composition, render-and-approve, submission,
+and (optionally) trigger. Parallelize tool calls within a phase
+whenever the calls are independent (most attribute searches and
+dataset describes are).
 
 ### Phase 0. Optional pre-flight data audit
 
@@ -198,7 +211,7 @@ audit_filters = [
 ]
 ```
 
-This list is the contract phase 7a will consume. If `audit_filters`
+This list is the contract phase 7 will consume. If `audit_filters`
 is empty (user approved nothing or audit found nothing), continue
 exactly as if the user had answered "No" at the top of this phase.
 
@@ -382,29 +395,17 @@ If the user is not sure what third-party data is available, point
 them at the data marketplace via the Narrative Platform UI — this
 skill does not browse the catalog.
 
-### Phase 7. Compose the workflow document
+### Phase 7. Draft and validate the edges-view NQL via `/write-nql`
 
-Assemble the workflow YAML using the inputs from phases 1, 3, 5, 6,
-and (when present) the `audit_filters` captured in phase 0. The
-shape is fixed; only the contents of the UNION, the per-dataset
-WHERE clauses, and the source lists change.
+Compose the `CREATE MATERIALIZED VIEW` statement that turns every
+input edge source into one unioned view — this is the
+`createEdges.with.nql` block in the workflow that phase 8 will hand
+to `/create-workflow`.
 
-Load the canonical template from
-[`assets/workflow.yaml`](assets/workflow.yaml) — it contains the
-full `document` / `do` skeleton with `<placeholder>` tokens (one
-`SELECT ... FROM ...` block per first-party dataset and one per
-third-party dataset in the UNION ALL, plus the
-`LabelConnectedComponents` call with default tuning knobs). Read it
-once at the start of this phase and fill in the placeholders using
-the rules below.
-
-#### 7a. Generate the materialized-view NQL via `/write-nql`
-
-Do **not** hand-write the `CREATE MATERIALIZED VIEW` body inline.
-Delegate to `/write-nql`, which owns NQL drafting + server-side
-validation. Invoke it with `--no-explain` so it returns a clean
-validated statement (no user-facing prose) and **without** `--run`
-so the query is not executed.
+Do **not** hand-write the DDL inline. Delegate to `/write-nql`,
+which owns NQL drafting + server-side validation. Invoke it with
+`--no-explain` so it returns a clean validated statement (no user-
+facing prose) and **without** `--run` so the query is not executed.
 
 Input (the free-text question passed to `/write-nql`):
 
@@ -458,71 +459,104 @@ differently than the contract expects, an audit-filter expression
 references a column the dataset doesn't have), surface the verbatim
 error to the user, ask whether to drop the offending dataset / drop
 the offending filter / remap, and re-invoke `/write-nql` with the
-corrected input list. Do **not** present an unvalidated workflow to
-the user. Do **not** drop an audit filter without explicit user
-approval — the user already approved each one in phase 0b.
+corrected input list. Do **not** hand an unvalidated DDL to phase 8.
+Do **not** drop an audit filter without explicit user approval — the
+user already approved each one in phase 0b.
 
-#### 7b. Substitute and fill the rest of the workflow
+Hold the returned NQL string as-is. Phase 8 will pass it through to
+`/create-workflow` verbatim.
 
-Take the NQL string from step 7a and substitute it into the
-`createEdges.with.nql: |` block of `assets/workflow.yaml`, replacing
-the entire placeholder body. Then fill the remaining placeholders:
+### Phase 8. Hand off composition and submission to `/create-workflow`
 
-- **`namespace`**: kebab-case slug of the company name returned by
-  `narrative_context_get`.
-- **`name`**: kebab-case slug derived from the graph kind in phase 1
-  (`person-identity-graph`, `household-identity-graph`, …). Append a
-  qualifier if the user named one ("us-person-identity-graph").
-- **`firstPartySources`** lists the distinct identifier-type values
-  (the `SOURCE_ID_TYPE` / `TARGET_ID_TYPE` enum values) that the
-  first-party datasets emit. Pull these from the column stats /
-  sample rows surfaced when phase 5's mapping work ran (or from the
-  `attributes` describe if the user has the canonical list). If you
-  don't know them, ask the user — do NOT guess.
-- **`thirdPartySources`** lists the equivalent identifier types
-  contributed by third-party access rules.
-- **`maxDegreeThreshold`, `maxComponentSize`, `maxIterations`**: keep
-  the defaults (100/100/25) unless the user has a calibrated reason
-  to change them. Surface defaults explicitly in the summary so the
-  user can override.
+`/create-workflow` owns the workflow-platform mechanics: loading the
+canonical identity-graph example, substituting every value this
+skill collected, resolving the data plane, rendering the YAML for
+user approval, submitting via `narrative_workflows_create`, and
+(optionally) firing the first run. Do not render or submit the
+workflow inside this skill.
 
-Save the filled YAML to a file in the working directory using the
-`Write` tool, e.g. `./<graph-name>.workflow.yaml`. This is the
-artifact the user will submit.
+Invoke `/create-workflow` with a structured prompt that names
+example 11 explicitly and supplies every substitution. The shape:
 
-### Phase 8. Submit / hand off the workflow
+> `/create-workflow` Build the identity-graph workflow from
+> `assets/examples/11-identity-graph-multi-source-build.yaml`.
+> Substitute:
+>
+> - `document.namespace`: `<kebab-case slug of the company name returned by narrative_context_get>`
+> - `document.name`: `<graph-kind>-identity-graph` (from phase 1 —
+>   `person-identity-graph`, `household-identity-graph`, etc.;
+>   append a qualifier if the user gave one, e.g. `us-person-identity-graph`)
+> - The `createEdges.with.nql` block: replace verbatim with this
+>   already-validated NQL string. Do not modify it.
+>
+>   ```
+>   <full NQL string returned by /write-nql in phase 7>
+>   ```
+>
+> - `labelComponents.with.edgeDataset`: `<edges-view-name>` (the
+>   view created by `createEdges` above)
+> - `labelComponents.with.outputDataset`: `<graph-output-dataset-name>`
+> - `labelComponents.with.firstPartySources`: `[<distinct
+>   SOURCE_ID_TYPE / TARGET_ID_TYPE values emitted by the
+>   first-party datasets, verbatim from phase 4-5 mapping work>]`
+>   — if you don't know the canonical list, **ask the user**;
+>   never guess.
+> - `labelComponents.with.thirdPartySources`: `[<equivalent
+>   identifier-type values from phase 6; empty array if none>]`
+> - `labelComponents.with.maxDegreeThreshold`: `100` (default)
+> - `labelComponents.with.maxComponentSize`: `100` (default — surface
+>   the default in your approval summary so the user can override
+>   for B2B / household graphs)
+> - `labelComponents.with.maxIterations`: `25` (default)
 
-There is no MCP tool to submit a workflow document directly from
-within this skill. After saving the YAML in phase 7, present the
-user with:
+Pass any user-requested execution flags through the same invocation
+— `--trigger` if the user asked for an immediate run, `--data-plane
+<id>` if they already named a plane, `--schedule` if they want the
+cron activated on create (only valid if the user explicitly asked
+for a schedule, which this skill does not add by default — the
+example has no `schedule:` block).
 
-1. The path to the saved workflow file.
-2. A 3-5 line summary of what the workflow does, the input datasets,
-   the third-party sources, and the output graph dataset name.
-3. Submission instructions — direct the user to the Narrative
-   Platform UI's Workflows tab, or to the workflow API endpoint, to
-   submit the file. (Do not invent endpoint URLs; if the user asks
-   for the exact endpoint and you don't already know it, suggest
-   they check the Narrative docs.)
-4. An offer to optionally run the materialized-view DDL right now,
-   so the edge view exists ahead of the workflow submission — useful
-   if the user wants to spot-check edge counts before kicking off
-   `LabelConnectedComponents`. Execution is delegated to `/write-nql`
-   with `--run` and the same prompt used in phase 7a; `/write-nql`
-   owns the polling, error handling, and the user-facing "completed"
-   confirmation. Do not re-implement execution or job polling here.
+If the user did **not** name a plane, do not invent one here;
+`/create-workflow` will ask. Same for trigger / schedule — let
+`/create-workflow` own those gates.
 
-Do not delegate execution without explicit user approval — the
-materialized view writes a real dataset.
+`/create-workflow` then runs end-to-end:
+
+1. Loads example 11.
+2. Substitutes the values above.
+3. Resolves the data plane (asks if not provided).
+4. Renders the YAML and explains it to the user.
+5. Gates submission on explicit user approval.
+6. Calls `narrative_workflows_create`.
+7. Optionally triggers the first run.
+
+When `/create-workflow` returns, take its result — workflow ID,
+data-plane ID, status, optional run ID — and pass it into "Final
+summary format" below, where you wrap it with the identity-graph
+context (input datasets, identifier types, output graph dataset)
+that `/create-workflow` does not know about.
+
+Do not retry `/create-workflow` blindly on submission failure. If
+it returns a validator error, surface the verbatim error to the
+user, decide together what to fix (a misnamed identifier type, a
+wrong-plane dataset, a non-default tuning knob the user wants), and
+re-invoke `/create-workflow` with the corrected substitutions.
 
 ## Final summary format
 
-When phase 8 completes, return a single summary message in this
-shape (plain text, not JSON — this skill emits an artifact, not a
-structured payload like the mappings skill):
+When phase 8 completes, return a single summary message that wraps
+`/create-workflow`'s return values with the identity-graph context
+this skill collected (plain text, not JSON — this skill is a
+workflow-builder, not a structured-payload emitter like the mappings
+skill):
 
 ```
-Saved <path> — <graph kind> identity graph.
+Submitted <graph kind> identity graph workflow.
+
+Workflow: <id from /create-workflow>
+Data plane: <id from /create-workflow>
+Status: <status from /create-workflow>
+Schedule: <none | cron expression>
 
 Inputs:
   • <dataset_1_name> (<dataset_1_id>) — first-party — mapped ✓ / mapped this run
@@ -535,10 +569,19 @@ Identifier types:
 
 Output graph dataset: <name>
 
-Next: submit the workflow via <UI tab or API endpoint>. Optionally,
-I can run the materialized-view DDL now so you can spot-check the
-edges before launching the graph job — just say the word.
+Next: <if /create-workflow triggered an immediate run, surface the
+run_id and tell the user to poll with narrative_workflow_runs_list>
+       <else if a schedule was activated, surface the next cron firing
+       time in UTC>
+       <else, tell the user the workflow is registered and can be
+       triggered manually via narrative_workflows_trigger>
 ```
+
+If the user opted to spot-check edges before the graph job runs, the
+materialized view can be created ahead of workflow submission by
+re-invoking `/write-nql --run` with the same DDL string returned in
+phase 7. Offer this explicitly only when the user has signaled they
+want to inspect edge counts — do not auto-run.
 
 ## Common cases
 
@@ -586,31 +629,13 @@ downstream consumers may be pinned to it.
 
 ## Edge cases and gotchas
 
-One-line triggers below; the full detail (SQL probes, naming
-defaults, convergence rules) lives in
-[`references/EDGE_CASES.md`](references/EDGE_CASES.md) — read it
-when something feels off or the user asks about tuning.
-
-- **Edge-contract schema is fixed** — every UNION input must produce
-  all six contract columns. `IS_DIRECTED` and `ATTRIBUTES` are the
-  common misses.
-- **Identifier-type strings are case- and spelling-sensitive** — the
-  `firstPartySources` / `thirdPartySources` lists must match the
-  mapping output verbatim.
-- **Directed and undirected edges shouldn't mix silently** — surface
-  the discrepancy in the summary so the user can decide.
-- **Third-party schemas are the provider's contract** — don't propose
-  mappings on access rules; flag mismatches and stop.
-- **Tuning knobs default conservative** — `maxComponentSize: 100`,
-  `maxDegreeThreshold: 100`, `maxIterations: 25`. Surface them in
-  the phase-8 summary so the user can override.
-- **Materialized-view names must be unique within the namespace** —
-  on collision, ask before overwriting or version up.
-- **Never auto-run writes** — neither materialized-view execution
-  (delegated to `/write-nql --run`) nor workflow submission runs
-  without explicit user approval.
-- **Empty UNION inputs fail silently** — spot-check per-source row
-  counts before launching the workflow.
+See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
+the fixed edge-contract schema, identifier-type casing, directed /
+undirected mixing, third-party schemas, tuning-knob defaults
+(`maxComponentSize` / `maxDegreeThreshold` / `maxIterations`),
+materialized-view name collisions, write-safety, and empty-UNION
+detection. Read when something feels off or the user is asking
+about tuning.
 
 ## Voice
 
@@ -621,38 +646,18 @@ the Narrative Platform UI's workflow / chat surface.
 
 ## Harness fallbacks
 
-Never silently degrade. If a tool is unavailable, say so explicitly
-in the phase-8 summary and reduce confidence accordingly. The
-per-phase substitutions and user-facing checklist of skipped steps
-live in
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
-
-- **`narrative-mcp` unavailable** — `/write-nql` and
-  `/generate-rosetta-stone-mappings` are both degraded too. Switch
-  to a paste-driven flow (user pastes dataset metadata + mapping
-  status), skip phase 5, skip the `/write-nql` handoff in phase 7a
-  and hand-author the `CREATE MATERIALIZED VIEW` from the asset's
-  placeholders with a global "not server-validated" warning, still
-  emit the workflow YAML.
-- **`narrative-knowledge-base` unavailable** — fall back to the
-  local reference files; do not block the workflow.
-- **Partial degradation** (specific MCP tool erroring) — skip that
-  call, flag the gap in the summary, continue. Don't block the
-  whole workflow on one flaky tool.
-
-If the harness does not expose `AskUserQuestion` as a named tool
-(Claude Code does; most others don't), ask the user the same question
-in plain prose — **one question per turn**, never batched — and wait
-for a reply before continuing. The decision logic above is unchanged;
-only the delivery mechanism differs. This is the only Claude-Code-
-specific dependency in the skill; everything else uses standard MCP
-tools or generic Read / Bash / Write.
+See
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
+covers `narrative-mcp` unavailable (paste-driven flow,
+hand-authored DDL, what to tell the user when `/create-workflow`
+also can't submit), `narrative-knowledge-base` unavailable (the
+mild case), partial degradation per MCP tool, and the
+`AskUserQuestion` fallback for harnesses that don't expose it. Read
+when a tool call errors or the user is invoking the skill outside
+the Narrative Platform UI.
 
 ## Further reading
 
-- `assets/workflow.yaml` — the canonical workflow skeleton loaded in
-  phase 7. Edit this file (not the body) to change the workflow's
-  default shape; the procedure references it by path.
 - `references/EDGE_CASES.md` — gotchas and tuning notes: the fixed
   edge-contract schema, identifier-type casing, directed/undirected
   mixing, `maxComponentSize` / `maxDegreeThreshold` / `maxIterations`
@@ -666,7 +671,7 @@ tools or generic Read / Bash / Write.
 - `../triage-pregraph-data/SKILL.md` — the pre-graph data-quality
   audit this one hands off to in phase 0 when the user opts into a
   pre-flight audit. Produces filter expressions per dataset; this
-  skill captures the approved ones and threads them into phase 7a's
+  skill captures the approved ones and threads them into phase 7's
   `/write-nql` prompt as `WHERE`-clause conditions on the
   corresponding `SELECT` blocks.
 - `../../../narrative-common/skills/find-attribute/SKILL.md` — the
@@ -679,10 +684,20 @@ tools or generic Read / Bash / Write.
   (`/generate-rosetta-stone-mappings`, lives in the
   `narrative-common` plugin).
 - `../../../narrative-common/skills/write-nql/SKILL.md` — the NQL
-  drafting + validation skill this one defers to in phase 7a
+  drafting + validation skill this one defers to in phase 7
   (`/write-nql`, lives in the `narrative-common` plugin). Invoked
   with `--no-explain` and without `--run` so it returns a validated
   `CREATE MATERIALIZED VIEW` statement without executing it.
+- `../../../narrative-common/skills/create-workflow/SKILL.md` — the
+  workflow composition + submission skill this one defers to in
+  phase 8 (`/create-workflow`, lives in the `narrative-common`
+  plugin). The identity-graph workflow shape lives in that skill's
+  `assets/examples/11-identity-graph-multi-source-build.yaml`;
+  phase 8 names that example explicitly in the handoff prompt.
+- `../../../narrative-common/skills/create-workflow/assets/examples/11-identity-graph-multi-source-build.yaml` —
+  the canonical identity-graph workflow example. Read it to see the
+  full shape the workflow will land in, including the per-source
+  `SELECT` blocks and the `LabelConnectedComponents` defaults.
 - `../../../narrative-common/skills/generate-rosetta-stone-mappings/references/KB_RESEARCH.md` —
   how to query the `narrative-knowledge-base` MCP server for
   identity-graph and `LabelConnectedComponents` docs when the local

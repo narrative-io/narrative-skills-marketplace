@@ -58,7 +58,8 @@ like `'00000000...'`, ad-network fallback MAIDs. That's usually
 what you want for a production graph; it isn't what you want for
 diagnostic runs trying to surface those very leaks.
 
-Call out the defaults explicitly in the phase-8 summary so the user
+Call out the defaults explicitly in the phase-8 handoff to
+`/create-workflow` so its approval summary shows them and the user
 can raise them when needed. Suggest `maxComponentSize: 10000` and
 `maxDegreeThreshold: 1000` for diagnostic-only runs.
 
@@ -73,10 +74,10 @@ sentinel-identifier leak, not an iteration budget.
 
 ## Materialized view names must be globally unique within the namespace
 
-If `/write-nql` reports a name-collision error during phase 7a
+If `/write-nql` reports a name-collision error during phase 7
 validation of the `CREATE MATERIALIZED VIEW` statement, ask the
 user whether to overwrite the existing view (use
-`WRITE_MODE = 'overwrite'`, already in the template) or pick a new
+`WRITE_MODE = 'overwrite'`, already in example 11) or pick a new
 name. Defaults:
 
 - View: `<graph_kind>_identity_graph_edges`
@@ -91,8 +92,9 @@ consumers may be pinned to it.
 The materialized-view creation (delegated to `/write-nql --run`)
 and the workflow submission both produce durable artifacts in the
 user's namespace. Confirm explicitly with the user before either
-runs. Phase 8 of the main procedure is the only place writes are
-allowed, and only after explicit approval.
+runs. The workflow submit gate lives inside `/create-workflow` and
+fires only after explicit user approval of the rendered YAML;
+spot-check edge creation only runs if the user opts in.
 
 ## Empty UNION inputs
 
@@ -100,6 +102,7 @@ If a first-party dataset is mapped to the graph-edge attribute but
 has zero rows that survive the mapping, its contribution to the
 UNION will be empty — silently. The graph will build fine, just
 smaller than expected. Spot-check edge counts per source before
-launching the workflow by asking `/write-nql --run` for a labeled
-per-source count across the first-party and third-party inputs.
-Flag any zero-count source as a warning in the phase-8 summary.
+handing off to `/create-workflow` by asking `/write-nql --run` for
+a labeled per-source count across the first-party and third-party
+inputs. Flag any zero-count source as a warning in the phase-8
+handoff so `/create-workflow`'s approval summary surfaces it.

@@ -5,7 +5,9 @@ available — most commonly `narrative-mcp` itself, occasionally
 `narrative-knowledge-base`.
 
 Never silently degrade. If a tool is unavailable, say so explicitly
-in the phase-8 summary and reduce confidence accordingly.
+in the final summary (or in the message handed to `/create-workflow`
+when only some MCP tools are degraded) and reduce confidence
+accordingly.
 
 ## `narrative-mcp` unavailable
 
@@ -46,24 +48,35 @@ all depend on it. Recover by switching to a paste-driven flow:
 5. **Phase 6** (third-party sources) is unchanged — it was already
    user-driven.
 
-6. **Phase 7** still produces the workflow YAML, but **skip the
-   `/write-nql` handoff in step 7a**. `/write-nql` cannot run
-   without `narrative-mcp` either, so it can't draft or validate
-   the `CREATE MATERIALIZED VIEW` body. Instead, hand-author the
-   statement directly from the asset's placeholders using the input
-   list from the paste-driven flow above. Add a global warning to
-   the summary:
+6. **Phase 7** cannot validate the `CREATE MATERIALIZED VIEW`
+   body — `/write-nql` is degraded too because it also needs
+   `narrative-mcp`. Hand-author the DDL directly from
+   `../../../narrative-common/skills/create-workflow/assets/examples/11-identity-graph-multi-source-build.yaml`
+   (the `createEdges.with.nql` block), filling per-source `SELECT`s
+   and `WHERE` clauses from the paste-driven input list. Mark the
+   DDL with a global "not server-validated" warning.
 
-   > "The materialized-view NQL was hand-authored because
-   > narrative-mcp was unavailable and `/write-nql` could not be
-   > used. It has not been server-validated — please review the
-   > YAML carefully before submitting."
+7. **Phase 8** cannot submit — `/create-workflow` is also
+   degraded because it depends on `narrative_workflows_create`. The
+   canonical submission path is the `narrative_workflows_create`
+   MCP tool; with the MCP server down there is no other supported
+   submission path from inside the skill.
 
-7. **Phase 8** is unchanged — still emit the file and submission
-   instructions.
+   Instead of handing off, render the full workflow YAML inline by
+   reading example 11, performing the substitutions phase 8 would
+   have asked `/create-workflow` to perform, and pasting the result
+   into the chat. Tell the user:
+
+   - The YAML has NOT been server-validated; they will hit the
+     validator only when it eventually runs through
+     `narrative_workflows_create`.
+   - To submit, they (or this skill) must re-invoke
+     `/create-workflow --spec <paste>` once `narrative-mcp` is
+     available again.
 
 Always produce the workflow YAML as the deliverable, even in fallback
-mode. The user can submit a manually-vetted file; they can't submit
+mode. The user can submit a manually-vetted file via
+`/create-workflow` when the MCP server returns; they can't submit
 what they don't have.
 
 ## `narrative-knowledge-base` unavailable
@@ -77,7 +90,7 @@ When unavailable:
 
 - Fall back to the local reference files (`EDGE_CASES.md`, the
   rosetta-stone skill's `EXPRESSION_SYNTAX.md` and `ENUM_HANDLING.md`).
-- Note in the phase-8 summary that KB lookups were skipped if any
+- Note in the final summary that KB lookups were skipped if any
   user question would normally have warranted one (e.g., the user
   asked "what does `maxDegreeThreshold` actually do" and the local
   references don't fully answer it).
@@ -113,8 +126,20 @@ Skipped because narrative-mcp was unavailable:
   • Company-context resolution (namespace was taken from your input)
   • Dataset mapping-status verification
   • /write-nql handoff for the materialized-view DDL — statement was
-    hand-authored from the asset and is not server-validated
+    hand-authored from example 11 and is not server-validated
+  • /create-workflow handoff for submission — workflow YAML was
+    rendered inline; submit it yourself with the curl recipe above
   • Identifier-type discovery (source lists came from your input)
 
 Please verify these manually before submitting the workflow.
 ```
+
+## `AskUserQuestion` not available
+
+If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same
+question in plain prose — **one question per turn**, never batched
+— and wait for a reply before continuing. The decision logic in the
+main procedure is unchanged; only the delivery mechanism differs.
+This is the only Claude-Code-specific dependency in the skill;
+everything else uses standard MCP tools or generic Read.

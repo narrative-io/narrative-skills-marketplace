@@ -1,0 +1,38 @@
+# Harness fallbacks
+
+What to do when the MCP servers this skill depends on aren't
+available — most commonly `narrative-mcp`, occasionally
+`narrative-knowledge-base` — and what to do when `AskUserQuestion`
+isn't exposed by the harness.
+
+Never silently degrade. If a tool is unavailable, say so explicitly
+in the final summary and reduce confidence accordingly.
+
+## `narrative-mcp` unavailable
+
+The skill cannot submit — `narrative_workflows_create` is the
+canonical (and only supported) submission path. Stop at step 6:
+render the YAML, explain it, and tell the user explicitly that
+submission is blocked until `narrative-mcp` is back. Offer to
+re-invoke `/create-workflow --spec <path>` once the MCP server
+returns; do not promote any out-of-band submission path.
+
+Never silently degrade. If the spec wasn't submitted because the MCP
+server was down, the final message must say so plainly.
+
+## `narrative-knowledge-base` unavailable but `narrative-mcp` is
+
+Proceed. The example files in `assets/examples/` and the task list
+in step 4 are self-contained — KB access is a *recommends*, not a
+*requires*.
+
+## "AskUserQuestion" not available
+
+If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same
+question in plain prose — **one question per turn**, never batched
+— and wait for a reply before continuing. The decision logic in the
+main procedure is unchanged; only the delivery mechanism differs.
+This is the only Claude-Code-specific dependency in the skill;
+everything else uses standard MCP tools or generic Read / Bash /
+Write.

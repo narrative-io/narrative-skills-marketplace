@@ -18,6 +18,7 @@ it and the gotchas that apply.
 | Write an audit-log row alongside a step | [`examples/08-dml-audit-log.yaml`](examples/08-dml-audit-log.yaml) | `RefreshMaterializedView`, `ExecuteDml`, `export` |
 | Run an LLM inside the pipeline | [`examples/09-run-model-inference.yaml`](examples/09-run-model-inference.yaml) | `RunModelInference` |
 | Capture a sample after refreshing | [`examples/10-dataset-sample-after-refresh.yaml`](examples/10-dataset-sample-after-refresh.yaml) | `RefreshMaterializedView`, `CreateDatasetSample` |
+| Build an identity graph end-to-end from N edge sources (UNION → label components) | [`examples/11-identity-graph-multi-source-build.yaml`](examples/11-identity-graph-multi-source-build.yaml) | `CreateMaterializedViewIfNotExists`, `LabelConnectedComponents` |
 
 If none match the user's intent precisely, start from
 [`templates/workflow-skeleton.yaml`](templates/workflow-skeleton.yaml)

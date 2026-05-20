@@ -1,0 +1,91 @@
+# Build an identity graph end-to-end: UNION every input edge dataset
+# (first- and third-party) into a single materialized view, then run
+# bipartite label propagation across it.
+#
+# Use when:
+#   - You have N edge datasets that already conform to the Rosetta
+#     Stone graph-edge contract { SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID,
+#     TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }.
+#   - You want one workflow that owns BOTH the edges-view build and
+#     the LabelConnectedComponents pass.
+#   - You're composing a person / household / device / B2B graph.
+#
+# Differs from example 07: this example builds the edge view inline;
+# example 07 assumes a pre-existing edge dataset and only labels it.
+#
+# Notes:
+#   - LabelConnectedComponents takes a single edge dataset, so the
+#     UNION ALL is mandatory whenever there are 2+ input sources.
+#   - All input datasets must be mapped to the graph-edge attribute
+#     before this workflow can run — see
+#     /generate-rosetta-stone-mappings.
+#   - Pre-flight data quality matters. Hub identifiers and leaky
+#     sentinel values can collapse thousands of entities into one
+#     component — run /triage-pregraph-data and fold any approved
+#     filter expressions into the per-source WHERE clauses below
+#     before submitting.
+#   - firstPartySources is ordered by priority — the first source in
+#     the list whose ID appears in a component wins the representative
+#     ID. Put higher-trust systems first.
+#   - maxDegreeThreshold excludes supernodes (bridge keys touching
+#     too many connections). maxComponentSize caps any single resolved
+#     identity. Conservative defaults (100/100/25) are right for
+#     person graphs; B2B / household graphs frequently need larger
+#     values — every employee of a Fortune-500 legitimately connects
+#     through one domain.
+#
+# This is the example /generate-identity-graph composes against. If
+# you're authoring a graph build by hand and your inputs are already
+# mapped, this file is the right starting point.
+
+document:
+  dsl: '1.0.0'
+  namespace: identity
+  name: person-identity-graph
+  version: '1.0.0'
+
+do:
+  # ─── Universal edges ─────────────────────────────────────────────
+  # UNION ALL every input edge source — first- and third-party — into
+  # one materialized view. Each SELECT pulls the same six contract
+  # columns; LabelConnectedComponents reads them downstream.
+
+  - createEdges:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW "person_identity_edges"
+          DISPLAY_NAME = 'Person identity edges'
+          DESCRIPTION = 'Unioned first- and third-party edges for the person identity graph.'
+          TAGS = ('person', 'identity-graph')
+          WRITE_MODE = 'overwrite'
+          AS
+          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
+          FROM COMPANY_DATA.first_party_crm_events
+          UNION ALL
+          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
+          FROM COMPANY_DATA.first_party_loyalty_events
+          UNION ALL
+          SELECT DISTINCT SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
+          FROM acxiom.consumer_identity_v3
+
+  # ─── Label connected components ──────────────────────────────────
+
+  - labelComponents:
+      call: LabelConnectedComponents
+      with:
+        edgeDataset: person_identity_edges
+        outputDataset: person_identity_graph
+        sourceIdCol: SOURCE_ID
+        sourceSystemCol: SOURCE_ID_TYPE
+        bridgeKeyCol: TARGET_ID
+        bridgeKeyTypeCol: TARGET_ID_TYPE
+        firstPartySources:
+          - sha256_email
+          - maid
+          - household_id
+        thirdPartySources:
+          - acxiom_personid
+        maxDegreeThreshold: 100
+        maxComponentSize: 100
+        maxIterations: 25
