@@ -1,18 +1,23 @@
 ---
 name: triage-pregraph-data
-version: 0.2.0
+version: 0.3.0
 description: |
   Audit a dataset before it joins an identity-graph build. Enumerates
   dataset-specific failure modes (hub identifiers, high-degree nodes,
   behaviorally suspicious values, over-connected identifiers, source-
   specific quirks), tests every hypothesis in parallel against the
-  data, quantifies damage by rows / edges / entities affected, and
-  proposes minimal filter expressions ranked by severity. Plans and
-  reports; the downstream query-writing skill executes.
+  data, quantifies damage by rows / edges / entities affected, proposes
+  minimal filter expressions ranked by severity, and — when the audit
+  finds issues — returns a validated `CREATE MATERIALIZED VIEW` NQL the
+  caller can run to produce a graph-ready clean source. If the data
+  passes the audit, says so plainly and recommends the source table
+  unchanged. Plans, reports, and authors the clean-view NQL; does not
+  execute it.
   Use when: "audit this dataset before the graph build", "find bad
   edges in <dataset>", "check identity data quality", "recommend
   filters for the graph build", "find hub identifiers in <dataset>",
-  "quantify damage from <identifier_type>", "pre-graph DQ".
+  "quantify damage from <identifier_type>", "give me the clean-view
+  NQL for the graph build", "pre-graph DQ".
   (narrative-identity)
 compatibility:
   recommends:
@@ -27,6 +32,7 @@ compatibility:
       - narrative_datasets_search
       - narrative_datasets_describe
       - narrative_dataset_get_column_stats
+      - narrative_nql_validate
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -64,11 +70,20 @@ Transitivity means a single bad edge can bridge thousands of
 unrelated entities into one component, so data quality is the
 dominant lever on graph quality.
 
-This skill produces a triage report: per-hypothesis theory, the
-query that tested it, the result, and — for confirmed issues — a
-proposed filter expression with quantified before/after impact,
-ordered by severity. The skill does **not** execute the filter; that
-is a downstream materialization step.
+This skill produces two deliverables, packaged into a single report:
+
+1. **Audit findings** — per-hypothesis theory, the query that tested
+   it, the result, and (for confirmed issues) a proposed filter
+   expression with quantified before/after impact, ordered by severity.
+2. **Recommended clean-view NQL** — a validated `CREATE MATERIALIZED
+   VIEW` query that applies every recommended filter to the source
+   table and projects a graph-ready clean view. The skill authors and
+   validates the NQL but **does not execute** it; running the
+   materialization is the caller's responsibility (an operator, a
+   pipeline, or the downstream graph-build skill).
+
+If the audit confirms zero issues, the skill says so plainly and
+recommends the source table unchanged — no materialization required.
 
 ## Arguments
 
@@ -112,10 +127,11 @@ Do NOT use for:
 
 ## Procedure
 
-Run phases 1–7 in order. Phases 2, 3, 4, and 6 are **mandatory** —
+Run phases 1–8 in order. Phases 2, 3, 4, 6, and 8 are **mandatory** —
 do not skip to the report without sharpening the question, generating
-hypotheses, testing them with quantified queries, and proposing
-evidence-tied filters.
+hypotheses, testing them with quantified queries, proposing
+evidence-tied filters, and composing the validated clean-view NQL (or
+explicitly confirming the source is clean and no NQL is needed).
 
 ### 1. Pin the company / context
 
@@ -216,10 +232,14 @@ need to consolidate.
 
 ### 4. Hand off hypotheses to `/design-analysis` for parallel testing — mandatory
 
-This skill **does not write or run queries directly**. Query
-authoring and execution belong to `/design-analysis`, which owns
-the `/write-nql` orchestration. Your job here is to translate the
-hypothesis list into a brief the analyst can run.
+For the **hypothesis-testing workload**, this skill does not write
+or run queries directly. Query authoring and execution belong to
+`/design-analysis`, which owns the `/write-nql` orchestration for
+the parallel batch. Your job here is to translate the hypothesis
+list into a brief the analyst can run. (Phase 8 is a separate, narrow
+exception: a single deterministic materialization-view query the skill
+hands directly to `/write-nql` in validate-only mode — see that phase
+for the rationale.)
 
 Compose a single brief and pass it to `/design-analysis`. In the
 brief, mark every hypothesis as a peer-level analytical spec with
@@ -329,11 +349,12 @@ If a hypothesis is **disproven** (the data does not support it), say
 so explicitly and do not propose a filter. Disproven hypotheses go
 in the report so the next audit doesn't re-test them blindly.
 
-### 7. Report — mandatory
+### 7. Draft the audit report — mandatory
 
-Compose the audit report. Use the template below; order **by severity
-(rows / edges / entities affected, descending)** per the user's
-explicit ask.
+Compose the audit findings section of the report. Use the template
+below; order **by severity (rows / edges / entities affected,
+descending)** per the user's explicit ask. The "Recommended clean-view
+NQL" block is filled in by Phase 8 — leave it as a placeholder for now.
 
 ```markdown
 # Pre-graph DQ audit: <dataset>
@@ -369,17 +390,114 @@ explicit ask.
 ### Disproven hypotheses (kept for the record)
 - **H<n>**: <claim>. **Result**: not supported (<evidence>). **No filter proposed.**
 
-## Recommended next step
-- Materialize a view with the filters above applied; pass it to the
-  graph builder. Hand the filter expressions to `/design-analysis`
-  as a new brief ("materialize a filtered view of <table> per the
-  audit's recommended filters") and let the analyst orchestrate
-  the `/write-nql` invocations that produce the view.
+## Recommended clean-view NQL
+<filled in by Phase 8 — either the validated CREATE MATERIALIZED VIEW
+query, or the "no materialization required" note when the audit found
+no issues>
 ```
 
-The report is the deliverable. This skill stops at the report; it
-does not author queries, run filters, or trigger the graph build.
-All query work routes through `/design-analysis`.
+The findings are the audit's diagnostic deliverable; the clean-view
+NQL (Phase 8) is its operational deliverable. Both ship together in
+the final report.
+
+### 8. Compose the recommended clean-view NQL — mandatory
+
+The caller needs an actionable artifact, not just a list of filters in
+prose. Phase 8 converts the consolidated filter set into a validated
+`CREATE MATERIALIZED VIEW` query that anyone (operator, pipeline, or
+the downstream graph-build skill) can run to produce a graph-ready
+clean source.
+
+#### Branch on findings
+
+- **Zero confirmed issues** (every hypothesis disproven, or every
+  confirmed issue has impact below the noise threshold you set in
+  Phase 2): **skip the NQL composition**. In the report's
+  "Recommended clean-view NQL" section, write exactly:
+
+  > The source table passed the audit. No materialization is required;
+  > `<source_table>` is graph-ready as-is. Pass it to the graph build
+  > directly.
+
+  Stop. Do not invoke `/write-nql`.
+
+- **One or more confirmed issues**: continue to the next step.
+
+#### Consolidate filters
+
+Before invoking `/write-nql`, normalize the filter set from Phase 6:
+
+1. **Dedupe** overlapping filters (e.g., a sentinel-email filter that
+   subsumes a malformed-email filter). Keep the broader filter; drop
+   the narrower one.
+2. **Phrase each filter as a row-level predicate** that evaluates
+   `TRUE` for rows to **keep** (the materialized view's `WHERE`
+   clause is a positive predicate, not an exclusion list). For each
+   Phase 6 filter expressed as "exclude rows where X", invert it to
+   "keep rows where NOT (X)".
+3. **List every column the source carries** — NQL rejects `SELECT *`,
+   so the materialization must project explicit columns. Capture the
+   column list from the Phase 2 schema read.
+
+#### Hand off to `/write-nql` (validate-only)
+
+Invoke `/write-nql` directly with a brief that asks for a single
+validated query, no execution:
+
+```
+/write-nql --dataset <id> --no-explain
+  Author a single CREATE MATERIALIZED VIEW over <fully-qualified
+  source table> that produces a graph-ready clean view. Project
+  these columns explicitly: <col1>, <col2>, ... . Apply the
+  following keep-predicates (combined with AND):
+    K1: <predicate from Phase 6 finding 1, phrased to keep good rows>
+    K2: <predicate from Phase 6 finding 2, phrased to keep good rows>
+    ...
+  Suggested view name: `<source_table>_graph_clean_<yyyymmdd>`.
+  EXPIRE policy: short (e.g., 'P7D') — the caller can promote to a
+  scheduled refresh if needed.
+  Validate only. Do NOT run. Return the validated NQL verbatim.
+```
+
+This is the **one** place this skill calls `/write-nql` directly. The
+Phase 4 hypothesis testing still routes through `/design-analysis`
+because that workload is multi-query and analytical. Phase 8 is a
+single deterministic translation from an already-decided filter set
+into a `CREATE MATERIALIZED VIEW` — no analyst orchestration adds
+value, so the direct call keeps the path short.
+
+Wait for `/write-nql` to return a validated query. If validation
+fails (e.g., a filter references a column that does not exist in
+the schema, or a function call doesn't compile), loop back to Phase
+6, revise the offending filter, and re-hand off. **Never ship an
+unvalidated NQL block.**
+
+#### Embed in the report
+
+Replace the Phase 7 "Recommended clean-view NQL" placeholder with:
+
+````markdown
+## Recommended clean-view NQL
+
+The query below applies every recommended filter as a single
+`CREATE MATERIALIZED VIEW`. **Validated against the dataset's schema
+but NOT executed.** Run it (or hand it to whoever runs
+materializations) to produce the graph-ready source table; then point
+the graph build at the resulting view.
+
+```sql
+<verbatim NQL returned by /write-nql>
+```
+
+Estimated impact (from Phase 5, deduped across filters):
+- Rows kept: `<N>` of `<total>` (`<pct>`%)
+- Rows removed: `<N>` (`<pct>`%)
+- Distinct entities preserved: `<N>`
+- Hub components prevented: `<list of largest>`
+````
+
+The NQL block is the final hand-off. This skill does not run it, does
+not schedule it, and does not trigger the graph build.
 
 ## Common cases
 
@@ -444,6 +562,17 @@ Typical hypotheses worth pre-loading (still re-justify on the data):
 - **The graph builder is already running on this data.** This skill
   is pre-graph. If the user is post-build, redirect to a
   post-build-repair workflow (separate skill, not yet shipped).
+- **Zero confirmed issues.** Skip Phase 8's NQL composition. Report
+  the headline (hypotheses tested, all disproven) and state plainly
+  that the source table is graph-ready as-is. Do not invent a
+  no-op `CREATE MATERIALIZED VIEW` — copying the source verbatim
+  adds storage and refresh overhead with no quality gain.
+- **`/write-nql` cannot validate the materialization query.** Loop
+  back to Phase 6 (filters reference a missing column, function, or
+  type). If validation still fails after revision, ship the audit
+  findings without the NQL block and explicitly flag the
+  validation failure with the schema mismatch in the report — never
+  ship an unvalidated NQL block as if it were validated.
 
 ## Harness fallbacks
 
@@ -470,7 +599,7 @@ If `narrative-mcp` is unavailable (or `--no-schema` was passed):
 
 If `/design-analysis` is unavailable:
 
-- This skill cannot run end-to-end without the analyst. The
+- This skill cannot run Phase 4 end-to-end without the analyst. The
   separation of concerns is a hard architectural rule, not a
   preference. Stop, surface the dependency, and hand the audit
   framing + hypothesis list to the user as a manual brief they can
@@ -478,19 +607,27 @@ If `/design-analysis` is unavailable:
   parallel-execution pattern in that brief — serial execution
   multiplies wall-clock time and erodes the audit's value.
 
+If `/write-nql` is unavailable for Phase 8:
+
+- Ship the audit findings (Phases 1–7) without the validated NQL
+  block. In the "Recommended clean-view NQL" section of the report,
+  include the consolidated filter set in plain English plus a draft
+  `CREATE MATERIALIZED VIEW` skeleton, and annotate it: "NOT
+  validated — `/write-nql` was unreachable. The caller must validate
+  before running." Better to ship a clearly unvalidated draft than to
+  block the audit's hand-off.
+
 ## Further reading
 
 - `docs/authoring-skills.md` — house conventions this skill follows.
 - `plugins/narrative-common/skills/design-analysis/` — the analyst.
-  This skill hands every query workload (hypothesis testing in
-  Phase 4, filter materialization in the next-step recommendation
-  of Phase 7) off to `/design-analysis`; the analyst owns
-  `/write-nql` orchestration. Do not call `/write-nql` from this
-  skill directly.
+  This skill hands the Phase 4 hypothesis-testing workload off to
+  `/design-analysis`; the analyst orchestrates the parallel
+  `/write-nql` batch.
 - `plugins/narrative-common/skills/write-nql/` — the query writer.
-  Reached transitively via `/design-analysis`, not directly. Listed
-  here for context on what the analyst will be invoking on this
-  skill's behalf.
+  Reached transitively via `/design-analysis` for Phase 4, and
+  directly (validate-only) for Phase 8's single materialization-view
+  query. Phase 8 is the only direct call this skill makes.
 - `plugins/narrative-common/skills/generate-rosetta-stone-mappings/`
   — run first if the dataset's identifier columns are not yet mapped
   to Rosetta Stone attributes.
