@@ -1,0 +1,79 @@
+name: Auto Release
+
+# Detects a squash-merged release PR by its commit subject and finishes
+# the release in CI: tags the commit and publishes the GitHub Release
+# with auto-generated notes. No client-side `bun run release:tag` step
+# needed.
+#
+# Manual tag pushes (the escape hatch) are still handled by release.yml.
+# Workflows do not trigger other workflows via GITHUB_TOKEN, so the tag
+# created here will NOT also fire release.yml — only one Release is
+# created per event.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Tag + publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect release commit
+        id: detect
+        run: |
+          subject=$(git log -1 --pretty=%s)
+          echo "subject=$subject"
+          if [[ "$subject" =~ ^chore\(release\):[[:space:]]+v([0-9]{4}\.[0-9]{2}\.[0-9]+)([[:space:]]+\(#[0-9]+\))?[[:space:]]*$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            echo "is_release=true"  >> "$GITHUB_OUTPUT"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "tag=v$version"    >> "$GITHUB_OUTPUT"
+            echo "::notice::Release commit detected: v$version"
+          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Not a release commit; skipping."
+          fi
+
+      - name: Verify tag does not already exist
+        if: steps.detect.outputs.is_release == 'true'
+        env:
+          TAG: ${{ steps.detect.outputs.tag }}
+        run: |
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists. Refusing to re-tag."
+            exit 1
+          fi
+
+      - name: Create and push annotated tag
+        if: steps.detect.outputs.is_release == 'true'
+        env:
+          TAG: ${{ steps.detect.outputs.tag }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release with auto-generated notes
+        if: steps.detect.outputs.is_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.detect.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            --verify-tag

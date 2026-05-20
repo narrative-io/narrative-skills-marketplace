@@ -1,18 +1,40 @@
 #!/usr/bin/env bun
 /**
- * Cut a CalVer release of the marketplace.
+ * Cut a CalVer release of the marketplace, via a PR-based flow.
  *
- * Versions look like `YYYY.MM.PATCH` (e.g. `2026.05.0`), tagged as `vYYYY.MM.PATCH`.
- * Same-month follow-ups bump the patch; a new month resets the patch to 0.
+ * Versions look like `YYYY.MM.PATCH` (e.g. `2026.05.0`), tagged as
+ * `vYYYY.MM.PATCH`. Same-month follow-ups bump the patch; a new month
+ * resets the patch to 0.
  *
  * Modes:
- *   bun run release                    Preview only (default).
- *   bun run release --apply            Write CHANGELOG, commit, tag locally.
- *   bun run release --apply --push     Same, then `git push --follow-tags`.
- *   bun run release --release-as=X.Y.Z Override the computed version.
+ *   bun run release                     Preview the next release.
+ *                                       No filesystem or git changes.
  *
- * After --apply (without --push) you still need to run:
- *   git push origin main --follow-tags
+ *   bun run release:apply               Open a release PR:
+ *                                       1. Compute next version from tags.
+ *                                       2. Generate the CHANGELOG.md entry.
+ *                                       3. Branch off main as
+ *                                          `chore/release-v<version>`.
+ *                                       4. Commit, push, open the PR
+ *                                          via `gh pr create`.
+ *                                       After the PR squash-merges,
+ *                                       `auto-release.yml` tags the
+ *                                       commit and publishes the GitHub
+ *                                       Release automatically — no
+ *                                       client-side follow-up needed.
+ *
+ *   bun run release:tag                 Escape-hatch: manually tag the
+ *                                       merged release commit if the
+ *                                       auto-release workflow didn't
+ *                                       fire. Pulls main, verifies HEAD
+ *                                       is a release commit, tags +
+ *                                       pushes. Falls through to
+ *                                       `release.yml` (tag-triggered).
+ *
+ *   --release-as=YYYY.MM.PATCH          Override the computed version
+ *                                       (applies to --apply only).
+ *
+ * Requires `gh` (GitHub CLI) on PATH for the --apply mode.
  *
  * See RELEASING.md for the full process.
  */
@@ -34,6 +56,7 @@ const CHANGELOG_PATH = resolve(REPO_ROOT, 'CHANGELOG.md');
 const RELEASES_MARKER = '<!-- RELEASES BELOW -->';
 
 const TAG_PREFIX = 'v';
+const RELEASE_COMMIT_PATTERN = /^chore\(release\):\s+v(\d{4}\.\d{2}\.\d+)(?:\s+\(#\d+\))?\s*$/;
 
 const TYPE_HEADERS: Record<string, string> = {
   feat: '### ✨ Features',
@@ -65,23 +88,27 @@ function sh(cmd: string): string {
   return execSync(cmd, { cwd: REPO_ROOT, encoding: 'utf-8' }).trim();
 }
 
+function shInherit(cmd: string): void {
+  execSync(cmd, { cwd: REPO_ROOT, stdio: 'inherit' });
+}
+
 function parseArgs(argv: string[]) {
   const args = {
     apply: false,
-    push: false,
+    tag: false,
     releaseAs: null as string | null,
   };
   for (const a of argv) {
     if (a === '--apply') {
       args.apply = true;
-    } else if (a === '--push') {
-      args.push = true;
+    } else if (a === '--tag') {
+      args.tag = true;
     } else if (a.startsWith('--release-as=')) {
       args.releaseAs = a.slice('--release-as='.length);
     }
   }
-  if (args.push && !args.apply) {
-    throw new Error('--push requires --apply');
+  if (args.apply && args.tag) {
+    throw new Error('--apply and --tag are mutually exclusive');
   }
   return args;
 }
@@ -202,7 +229,7 @@ function currentBranch(): string {
   return sh('git rev-parse --abbrev-ref HEAD');
 }
 
-function insertEntry(entry: string) {
+function insertEntry(entry: string): void {
   const existing = readFileSync(CHANGELOG_PATH, 'utf-8');
   const idx = existing.indexOf(RELEASES_MARKER);
   if (idx === -1) {
@@ -213,20 +240,17 @@ function insertEntry(entry: string) {
   writeFileSync(CHANGELOG_PATH, updated);
 }
 
-function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const version = nextVersion(args.releaseAs);
-  const tag = `${TAG_PREFIX}${version}`;
-  const since = lastTag();
-  const commits = commitLog(since);
-
-  if (commits.length === 0) {
-    console.error(`No commits since ${since ?? 'the beginning'} — nothing to release.`);
-    process.exit(1);
+function assertGhAvailable(): void {
+  try {
+    execSync('gh --version', { stdio: 'ignore' });
+  } catch {
+    throw new Error('`gh` (GitHub CLI) is required for --apply. Install: https://cli.github.com');
   }
+}
 
+function preview(version: string, commits: Commit[], since: string | null): string {
+  const tag = `${TAG_PREFIX}${version}`;
   const entry = renderEntry(version, commits);
-
   console.log(`Next version: ${version}`);
   console.log(`Tag:          ${tag}`);
   console.log(`Since:        ${since ?? '(no prior tag)'}`);
@@ -236,36 +260,118 @@ function main() {
   console.log(entry);
   console.log('--- end ---');
   console.log('');
+  return entry;
+}
 
-  if (!args.apply) {
-    console.log('Preview only. Re-run with --apply to write CHANGELOG.md, commit, and tag.');
+function openReleasePR(version: string, entry: string): void {
+  assertGhAvailable();
+  if (!workingTreeClean()) {
+    throw new Error('working tree is dirty. Commit or stash changes before --apply.');
+  }
+  if (currentBranch() !== 'main') {
+    throw new Error(`must be on main for --apply (current: ${currentBranch()}).`);
+  }
+
+  const tag = `${TAG_PREFIX}${version}`;
+  const branch = `chore/release-${tag}`;
+
+  shInherit('git fetch origin');
+  shInherit('git pull --ff-only origin main');
+  shInherit(`git checkout -b ${branch}`);
+  insertEntry(entry);
+  shInherit('git add CHANGELOG.md');
+  shInherit(`git commit -m "chore(release): ${tag}"`);
+  shInherit(`git push -u origin ${branch}`);
+
+  const body = [
+    `## Summary`,
+    ``,
+    `Cuts release **${tag}**. Adds the \`CHANGELOG.md\` entry generated from conventional commit subjects since the previous tag.`,
+    ``,
+    `## What happens after merge`,
+    ``,
+    `1. This PR squash-merges to \`main\` with subject \`chore(release): ${tag} (#NN)\`.`,
+    `2. The \`auto-release.yml\` workflow detects the release-commit subject, tags the commit with \`${tag}\`, and creates the public GitHub Release with auto-generated notes. No client-side step needed.`,
+    ``,
+    `## Test plan`,
+    ``,
+    `- [ ] CI passes on this PR`,
+    `- [ ] After merge, \`auto-release.yml\` runs to success and \`${tag}\` appears under [Releases](https://github.com/narrative-io/narrative-skills-marketplace/releases)`,
+    ``,
+    `🤖 Generated by \`scripts/release.ts\`.`,
+  ].join('\n');
+
+  shInherit(`gh pr create --title "chore(release): ${tag}" --body ${JSON.stringify(body)}`);
+
+  shInherit('git checkout main');
+  console.log('');
+  console.log('Release PR opened. After it squash-merges, auto-release.yml');
+  console.log('will tag the commit and publish the GitHub Release automatically.');
+}
+
+function tagMergedRelease(): void {
+  if (!workingTreeClean()) {
+    throw new Error('working tree is dirty. Commit or stash changes before --tag.');
+  }
+  if (currentBranch() !== 'main') {
+    throw new Error(`must be on main for --tag (current: ${currentBranch()}).`);
+  }
+  shInherit('git fetch origin');
+  shInherit('git pull --ff-only origin main');
+
+  const headSubject = sh('git log -1 --pretty=%s');
+  const match = headSubject.match(RELEASE_COMMIT_PATTERN);
+  if (!match?.[1]) {
+    throw new Error(
+      `HEAD is not a release commit. Expected subject "chore(release): v<YYYY.MM.PATCH>", got: "${headSubject}". ` +
+        `Make sure the release PR has been squash-merged into main and you've pulled.`,
+    );
+  }
+  const version = match[1];
+  const tag = `${TAG_PREFIX}${version}`;
+
+  const existing = sh(`git tag --list "${tag}"`);
+  if (existing) {
+    throw new Error(
+      `Tag ${tag} already exists locally. If a previous attempt got partway, delete the local tag with ` +
+        `\`git tag -d ${tag}\` and try again — but first verify the remote state with \`git ls-remote --tags origin ${tag}\`.`,
+    );
+  }
+
+  shInherit(`git tag -a ${tag} -m "Release ${tag}"`);
+  shInherit(`git push origin ${tag}`);
+  console.log('');
+  console.log(
+    `Pushed ${tag}. The release.yml workflow should now run and publish the GitHub Release.`,
+  );
+  console.log(`Watch: gh run watch (or check the Actions tab)`);
+}
+
+function main(): void {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (args.tag) {
+    tagMergedRelease();
     return;
   }
 
-  if (!workingTreeClean()) {
-    console.error('error: working tree is dirty. Commit or stash changes before --apply.');
-    process.exit(1);
-  }
-  const branch = currentBranch();
-  if (branch !== 'main') {
-    console.error(`error: must be on main to release (current: ${branch}).`);
+  const version = nextVersion(args.releaseAs);
+  const since = lastTag();
+  const commits = commitLog(since);
+
+  if (commits.length === 0) {
+    console.error(`No commits since ${since ?? 'the beginning'} — nothing to release.`);
     process.exit(1);
   }
 
-  insertEntry(entry);
-  sh('git add CHANGELOG.md');
-  sh(`git commit -m "chore(release): ${tag}"`);
-  sh(`git tag -a ${tag} -m "Release ${tag}"`);
-  console.log(`Committed CHANGELOG.md and created tag ${tag}.`);
+  const entry = preview(version, commits, since);
 
-  if (args.push) {
-    sh(`git push origin ${branch} --follow-tags`);
-    console.log(`Pushed ${branch} and ${tag} to origin.`);
-  } else {
-    console.log('');
-    console.log('To publish, run:');
-    console.log(`  git push origin ${branch} --follow-tags`);
+  if (!args.apply) {
+    console.log('Preview only. Re-run with --apply to open a release PR.');
+    return;
   }
+
+  openReleasePR(version, entry);
 }
 
 main();
