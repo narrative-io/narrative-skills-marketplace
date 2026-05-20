@@ -1,8 +1,6 @@
 <div align="center">
 
-<!-- Drop a hero image at .github/banner.png (1280x320 ideal) and uncomment the line below.
-     Until then, the wordmark + tagline lead. -->
-<!-- <img src=".github/banner.png" alt="Narrative Skills Marketplace" width="100%" /> -->
+<img src=".github/banner.png" alt="Narrative Skills Marketplace" width="100%" />
 
 # Narrative Skills Marketplace
 
