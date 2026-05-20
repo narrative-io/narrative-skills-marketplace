@@ -1,0 +1,11 @@
+# Lefthook configuration.
+#
+# Local git hooks for contributors. Install with `bun run hooks:install`
+# (or it'll happen automatically when you run `bash setup`).
+#
+# Keep this file lean — heavy checks belong in CI, not on every commit.
+
+commit-msg:
+  commands:
+    commitlint:
+      run: bunx --bun commitlint --edit {1}
