@@ -9,6 +9,8 @@
  *
  * Content is written between the `<!-- BEGIN PLUGINS -->` and
  * `<!-- END PLUGINS -->` markers in README.md.
+ *
+ * --dry-run: render to memory; exit 1 if README.md is stale.
  */
 import { readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -80,7 +82,10 @@ async function renderPlugins(root: string): Promise<string> {
   return `${out.join('\n').replace(/\s+$/, '')}\n`;
 }
 
-const root = resolve(process.argv[2] ?? join(import.meta.dir, '..'));
+const args = process.argv.slice(2);
+const DRY_RUN = args.includes('--dry-run');
+const positional = args.find((a) => !a.startsWith('--'));
+const root = resolve(positional ?? join(import.meta.dir, '..'));
 const readmePath = join(root, 'README.md');
 const text = await Bun.file(readmePath).text();
 const block = `${BEGIN}\n${await renderPlugins(root)}\n${END}`;
@@ -89,7 +94,15 @@ const updated = pattern.test(text)
   ? text.replace(pattern, block)
   : `${text.replace(/\s+$/, '')}\n\n${block}\n`;
 
-if (updated === text) {
+if (DRY_RUN) {
+  if (updated === text) {
+    console.log(`FRESH: ${relative(root, readmePath)}`);
+  } else {
+    console.error(`STALE: ${relative(root, readmePath)}`);
+    console.error('\nREADME.md plugin catalog is stale. Run: bun run gen:readme');
+    process.exit(1);
+  }
+} else if (updated === text) {
   console.log(`  ${relative(root, readmePath)} already up to date`);
 } else {
   await Bun.write(readmePath, updated);
