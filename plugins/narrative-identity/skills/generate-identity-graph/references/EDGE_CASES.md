@@ -5,7 +5,7 @@ graph-edge mapping isn't producing the right columns, identifier
 types are showing up in unexpected casings, or the user is asking
 about tuning knobs (`maxComponentSize`, `maxDegreeThreshold`).
 
-## The graph-edge attribute schema is fixed
+## The graph-edge attribute schema is fixed and bipartite
 
 All inputs to the UNION must produce exactly the contract columns:
 
@@ -13,8 +13,28 @@ All inputs to the UNION must produce exactly the contract columns:
 SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES
 ```
 
-If a dataset's mapping doesn't produce all six, phase 5 of the main
-procedure isn't done — re-enter the
+The schema is bipartite, and the asymmetry is usually load-bearing:
+
+- **SOURCE_ID / SOURCE_ID_TYPE**: typically the *less shared* side
+  — often an identifier unique within one source system (a UUID,
+  an auto-increment customer_id, a local-namespace member ID).
+  `SOURCE_ID_TYPE` names the source (a source system like
+  `first_party_crm`, or a third-party provider like `acxiom`,
+  `experian`).
+- **TARGET_ID / TARGET_ID_TYPE**: typically the *shared join key*
+  — a value that recurs across sources and lets the graph stitch
+  components together (a hashed email, an E.164 phone hash, a
+  MAID). `TARGET_ID_TYPE` names the join-key type.
+
+"Typically" matters: third-party providers occasionally publish
+edges where both sides are shared identifier types and the
+asymmetry inverts. Spot-check by asking whether the SOURCE_ID
+value would ever appear in *another* dataset — if yes, it may be
+behaving as a join key and you should at least confirm the
+producer intended that.
+
+If a dataset's mapping doesn't produce all six contract columns,
+phase 5 of the main procedure isn't done — re-enter the
 `/generate-rosetta-stone-mappings` flow until it does. A common
 miss is `IS_DIRECTED` (gets silently dropped because the source
 column is implicit); another is `ATTRIBUTES` (often null but still
@@ -38,28 +58,49 @@ fail without aborting the others — useful when one dataset's draft
 needs a small fix but the others are correct. Flip to `false` only
 if you want any mapping failure to fail the whole workflow.
 
-## Identifier-type strings are case- and spelling-sensitive
+## `firstPartySources` / `thirdPartySources` are SOURCE_ID_TYPE values only
 
-The values in `firstPartySources` / `thirdPartySources` must match
-the **exact** strings produced by the mapping expressions. If a
-mapping emits `'sha256_email'` (lowercase, underscore), don't list
-it as `'SHA256_Email'` — the graph job will not match them.
+Both lists hold the distinct **SOURCE_ID_TYPE** values from the
+unioned edges, partitioned by which inputs are first-party vs
+third-party (e.g. `first_party_crm`, `first_party_loyalty`,
+`acxiom`, `experian`). They do **not** hold TARGET_ID_TYPE values
+(the bridge keys like `sha256_email`, `maid`, `household_id`).
+Putting bridge keys in either list silently breaks priority
+resolution — the graph job will not match them against any edge's
+SOURCE_ID_TYPE and they'll behave as if absent.
 
-When in doubt, ask `/write-nql --run` to enumerate the distinct
-identifier-type values in the edge materialized view (something
-like "show me all the distinct values of SOURCE_ID_TYPE and
-TARGET_ID_TYPE in `<edges_view>`"). Use the result set verbatim
-to populate the source lists. Don't hand-author the probe — let
-`/write-nql` write and validate it.
+The strings are also case- and spelling-sensitive: they must match
+the **exact** values produced by the mapping expressions. If a
+mapping emits `'first_party_crm'` (lowercase, underscore), don't
+list it as `'First_Party_CRM'`.
+
+### Discover them empirically — don't guess
+
+Pull the SOURCE_ID_TYPE values from the data itself, not from
+memory or the mapping spec:
+
+- **Dataset statistics**: once the edges materialized view exists,
+  ask for column stats on `SOURCE_ID_TYPE` — the distinct-values
+  enumeration is what populates the source lists.
+- **Distinct query**: ask `/write-nql --run` to run something like
+  "show me all the distinct values of `SOURCE_ID_TYPE` in
+  `<edges_view>`, optionally split by contributing dataset" so you
+  can label which values came from first-party datasets vs
+  third-party access rules. Use the result set verbatim. Don't
+  hand-author the probe — let `/write-nql` write and validate it.
+
+Same pattern applies to `TARGET_ID_TYPE` if you need to confirm
+the bridge keys for `bridgeKeyTypeCol` — query, don't guess.
 
 This matters more under the in-workflow mapping model:
 `labelComponents.with.firstPartySources` is set at workflow-author
 time (in phase 8's `/create-workflow` handoff), but the actual
-identifier-type values won't exist until the workflow has run for
-the first time. If you set the wrong values, `LabelConnectedComponents`
-will silently find zero edges from those sources — the graph builds
-but is empty in surprising ways. Spot-check the unioned edges view
-after the first run before relying on the graph.
+SOURCE_ID_TYPE values won't exist in the edge view until the
+workflow has run for the first time. If you set the wrong values,
+`LabelConnectedComponents` will silently find zero edges from those
+sources — the graph builds but is empty in surprising ways.
+Spot-check the unioned edges view after the first run before
+relying on the graph.
 
 ## Don't mix directed and undirected edges silently
 
