@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.1.0
+version: 0.3.0
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -13,8 +13,6 @@ description: |
   (narrative-common)
 compatibility:
   requires:
-    tools:
-      - AskUserQuestion
     mcp-servers:
       - narrative-mcp
     mcp-tools:
@@ -27,6 +25,8 @@ compatibility:
       - narrative_nql_run
       - narrative_jobs_describe
   recommends:
+    tools:
+      - AskUserQuestion
     mcp-servers:
       - narrative-knowledge-base
     mcp-tools:
@@ -268,9 +268,9 @@ back to step 4 with their feedback.
 Before submitting, wrap your validated `SELECT` in `CREATE MATERIALIZED
 VIEW` — a bare `SELECT` is not a runnable form against
 `narrative_nql_run`, even when it passes validation. Use the smallest
-viable wrapper (no schedule, short `EXPIRE`, low `BUDGET`) for one-off
-analytical queries; promote to a real refresh schedule only when the
-view is intended to persist.
+viable wrapper (no schedule, short `EXPIRE`) for one-off analytical
+queries; promote to a real refresh schedule only when the view is
+intended to persist.
 
 ```
 narrative_nql_run(
@@ -280,11 +280,29 @@ narrative_nql_run(
     AS (
       <the same validated SELECT>
     )
-    BUDGET 5 USD
   ',
   data_plane_id: '<plane captured in step 3>'
 )
 ```
+
+**Do not add a `BUDGET` clause to the default wrapper.** The validator
+accepts `BUDGET … USD`, but `narrative_nql_run` returns HTTP 500 when
+the query reads the user's own data (`company_data.<id>`). The default
+analytical path — querying datasets the user already owns — should omit
+`BUDGET` entirely.
+
+**Buying-data is the exception.** `BUDGET` is meaningful only when the
+query reads data the user is buying. The two triggers:
+
+- the FROM/JOIN touches `narrative.rosetta_stone`, **or**
+- the FROM/JOIN touches another company's namespace (e.g.
+  `other_company_slug.<table>` resolved via an `access_rule` — not
+  your own `company_data.*`).
+
+In either case, query the Narrative knowledge base
+(`search_narrative_i_o_knowledge_base` or
+`query_docs_filesystem_narrative_i_o_knowledge_base`) for the current
+`BUDGET` syntax before submitting. Do not hardcode `BUDGET 5 USD`.
 
 Always pass `data_plane_id` matching the dataset's plane (captured in
 step 3). Use the **same** `data_plane_id` when polling with
@@ -401,6 +419,8 @@ keys with `CROSS JOIN UNNEST([...])` or `UNION` two single-key joins.
   platform may have updated the dataset mid-conversation.
 
 ## Harness fallbacks
+
+{{SNIPPET:askuserquestion-fallback}}
 
 If `narrative-mcp` is unavailable:
 

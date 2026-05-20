@@ -5,6 +5,12 @@
 #
 # Keep this file lean — heavy checks belong in CI, not on every commit.
 
+pre-commit:
+  commands:
+    skill-versions:
+      glob: 'plugins/*/skills/*/SKILL.md.tmpl'
+      run: bun run check:versions {staged_files}
+
 commit-msg:
   commands:
     commitlint:

@@ -1,8 +1,6 @@
 <div align="center">
 
-<!-- Drop a hero image at .github/banner.png (1280x320 ideal) and uncomment the line below.
-     Until then, the wordmark + tagline lead. -->
-<!-- <img src=".github/banner.png" alt="Narrative Skills Marketplace" width="100%" /> -->
+<img src=".github/banner.png" alt="Narrative Skills Marketplace" width="100%" />
 
 # Narrative Skills Marketplace
 
@@ -25,6 +23,10 @@ qualifying leads, shipping code, building decks — one approval at a time.
 
 ---
 
+> **Status: pre-stable (0.x).** APIs, skill names, and frontmatter
+> contracts may change between minor versions. Pin a commit if you
+> depend on a specific shape.
+
 ## What is this?
 
 A **marketplace** of agent skills. Each plugin bundles one or more
@@ -38,15 +40,21 @@ research, drafts the artifact, and waits for your approval before
 acting on anything outside your repo.
 
 Skills follow the [Agent Skills spec](https://agentskills.io) and run
-in any spec-compliant harness. The bundled `bash setup` installer
-currently targets Claude Code; for other harnesses, point your agent
-at the `plugins/*/skills/*/SKILL.md` files directly.
+in any spec-compliant harness. The bundled `bash setup` installer has
+two modes: a Claude Code path (uses the `claude` CLI to register the
+marketplace) and a `--portable` path that builds a `dist/` tree any
+agentskills.io-compliant harness can consume — see
+[Install on other harnesses](#install-on-other-harnesses).
+
+Every rendered `SKILL.md` is **committed**; CI fails if any rendered
+file is stale relative to its `.tmpl`. Other harnesses can clone this
+repo (or read from `raw.githubusercontent.com`) without running Bun.
 
 > **Want the design philosophy?** See
 > [AGENTS.md](AGENTS.md#skill-design-principles) — "interactive, not
 > reference," "drafts, not actions," "evidence over assumptions," etc.
 
-## Install
+## Install on Claude Code
 
 ```bash
 git clone https://github.com/narrative-io/narrative-skills-marketplace
@@ -55,15 +63,45 @@ bash setup
 ```
 
 `setup` registers the marketplace, installs every plugin listed
-below, and regenerates the catalog in this README. The installer
-currently targets [Claude Code](https://claude.com/claude-code) — for
-other harnesses, load any `plugins/*/skills/*/SKILL.md` directly.
+below, and regenerates the catalog in this README.
 
 **Requirements**
 
-- [Claude Code](https://claude.com/claude-code) CLI on `PATH` (for
-  `bash setup`; the SKILL.md files themselves are spec-portable)
+- [Claude Code](https://claude.com/claude-code) CLI on `PATH`
 - [Bun](https://bun.sh) ≥ 1.1 (used for template rendering + scripts)
+
+## Install on other harnesses
+
+The skills are spec-portable. Each `plugins/<plugin>/skills/<skill>/`
+directory is a self-contained Agent Skill (rendered `SKILL.md` plus any
+`references/` / `scripts/` / `assets/`). The discovery index lives at
+[`skills.json`](skills.json); MCP server configs live under
+[`mcp/`](mcp/).
+
+To build a flat, plugin-namespace-free distribution at `dist/`:
+
+```bash
+bash setup --portable      # or: bun run build:portable
+```
+
+This emits `dist/skills/<skill>/` (one folder per skill, no plugin
+nesting), `dist/mcp/*.mcp.json`, and `dist/skills.json`. Then:
+
+| Harness | How to install |
+|---------|----------------|
+| [Claude Code](https://claude.com/claude-code) | Use the default `bash setup` (registers the marketplace). |
+| [Claude.ai web Skills](https://claude.ai/settings/capabilities) | Zip each `dist/skills/<skill>/` directory and upload it under Settings → Capabilities → Skills. |
+| Claude Desktop (Mac) | `cp -R dist/skills/* "$HOME/Library/Application Support/Claude/skills/"`, then merge [`mcp/all.mcp.json`](mcp/all.mcp.json) into `claude_desktop_config.json`. |
+| Claude Desktop (Windows) | `cp -R dist/skills/* "$APPDATA/Claude/skills/"`, then merge `mcp/all.mcp.json` into `claude_desktop_config.json`. |
+| [Cursor](https://cursor.com) | Copy `dist/skills/*/SKILL.md` into `.cursor/rules/` in your project. MCP servers go in `~/.cursor/mcp.json` (paste from `mcp/all.mcp.json`). |
+| Generic MCP-aware agent | Point the agent at `dist/skills/` as its skills root and register the servers in `mcp/all.mcp.json` via your harness's MCP config. |
+
+**One Claude-Code-specific dependency:** the skills currently use
+`AskUserQuestion` (a Claude Code primitive) for interactive prompts.
+It's declared in `compatibility.recommends.tools`, not `requires`, so
+spec-compliant harnesses without it should fall through to the
+documented prose Q&A fallback in each skill's `## Harness fallbacks`
+section.
 
 <!-- BEGIN PLUGINS -->
 ## Plugins
@@ -74,7 +112,9 @@ Common Narrative workflows backed by the narrative-mcp server — starting with 
 
 | Skill | Use when |
 |-------|----------|
+| `/create-workflow` | "create a workflow that does X", "schedule a daily refresh of dataset Y", "wrap this NQL as a workflow", "build a pipeline that creates view A then refreshes view B", "submit this workflow YAML", "productionize this query as a recurring job". |
 | `/design-analysis` | "why did X drop", "is there a relationship between A and B", "who are our highest-value customers", "what's driving the change in Y", "investigate this trend", "design an analysis for", "scope this analytical question". |
+| `/find-attribute` | "find the X attribute", "what's the graph-edge attribute ID", "look up the email Rosetta Stone attribute", "search the attribute catalog for Y", "which attribute has SOURCE_ID + TARGET_ID + IS_DIRECTED". |
 | `/generate-rosetta-stone-mappings` | "map this dataset to Rosetta Stone", "suggest normalized attributes for dataset N", "evaluate the mappings on dataset N", "why is this mapping low confidence", "fix this expression", "improve this NQL mapping expression". |
 | `/write-nql` | "write an NQL query for X", "query this dataset", "validate this NQL", "run NQL against dataset <id>", "how many rows match Y", "show me the top N records from <dataset>". |
 

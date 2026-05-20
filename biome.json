@@ -17,6 +17,8 @@
       "!plugins/**/skills/**/SKILL.md.tmpl",
       "!plugins/**/_snippets",
       "!snippets",
+      "!mcp",
+      "!skills.json",
       "!renovate.json",
       "!renovate.json5",
       "!.github/renovate.json",

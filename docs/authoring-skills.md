@@ -497,7 +497,6 @@ We use a structured object:
 compatibility:
   requires:
     tools:
-      - AskUserQuestion
       - Bash
     mcp-servers:
       - narrative-mcp
@@ -505,11 +504,19 @@ compatibility:
       - narrative_datasets_search
       - narrative_datasets_describe
   recommends:
+    tools:
+      - AskUserQuestion
     mcp-servers:
       - narrative-knowledge-base
     mcp-tools:
       - search_narrative_i_o_knowledge_base
 ```
+
+> **Note:** `AskUserQuestion` is a Claude Code primitive. List it under
+> `recommends.tools`, not `requires.tools`, so the skill stays portable
+> to other agentskills.io-compliant harnesses. The body should call
+> `{{SNIPPET:askuserquestion-fallback}}` from the `## Harness fallbacks`
+> section so the prose Q&A fallback is documented in one place.
 
 **`requires`** lists everything the skill *cannot run without*. If any
 required tool or server is missing, the body should fall through to
@@ -521,9 +528,12 @@ bearing. The body uses them when present, ignores them when not.
 
 **Naming rules:**
 
-- `tools:` — non-MCP harness tools (`AskUserQuestion`, `Bash`, `Read`,
-  `Write`, `WebFetch`). Built-in `Edit`, `Glob`, `Grep` are assumed
-  available everywhere and don't need to be listed.
+- `tools:` — non-MCP harness tools (`Bash`, `Read`, `Write`, `WebFetch`,
+  and the Claude-Code-specific `AskUserQuestion`). Built-in `Edit`,
+  `Glob`, `Grep` are assumed available everywhere and don't need to
+  be listed. Tools that exist on Claude Code but not on every spec-
+  compliant harness (`AskUserQuestion` being the canonical example)
+  belong under `recommends`, with a documented prose fallback.
 - `mcp-servers:` — server names as declared in `plugin.json`.
 - `mcp-tools:` — fully qualified tool names (no server prefix
   duplication).
