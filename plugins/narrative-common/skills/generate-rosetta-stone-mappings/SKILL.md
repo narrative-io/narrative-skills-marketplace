@@ -24,7 +24,6 @@ compatibility:
       - narrative_dataset_request_sample
       - narrative_dataset_get_column_stats
       - narrative_dataset_recalculate_statistics
-      - narrative_attributes_search
       - narrative_attributes_describe
       - narrative_nql_validate
       - narrative_nql_run
@@ -98,14 +97,14 @@ Run these steps in order. Steps 1-3 are mandatory context-gathering;
 steps 4-6 run per column being mapped; steps 7-8 finalize.
 
 **Parallelize where the calls are independent.** Most steps below have
-fan-out points — multiple `narrative_attributes_search` queries (one
-per semantic cluster), a batch of `narrative_attributes_describe` IDs,
-a batch of `narrative_nql_validate` expressions. Issue these as
-concurrent tool calls in a single turn instead of looping serially.
-For very wide datasets (50+ mappable columns), consider spawning a
-sub-agent per column cluster so each one owns its own search →
-describe → validate loop and only the final scoring is reconciled at
-the parent.
+fan-out points — multiple `/find-attribute` invocations (one per
+semantic cluster), a batch of `narrative_attributes_describe` IDs
+when reconfirming known attributes, a batch of `narrative_nql_validate`
+expressions. Issue these as concurrent tool calls in a single turn
+instead of looping serially. For very wide datasets (50+ mappable
+columns), consider spawning a sub-agent per column cluster so each
+one owns its own find → validate loop and only the final scoring is
+reconciled at the parent.
 
 ### 1. Pin the company / context
 
@@ -234,46 +233,55 @@ What to look for in sample rows:
 
 ### 4. Find candidate Rosetta Stone attributes
 
-For each column (or column cluster — see "object_mapping" below):
+Identify the column clusters that should resolve to attributes
+(individual columns for primitive mappings, groups like
+`{type, value}` or `{first_name, last_name}` for object mappings —
+see step 5).
 
+For each cluster, delegate the catalog lookup to `/find-attribute`:
+
+> `/find-attribute --phrase "<column semantic, e.g. 'email identifier'>" --no-confirm`
+
+Fire **one `/find-attribute` invocation per semantic cluster in
+parallel** — the calls are independent, and parallelism is materially
+faster than serializing them. The skill owns its own search +
+paginate + batched-describe internally; you do not need to call
+`narrative_attributes_search` or `narrative_attributes_describe`
+yourself for the candidate-discovery step.
+
+Each `/find-attribute` call returns a structured result:
+
+```yaml
+attribute_id: <id>
+display_name: <name>
+schema:
+  - { name: <column>, type: <type>, enum: [<values>] | null }
+  - …
+confidence: high | medium | low
+match_reason: <one-line>
+alternatives:
+  - { attribute_id: <id>, display_name: <name>, why: <one-line> }
+  - …
 ```
-narrative_attributes_search(
-  search_term: "<column semantic, e.g. 'email identifier'>",
-  per_page: 5
-)
-```
 
-`per_page` defaults to 10 (max 50). Walk additional pages with `page`
-if the first batch is insufficient. Avoid `include: ["schema"]` here
-— it makes the search payload large; describe the shortlisted hits
-instead.
+The `schema` field is the contract you need for step 5 — it includes
+type (primitive vs object), property paths (for object attributes —
+e.g., `type`, `value`, `context.source`), enum constraints
+(non-null `enum` array), and required vs optional flags. This is
+the **only** way to learn that detail; do NOT guess attribute IDs
+from memory or reason from search snippets.
 
-Fire one search per semantic cluster (email, person name, geography,
-currency, date, etc.) **in parallel** — these queries are independent
-and batching them as concurrent tool calls in a single turn is
-materially faster than looping. Same applies to the
-`narrative_attributes_describe` call below: pass every shortlisted ID
-in one array (up to 50) rather than one describe per ID.
+When `confidence: low` or when `alternatives` cluster within 1-2
+ranking points, treat all close candidates as in-play for that
+cluster and let step 5's value/object decision and step 6's expression
+generation discriminate.
 
-Then batch the shortlist into one describe call:
-
-```
-narrative_attributes_describe(
-  attribute_ids: [<id>, <id>, <id>]
-)
-```
-
-`attribute_ids` is an array (up to 50). Default `include` already
-returns both `metadata` and `schema`. This is the **only** way to
-learn the attribute's:
-
-- Type (primitive vs object)
-- Property paths (for object attributes — e.g., `type`, `value`, `context.source`)
-- Enum constraints (`{value1|value2|value3}` in the describe output)
-- Required vs optional properties
-
-Do NOT guess attribute IDs from memory. The catalog changes; describe
-every candidate before mapping to it.
+When you already know the target attribute ID (the user named one
+explicitly, or you are evaluating existing mappings — see the
+"Evaluate existing mappings" common case), skip `/find-attribute`
+and call `narrative_attributes_describe(attribute_ids: [<id>, ...])`
+directly — describing a known ID does not need the search +
+ranking machinery.
 
 ### 5. Decide value_mapping vs object_mapping
 
@@ -515,6 +523,11 @@ If `narrative-mcp` is unavailable:
 
 ## Further reading
 
+- `../find-attribute/SKILL.md` — the attribute-lookup skill this one
+  defers to in step 4 (`/find-attribute`) to resolve candidate
+  Rosetta Stone attributes per column cluster. Invoked in parallel,
+  one call per cluster, with `--no-confirm` so the skill returns
+  structured results directly.
 - `references/EXPRESSION_SYNTAX.md` — SQL/NQL quoting, function, and
   CASE WHEN rules. Read when an expression fails
   `narrative_nql_validate` or when mapping a column with a
