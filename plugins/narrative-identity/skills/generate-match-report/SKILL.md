@@ -1,6 +1,6 @@
 ---
 name: generate-match-report
-version: 0.1.0
+version: 0.2.0
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -248,9 +248,7 @@ narrative_dataset_set_column_stats_config(
 Trigger a stats recalculation via
 `narrative_dataset_recalculate_statistics(dataset_id=CUSTOMER_DATASET_ID)`.
 Poll the returned job with `narrative_jobs_describe` until it
-completes, then re-fetch column stats and read the histogram. If the
-MCP tool is unavailable, see
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
+completes, then re-fetch column stats and read the histogram.
 
 Bind `CUSTOMER_ID_TYPES` = set of histogram keys (e.g.
 `{normalized_email, e164_phone_number}`).
@@ -457,15 +455,15 @@ whether to:
 
 ### Phase 7. Submit the workflow
 
-If MCP exposes a workflow-submit tool, call it with:
+Call `narrative_workflows_create` with:
 
 - `specification` = the substituted YAML
+- `data_plane_id` = the customer dataset's data plane UUID
 - `tags` = `["_nio_ci_match_report_workflow", "<RUN_SLUG_LOWER>"]`
+- `trigger_immediately` = `true`
 
-Otherwise see [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
-for the API fallback.
-
-Capture `workflowId` and `runId`. Poll the run status until terminal
+Capture `workflowId` and `runId` from the response. Poll the run via
+`narrative_workflow_runs_list(workflow_id=workflowId)` until terminal
 (`completed`, `failed`, or `terminated`).
 
 If `failed`, the runner returns an error message naming the failing
@@ -592,11 +590,6 @@ authored; for now, the rules below are self-contained.
 
 ## Harness fallbacks
 
-- **No `narrative_workflows_create` MCP tool available.** The
-  workflow submission and run-polling steps run over the raw
-  Narrative API instead. See
-  [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
-  for endpoint shapes, auth, and the call template.
 - **No `narrative_nql_validate` MCP tool available.** Skip the
   pre-flight validation in Phase 6 and surface the gap to the user
   before submit. Do not auto-resort to running NQL via
@@ -627,9 +620,8 @@ tools or generic Read / Bash / Write.
 - [`references/IDENTITY_ONLY_VARIANT.md`](references/IDENTITY_ONLY_VARIANT.md)
   — exact diff to apply when running identity-only (no enrichment AR).
 - [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
-  — API fallback for the `narrative_workflows_create` MCP gap, plus
-  prose-mode fallbacks for `narrative_nql_validate` and
-  `AskUserQuestion`.
+  — prose-mode fallbacks for `narrative_nql_validate` and
+  `AskUserQuestion` (both Claude-Code-specific).
 - Sibling skills: `/generate-identity-graph` (build the graph),
   `/create-mapping` (author a Rosetta Stone mapping),
   `/share-enclave-dataset` (expose your data to a partner).
