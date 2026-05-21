@@ -1,6 +1,6 @@
 ---
 name: generate-match-report
-version: 0.2.0
+version: 0.3.0
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -424,10 +424,11 @@ and present the result:
 
 > **Plain English:** Ready to submit. Here's what we'll do:
 > - **Your data:** `<CUSTOMER_DATASET_NAME>` (`<N>` id types: `<list>`)
-> - **Partner:** `<SUPPLIER_NAME>` — matching on `<SELECTED_ID_TYPES>`
+> - **Partner:** `<Supplier human name>` — matching on `<SELECTED_ID_TYPES>`
 > - **Enrichment:** `<ENRICHMENT_AR_TABLE>` joined on
 >   `<ENRICHMENT_JOIN_PATH>` with `<M>` attributes
-> - **Final report dataset name:** `<RUN_SLUG_UPPER>`
+> - **Report display name:** `<REPORT_DISPLAY_NAME>`
+> - **Final MV table name:** `<RUN_SLUG_UPPER>` (timestamped for uniqueness)
 > - **Expected runtime:** 5–25 minutes
 >
 > Options:
@@ -634,15 +635,29 @@ tools or generic Read / Bash / Write.
 |---|---|---|
 | `<RUN_SLUG_KEBAB>` | `verisk-match-report-20260520-100831` | Document `name` |
 | `<RUN_SLUG_LOWER>` | `verisk_match_report_20260520_100831` | Table refs in `FROM company_data.<...>` |
-| `<RUN_SLUG_UPPER>` | `VERISK_MATCH_REPORT_20260520_100831` | MV `DISPLAY_NAME`, final dataset name |
-| `<SUPPLIER_NAME>` | `VERISK` | Used in the final-report `DESCRIPTION` only |
+| `<RUN_SLUG_UPPER>` | `VERISK_MATCH_REPORT_20260520_100831` | Final MV table name (must be globally unique → keeps the timestamp) |
+| `<REPORT_DISPLAY_NAME>` | `Verisk Match Report — Hartford Funds Customers` | Human-readable UI label on the final dataset. Short; no timestamp (it's in metadata). |
+| `<REPORT_DESCRIPTION>` | `Compares Hartford_Funds_Customers against Verisk. Identity match on normalized_email, e164_phone_number; 25 enrichment attributes attached.` | One line. Don't restate timestamps or list every attribute — those are already structural. |
 | `<CUSTOMER_DATASET_NAME>` | `Hartford_Funds_Customers` | Bare table name; used as `FROM company_data.<name>` |
 | `<SUPPLIER_AR_TABLE>` | `verisk.verisk_identity_basis_share` | Qualified `slug.name` |
 | `<ENRICHMENT_AR_TABLE>` | `verisk.verisk_tcibe_0016718_basis_share` | Qualified `slug.name` |
 | `<ENRICHMENT_JOIN_PATH>` | `_rosetta_stone.person_id['value']` | **No `e.` prefix** — template prepends it |
 | `<SELECTED_ID_TYPES_QUOTED>` | `'normalized_email', 'e164_phone_number'` | Comma-separated quoted strings for the `IN (...)` clause |
 | `<ATTRIBUTE_STRUCTS>` | (multi-line block, see below) | Comma-separated `NAMED_STRUCT(...)` entries |
-| `<ATTRIBUTE_NAMES_LIST>` | `age, birth_year, dwelling_type.value, ...` | Alphabetized leaf paths, used in step 5 `DESCRIPTION` only |
+
+**Building `<REPORT_DISPLAY_NAME>`.** Pattern:
+`<Supplier human name> Match Report — <Customer display name>`. Keep
+it under ~70 chars. Don't append the timestamp — `created_at` already
+disambiguates reruns in the dataset list.
+
+**Building `<REPORT_DESCRIPTION>`.** One line, two clauses:
+
+1. `Compares <CUSTOMER_DATASET_NAME> against <Supplier human name>.`
+2. With enrichment: `Identity match on <selected id types, comma-joined>; <N> enrichment attributes attached.`
+   Identity-only: `Identity-only match on <selected id types, comma-joined>.`
+
+Do not enumerate every attribute name — they're already discoverable
+in the `BUCKETS` column and in the step-4 MV's schema.
 
 **Building `<ATTRIBUTE_STRUCTS>`.** For each selected attribute, emit
 one line:
