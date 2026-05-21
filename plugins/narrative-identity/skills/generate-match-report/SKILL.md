@@ -1,6 +1,6 @@
 ---
 name: generate-match-report
-version: 0.3.0
+version: 0.3.1
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -509,6 +509,31 @@ Render:
 > - **Identifier types matched:** `<list with counts>`
 > - **Top enrichment coverage:** `<top 5 attrs with %>`
 
+#### Intermediate datasets — no in-workflow cleanup today
+
+The workflow leaves four intermediate MVs behind
+(`<RUN_SLUG_UPPER>_STEP1_CUSTOMER_EDGES` … `_STEP4_MATCH_ENRICHED`).
+The workflow DSL has no `DropMaterializedView` / `DeleteDataset`
+task in its current catalog (`CreateMaterializedViewIfNotExists`,
+`RefreshMaterializedView`, `ExecuteDml`, `RunModelInference`,
+`LabelConnectedComponents`, `CreateRosettaStoneMappingsIfNotExist`,
+`CreateDatasetSample`), so cleanup cannot be appended as a step.
+
+Until a delete-style task ships, surface this to the user verbatim
+and offer a post-run cleanup path:
+
+> **Note:** This run left 4 intermediate datasets behind (tagged
+> `<RUN_SLUG_LOWER>`). The workflow DSL can't delete them today.
+> If you want them gone, delete them via the dataset API or UI
+> (filter by tag `<RUN_SLUG_LOWER>`, keep the final report dataset
+> `<RUN_SLUG_UPPER>`, delete the rest).
+
+Do not invent a `DropMaterializedView` call inside the YAML — the
+workflow runner will reject the unknown task type and the run will
+fail before step 5. When the DSL gains a drop task, this section
+becomes the cleanup step list (steps 6a–6d, one drop per
+intermediate MV, dependent on step 5 success).
+
 ---
 
 ## Completion status
@@ -586,6 +611,9 @@ authored; for now, the rules below are self-contained.
 - **`ENRICHMENT_JOIN_PATH` starts with `e.`.** Template prepends the
   alias; a leading `e.` produces `e.e._rosetta_stone...` and the join
   fails silently. Validate before binding.
+- **Intermediate MVs persist after success.** No drop task in the
+  workflow DSL today; tell the user and offer the tag-based manual
+  cleanup. See Phase 8.
 
 ---
 
