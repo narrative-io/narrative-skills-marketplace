@@ -11,7 +11,8 @@ do:
           CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>_STEP1_CUSTOMER_EDGES"
           DISPLAY_NAME = '<RUN_SLUG_UPPER>_STEP1_CUSTOMER_EDGES'
           DESCRIPTION = 'Step 1/5 of <RUN_SLUG_UPPER>: customer flat edges (single rosetta-stone scan).'
-          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow' )
+          EXPIRE = 'P1D'
+          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow', '_nio_interactive' )
           WRITE_MODE = 'overwrite'
           AS
           WITH customer_edges AS (
@@ -33,7 +34,8 @@ do:
           CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>_STEP2_SUPPLIER_EDGES"
           DISPLAY_NAME = '<RUN_SLUG_UPPER>_STEP2_SUPPLIER_EDGES'
           DESCRIPTION = 'Step 2/5 of <RUN_SLUG_UPPER>: supplier distinct flat edges, filtered to customer ID types.'
-          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow' )
+          EXPIRE = 'P1D'
+          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow', '_nio_interactive' )
           WRITE_MODE = 'overwrite'
           AS
           WITH supplier_edges AS (
@@ -56,7 +58,8 @@ do:
           CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>_STEP3_MATCH_EDGES"
           DISPLAY_NAME = '<RUN_SLUG_UPPER>_STEP3_MATCH_EDGES'
           DESCRIPTION = 'Step 3/5 of <RUN_SLUG_UPPER>: inner join of customer × supplier flat edges.'
-          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow' )
+          EXPIRE = 'P1D'
+          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow', '_nio_interactive' )
           WRITE_MODE = 'overwrite'
           AS
           WITH match_edges AS (
@@ -80,7 +83,8 @@ do:
           CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>_STEP4_MATCH_ENRICHED"
           DISPLAY_NAME = '<RUN_SLUG_UPPER>_STEP4_MATCH_ENRICHED'
           DESCRIPTION = 'Step 4/5 of <RUN_SLUG_UPPER>: LEFT JOIN match edges × enrichment, builds ATTRIBUTES array.'
-          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow' )
+          EXPIRE = 'P1D'
+          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow', '_nio_interactive' )
           WRITE_MODE = 'overwrite'
           AS
           WITH match_enriched AS (

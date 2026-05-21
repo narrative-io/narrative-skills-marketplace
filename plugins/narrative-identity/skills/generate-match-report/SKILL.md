@@ -1,6 +1,6 @@
 ---
 name: generate-match-report
-version: 0.3.1
+version: 0.4.0
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -509,30 +509,33 @@ Render:
 > - **Identifier types matched:** `<list with counts>`
 > - **Top enrichment coverage:** `<top 5 attrs with %>`
 
-#### Intermediate datasets — no in-workflow cleanup today
+#### Intermediate datasets — auto-expire + hidden from UI
 
-The workflow leaves four intermediate MVs behind
-(`<RUN_SLUG_UPPER>_STEP1_CUSTOMER_EDGES` … `_STEP4_MATCH_ENRICHED`).
-The workflow DSL has no `DropMaterializedView` / `DeleteDataset`
-task in its current catalog (`CreateMaterializedViewIfNotExists`,
-`RefreshMaterializedView`, `ExecuteDml`, `RunModelInference`,
-`LabelConnectedComponents`, `CreateRosettaStoneMappingsIfNotExist`,
-`CreateDatasetSample`), so cleanup cannot be appended as a step.
+The four intermediate MVs
+(`<RUN_SLUG_UPPER>_STEP1_CUSTOMER_EDGES` … `_STEP4_MATCH_ENRICHED`)
+borrow the interactive-query cleanup pattern used in the platform UI:
 
-Until a delete-style task ships, surface this to the user verbatim
-and offer a post-run cleanup path:
+- `EXPIRE = 'P1D'` — the platform garbage-collects each MV one day
+  after creation, so the storage and Dataset entries are removed
+  automatically. Plenty of time to debug a failed run.
+- `TAGS = (..., '_nio_interactive')` — the dataset store's default
+  `datasets` getter filters out anything carrying `_nio_interactive`,
+  so these MVs never appear in the customer's Datasets list, Audience
+  Studio source pickers, Graph Studio inputs, etc. They surface only
+  in escape-hatch views that opt in via
+  `allDatasetsIncludingInteractive`.
 
-> **Note:** This run left 4 intermediate datasets behind (tagged
-> `<RUN_SLUG_LOWER>`). The workflow DSL can't delete them today.
-> If you want them gone, delete them via the dataset API or UI
-> (filter by tag `<RUN_SLUG_LOWER>`, keep the final report dataset
-> `<RUN_SLUG_UPPER>`, delete the rest).
+The final report (step 5) carries neither — it's the customer-facing
+artifact and should be persistent and visible.
+
+If the user asks "where did the STEP1..STEP4 datasets go," explain:
+they exist for ≤24h, they're hidden from the main UI by tag, and
+they auto-delete. Nothing for the user to clean up by hand.
 
 Do not invent a `DropMaterializedView` call inside the YAML — the
 workflow runner will reject the unknown task type and the run will
-fail before step 5. When the DSL gains a drop task, this section
-becomes the cleanup step list (steps 6a–6d, one drop per
-intermediate MV, dependent on step 5 success).
+fail before step 5. The DSL still has no drop task; we don't need
+one because EXPIRE handles retention server-side.
 
 ---
 
@@ -611,9 +614,10 @@ authored; for now, the rules below are self-contained.
 - **`ENRICHMENT_JOIN_PATH` starts with `e.`.** Template prepends the
   alias; a leading `e.` produces `e.e._rosetta_stone...` and the join
   fails silently. Validate before binding.
-- **Intermediate MVs persist after success.** No drop task in the
-  workflow DSL today; tell the user and offer the tag-based manual
-  cleanup. See Phase 8.
+- **Intermediate MVs.** Steps 1–4 carry `EXPIRE = 'P1D'` and the
+  `_nio_interactive` tag — they auto-expire in 24h and are filtered
+  out of the customer's main dataset list. No manual cleanup needed.
+  See Phase 8.
 
 ---
 
