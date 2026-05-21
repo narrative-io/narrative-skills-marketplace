@@ -1,6 +1,6 @@
 ---
 name: generate-match-report
-version: 0.4.0
+version: 0.5.0
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -454,17 +454,13 @@ modified NQL.
 
 ---
 
-### Phase 8. Sample the final report and summarize
+### Phase 8. Read the final report sample and summarize
 
-When the run completes, the final MV's dataset ID is in the
-workflow's exported `finalDatasetId` context. Kick a sample:
-
-```
-narrative_dataset_request_sample(dataset_id=FINAL_DATASET_ID)
-```
-
-Poll via `narrative_jobs_describe(job_ids=[<sample_job_id>])` until
-ready, then read the sample:
+The workflow's last step (`step_6_sample_final`) already ran a
+`CreateDatasetSample` against the final MV by the time the run hits
+`completed`. Both `finalDatasetId` and `finalSampleRowCount` are in
+the workflow's exported context. No out-of-band sample call is
+needed — just read the sample directly:
 
 ```
 narrative_datasets_describe(
@@ -472,6 +468,10 @@ narrative_datasets_describe(
   include=["sample", "metadata"]
 )
 ```
+
+(If you ever need to re-sample later — e.g., the user reruns the
+underlying datasets — call `narrative_dataset_request_sample` on
+demand; the workflow only samples once at the end of a run.)
 
 Pull these `ATTRIBUTE_TYPE` rows from the sample for the summary:
 

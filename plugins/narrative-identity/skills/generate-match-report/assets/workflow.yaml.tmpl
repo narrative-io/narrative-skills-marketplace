@@ -314,3 +314,9 @@ do:
           UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM match_attribute_coverage
       export:
         as: '$context + { finalDatasetId: .datasetId }'
+  - step_6_sample_final:
+      call: CreateDatasetSample
+      with:
+        datasetName: <RUN_SLUG_UPPER>
+      export:
+        as: '$context + { finalSampleRowCount: .rowCount }'
