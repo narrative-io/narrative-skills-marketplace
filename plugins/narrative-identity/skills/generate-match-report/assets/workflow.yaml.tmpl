@@ -103,8 +103,8 @@ do:
       with:
         nql: |
           CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>"
-          DISPLAY_NAME = '<RUN_SLUG_UPPER>'
-          DESCRIPTION = '3P Data Match Report for <SUPPLIER_NAME>. Includes attributes: <ATTRIBUTE_NAMES_LIST>. Final aggregation step of the match-report workflow.'
+          DISPLAY_NAME = '<REPORT_DISPLAY_NAME>'
+          DESCRIPTION = '<REPORT_DESCRIPTION>'
           TAGS = ( '_nio_ci_match_report' )
           WRITE_MODE = 'overwrite'
           EXTENDED_STATS = 'none'
