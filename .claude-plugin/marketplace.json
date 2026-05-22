@@ -8,7 +8,7 @@
     {
       "name": "narrative-common",
       "description": "Common Narrative workflows backed by the narrative-mcp server — starting with Rosetta Stone attribute mapping generation, evaluation, and improvement.",
-      "version": "2026.05.2",
+      "version": "2026.05.3",
       "author": {
         "name": "Narrative I/O"
       },
@@ -17,7 +17,7 @@
     {
       "name": "narrative-identity",
       "description": "Identity-graph workflows backed by the narrative-mcp server — pre-graph data-quality auditing, edge-quality analysis, and graph-build hygiene.",
-      "version": "2026.05.2",
+      "version": "2026.05.3",
       "author": {
         "name": "Narrative I/O"
       },

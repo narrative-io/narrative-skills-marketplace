@@ -14,6 +14,24 @@ the two views are deliberately redundant.
 
 <!-- RELEASES BELOW -->
 
+## [2026.05.3] - 2026-05-22
+
+### ✨ Features
+
+- **apply-rosetta-stone-mappings:** new skill for applying generated mappings (#52) (4539930)
+- **triage-pregraph-data:** support access-rule sources + progressive disclosure (#51) (c5b031d)
+
+### ♻️ Refactor
+
+- **generate-identity-graph:** apply progressive disclosure (#50) (e3daf49)
+- **narrative-common:** apply progressive disclosure to four skills (#49) (45e22ba)
+- **write-nql:** extract NQL deep-dives into references; expand progressive-disclosure doc (#44) (e6799a7)
+
+### 📚 Documentation
+
+- **write-nql:** drop EXPLAIN forecast references (#43) (4fce72a)
+
+
 ## [2026.05.2] - 2026-05-20
 
 ### ✨ Features
