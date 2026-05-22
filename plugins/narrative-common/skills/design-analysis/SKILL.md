@@ -1,6 +1,6 @@
 ---
 name: design-analysis
-version: 0.2.1
+version: 0.3.0
 description: |
   Translate a fuzzy analytical question into a rigorous investigation
   plan. Interrogates the ask, grounds the plan in the available data
@@ -49,6 +49,20 @@ You never write SQL — that is the query writer's job. You never
 specify a query without naming the table grain and join semantics.
 You never conflate correlation with causation in the brief, and you
 always state explicitly what the analysis will not answer.
+
+## Output rules
+
+**Don't surface `_nio_*` field names to the user.** Columns and
+fields whose names start with `_nio_` (e.g., `_nio_last_modified_at`,
+`_nio_sample_128`) are platform-managed internals. Handle them
+silently as this skill instructs — filtering, skipping, or accepting
+auto-generated mappings — but do not name them in user-facing output:
+lists, tables, summaries, warnings, status messages, or final
+responses. Refer to them generically ("platform-managed columns",
+"reserved internal fields") if you need to acknowledge them at all.
+
+Exception: if the user expressly asks about `_nio_*` fields, answer
+normally.
 
 ## Overview
 
@@ -298,225 +312,22 @@ Each query specification names: **purpose**, **source tables + grain**,
 conceptually)**, **joins + semantics**, **expected output shape**, and
 **validation checks the query writer should build in**.
 
-Specs must be expressible in NQL — when in doubt, lean on the gotchas
-catalog the downstream `/write-nql` skill will apply. The biggest
-ones to keep in mind while drafting specs:
+Specs must be expressible in NQL. `/write-nql` enforces syntactic constraints; see its [`NQL_GOTCHAS.md`](../write-nql/references/NQL_GOTCHAS.md) reference for the canonical catalog.
 
-- Enumerate measure columns; **no `SELECT *` or `COUNT(*)`** (NQL
-  rejects both). Specify `COUNT(1)` or `COUNT(<col>)` when the
-  intent is row / non-null counts.
-- Every joined dataset must live in the **same data plane** — flag
-  this in the brief if there's any doubt; cross-plane joins fail at
-  validation.
-- Avoid `OR` in `JOIN` conditions in the spec; if a hypothesis
-  legitimately requires multi-key matching, name it as such so the
-  writer uses `UNNEST` / `UNION` (see the gotchas table in the
-  shared NQL syntax snippet).
-- Executable queries must be wrapped in `CREATE MATERIALIZED VIEW`;
-  a bare `SELECT` is not runnable. `/write-nql` handles the wrapping
-  — your spec just needs to describe the underlying `SELECT`.
-- For "how many distinct X" measures, prefer `APPROX_COUNT_DISTINCT`
-  unless the spec needs an exact count for threshold logic.
+### 6. (optional) Execute the brief
 
-For the long form, the writer consults the `narrative-knowledge-base`
-MCP server (`/guides/nql/troubleshooting/…`, `/cookbooks/nql/…`).
+If the user approves the brief and wants it executed, hand off to `/write-nql` per query specification. See [`references/CHAIN_EXECUTION.md`](references/CHAIN_EXECUTION.md) for the orchestration pattern (parallelism rules, gating table, fallback).
 
-### 6. Execute the brief via `/write-nql` — gated
+This skill's primary deliverable is the brief itself — execution is opt-in.
 
-Once the user has approved the brief, drive `/write-nql` to execute
-it. This skill is the **only** orchestrator of `/write-nql` calls
-for analytical work — upstream skills (e.g.
-`/triage-pregraph-data`) that need queries run hand their specs to
-this skill and let it own the chaining. Do not let callers bypass
-this layer; that's how the separation between question-framing,
-query authoring, and graph-quality concerns stays intact.
+## References
 
-The order matters: **foundational queries first**, analytical
-queries only after their dependencies have completed and validated.
-Within a tier, independent specs run in parallel; dependent specs
-wait.
-
-#### Parallelism — issue independent specs concurrently
-
-Group the specs by tier (foundational / analytical) and by
-dependency. **Independent specs at the same tier are issued as a
-single batch of concurrent `/write-nql` tool calls in one turn**,
-not serially. This is critical for callers that test many
-hypotheses in parallel (e.g. `/triage-pregraph-data` passes 5–15
-independent hypothesis specs in one brief).
-
-A spec is *dependent* only if the brief explicitly marks it (e.g.
-"Q5 depends on the cohort defined in Q3"). Otherwise treat
-same-tier specs as parallel.
-
-Example execution shape for a brief with Q1, Q2 foundational and
-Q3, Q4, Q5 independent analytical specs:
-
-1. **Batch 1 (foundational)** — issue Q1, Q2 as two parallel
-   `/write-nql --run` invocations in one tool-call turn.
-2. **Wait for both** to reach terminal state. Validate that the
-   framing still holds.
-3. **Batch 2 (analytical)** — issue Q3, Q4, Q5 as three parallel
-   `/write-nql` invocations (no `--run` — let each one gate
-   through `/write-nql`'s own end-of-flow approval).
-4. **Wait for all three.** Then compose the consolidated results.
-
-For very wide briefs (15+ independent specs), spawn a sub-agent
-per spec cluster so each owns its own draft → validate → execute
-loop and only consolidated results return to the parent.
-
-#### Per-spec invocation pattern
-
-For each spec in the current batch:
-
-1. **Compose the invocation.** The spec's purpose + filters +
-   measures become `/write-nql`'s free-text tail; the dataset id and
-   any flags become its arguments. Example for the validation query
-   Q1:
-
-   ```
-   /write-nql --dataset 12345 --run --no-explain
-     Q1 validation per the design-analysis brief: count rows,
-     distinct entity_ids, and min/max event_ts for company_data.events
-     over [2026-04-01, 2026-05-01).
-   ```
-
-   - Pass `--no-explain` on chained invocations — the brief already
-     carries the user-facing explanation, and `/write-nql`'s
-     plain-English layer would duplicate it.
-   - Pass `--run` only for foundational queries (cheap, read-only,
-     row-count / distribution / date-range sanity checks). **Never**
-     auto-`--run` analytical queries that scan large volumes; let
-     `/write-nql`'s end-of-flow gate ask the user.
-
-2. **Hand off and wait.** `/write-nql` runs its own validate → (gated)
-   execute loop. Wait for its terminal state before moving on
-   (validated query for plan-only; `completed` job for `--run`).
-
-3. **Capture the result.** Append to the brief as
-   "Q<n> result": the query that was actually run plus the result
-   rows (or the validated query, if execution wasn't approved).
-
-4. **Decide whether to continue.** Foundational-query failures
-   (Q1 row count = 0, Q2 distribution all-null, date range outside
-   the window) invalidate the framing. **Stop and re-interrogate**
-   (loop back to Phase 2) before any analytical query runs. Do not
-   paper over a broken foundation.
-
-#### Foundational vs. analytical gating
-
-| Tier | Examples | Default `/write-nql` invocation |
-| --- | --- | --- |
-| Foundational | row counts, date min/max, distinct keys, marginal distributions | `/write-nql … --run` immediately after brief approval |
-| Analytical | period-over-period deltas, cohort joins, ranked attribution, decompositions | `/write-nql …` (no `--run`) — let `/write-nql` ask the user query-by-query |
-
-This skill never bypasses `/write-nql`'s own validation or
-execution gates. If the user invoked `/design-analysis` with a
-`--run`-equivalent shortcut, that is forwarded to foundational
-queries only.
-
-#### When `/write-nql` is not available
-
-Drop to the harness-fallback flow below: ship the brief as the
-deliverable and let the user execute through their own query tool.
-Never silently re-implement query execution inside this skill.
-
-## Common cases
-
-### "Why did `<metric>` drop last quarter?"
-
-Decomposition-over-comparison-period analysis.
-
-- Unit of analysis: usually the lowest grain the metric is reported
-  at (user-day, session, transaction).
-- Comparison period: prior quarter (or year-ago for seasonal metrics).
-- Decomposition dimensions: typical first cuts are by acquisition
-  channel, plan tier, geography, cohort, and product surface — pick
-  2–3 that the user can act on.
-- Watch for: Simpson's paradox (the aggregate drop may flip sign
-  inside segments), seasonality, marketing-campaign timing.
-
-Brief contains: total-counts validation, by-dimension breakdown,
-period-over-period delta by dimension, ranked attribution.
-
-### "Is there a relationship between `<A>` and `<B>`?"
-
-Correlation / association analysis.
-
-- Unit of analysis: the entity at which both A and B vary.
-- Time window: pick a window where both are observable.
-- Watch for: collider bias, both A and B driven by a third
-  variable, scale mismatch (rates vs. counts).
-- Always include a "what we cannot conclude" line about causation.
-
-Brief contains: per-entity joined dataset, marginal distributions of
-A and B, joint distribution, conditional summary (B by buckets of A),
-plus an explicit note that observational data cannot prove cause.
-
-### "Who are our highest-value `<segment>`?"
-
-Segmentation + ranking.
-
-- Unit of analysis: customer / account / user.
-- "Value" must be defined precisely: revenue, gross margin, LTV,
-  engagement, retention — push back if vague.
-- Watch for: survivorship bias (high-value retained customers ≠
-  high-value cohort at acquisition), short-window bias.
-
-Brief contains: per-entity value calculation, distribution of value
-(so the user can see top-decile vs. long-tail), top-N table with
-attribution dimensions, validation that the totals reconcile with a
-known company-level number.
-
-### "What's driving the change in `<Y>`?"
-
-Decomposition analysis.
-
-- Unit of analysis: typically the entity that contributes to Y.
-- Decomposition strategy: additive (`Y = sum of components`),
-  multiplicative (`Y = rate × volume`), or by dimension.
-- Watch for: composition shift (`Y` changes because the mix of
-  contributing entities changes, not their per-entity rate).
-
-Brief contains: component-decomposition query, by-dimension shift
-analysis, a "rate vs. volume" split if applicable.
-
-## Edge cases and gotchas
-
-See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
-overly vague questions, schemas missing the implied entity,
-observational-vs-causal scoping, users insisting on Q0 before the
-brief is done, data-quality breaks inside a cohort window, and
-table-choice tradeoffs. Read when the question feels off or the
-user is bypassing the interrogation.
-
-## Harness fallbacks
-
-See
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
-covers `narrative-mcp` unavailable (paste-driven schema flow), the
-`--no-schema` invocation, and the `AskUserQuestion` fallback for
-harnesses that don't expose it. Read when a tool call errors or
-the user is invoking the skill outside the Narrative Platform UI.
-
-## Further reading
-
-- `references/EDGE_CASES.md` — gotchas and framing pitfalls: vague
-  questions, observational-vs-causal scoping, data-quality breaks
-  inside cohort windows, table-choice tradeoffs. Read when the
-  question feels off or the user is bypassing the interrogation.
-- `references/HARNESS_FALLBACK.md` — what to do when `narrative-mcp`
-  is unavailable (paste-driven schema flow) and how to deliver the
-  same flow when `AskUserQuestion` isn't exposed. Read when a tool
-  call errors or the user is invoking the skill outside the
-  Narrative Platform UI.
-- `docs/authoring-skills.md` — house conventions this skill follows
-  (persona, phased body, progressive disclosure, declared
-  requirements).
-- `plugins/narrative-common/skills/write-nql/` — the canonical
-  downstream skill for Narrative datasets. The brief this skill
-  produces is intended to feed one `/write-nql` invocation per query
-  specification.
+- [`references/CHAIN_EXECUTION.md`](references/CHAIN_EXECUTION.md) — `/write-nql` orchestration pattern when the user approves execution of the brief: parallelism rules for batched calls, per-spec invocation pattern, foundational-vs-analytical gating, and the no-`/write-nql` fallback. Read when chaining into query execution.
+- [`references/ANALYSIS_PATTERNS.md`](references/ANALYSIS_PATTERNS.md) — worked analytical patterns (decomposition, correlation, segmentation, change-driver). Read when scoping a question that fits one of these archetypes for the dimension list and watch-fors.
+- [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — vague questions, observational-vs-causal scoping, data-quality breaks in cohort windows, table-choice tradeoffs. Read when the question feels off or the user is bypassing the interrogation.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` unavailable (paste-driven schema), `--no-schema`, `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.
+- `docs/authoring-skills.md` — house conventions (persona, phased body, progressive disclosure, declared requirements).
+- `plugins/narrative-common/skills/write-nql/` — the canonical downstream skill. The brief feeds one `/write-nql` invocation per query specification.
 
 ## Feedback (only if something could be improved)
 

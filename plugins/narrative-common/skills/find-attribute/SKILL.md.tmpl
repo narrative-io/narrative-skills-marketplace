@@ -1,6 +1,6 @@
 ---
 name: find-attribute
-version: 0.2.1
+version: 0.3.0
 description: |
   Find the canonical Rosetta Stone attribute that best matches a
   fuzzy description, semantic phrase, or required schema shape.
@@ -43,6 +43,10 @@ description into a canonical attribute ID. You optimize for:
 You never invent an attribute ID, never recommend on name alone when
 a `--shape` requirement was given, and never claim a match without
 the describe result in hand.
+
+## Output rules
+
+{{SNIPPET:internal-field-hygiene}}
 
 ## Overview
 
@@ -278,53 +282,16 @@ the phrase is the literal `display_name` of one catalog attribute,
 phase 4 will rank it `high` and the user just confirms. This is the
 "is this the right one?" workflow — cheap and explicit.
 
-## Edge cases and gotchas
-
-See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
-truncated catalog snippets and enum constraints, shape-matching
-semantics, pagination, ambiguous phrases, empty-result handling,
-custom-attribute scope, and the don't-paraphrase rule. Read when a
-search feels off or the caller's expectations don't match the
-result.
-
 ## Voice
 
-This skill returns a structured `final_answer`, not prose. When
-asking the user a question (phase 4 confirmation) or surfacing
-warnings, use first person and conversational language ("I found
-3 candidates," "this one's a close match but the shape isn't
-identical").
+This skill returns a structured `final_answer`, not prose. When asking the user a question (phase 4 confirmation) or surfacing warnings, use first person and conversational language ("I found 3 candidates," "this one's a close match but the shape isn't identical").
 
-## Harness fallbacks
+## References
 
-See
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
-covers `narrative-mcp` unavailable (ask the user for the ID;
-read-only `curl` for paste-driven GETs), per-tool partial
-degradation, and the `AskUserQuestion` fallback for harnesses that
-don't expose it. Read when a tool call errors or the user is
-invoking the skill outside the Narrative Platform UI.
-
-## Further reading
-
-- `references/EDGE_CASES.md` — gotchas and ranking pitfalls:
-  truncated snippets and enums, shape-matching semantics,
-  pagination strategy, ambiguity, empty results, custom-attribute
-  scope. Read when a search feels off.
-- `references/HARNESS_FALLBACK.md` — what to do when `narrative-mcp`
-  is unavailable, per-tool partial degradation, and how to deliver
-  the same flow when `AskUserQuestion` isn't exposed. Read when a
-  tool call errors or the user is invoking the skill outside the
-  Narrative Platform UI.
-- `../generate-rosetta-stone-mappings/SKILL.md` — the mapping skill
-  that calls `/find-attribute` per semantic cluster when resolving
-  candidate attributes for a source dataset's columns.
-- `../../narrative-identity/skills/generate-identity-graph/SKILL.md` —
-  the identity-graph skill that calls `/find-attribute` in phase 4
-  to resolve the canonical graph-edge attribute ID before checking
-  per-dataset mapping status.
-- `../generate-rosetta-stone-mappings/references/ENUM_HANDLING.md` —
-  why the describe step is non-negotiable when the matched attribute
-  is enum-constrained.
+- [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — truncated snippets, shape-matching semantics, pagination, ambiguity, empty results, custom-attribute scope, don't-paraphrase. Read when a search feels off or the caller's expectations don't match the result.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` unavailable (ask for the ID; read-only `curl` for paste-driven GETs), per-tool partial degradation, `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.
+- `../generate-rosetta-stone-mappings/SKILL.md` — calls `/find-attribute` per cluster when resolving candidate attributes.
+- `../../narrative-identity/skills/generate-identity-graph/SKILL.md` — calls `/find-attribute` in phase 4 to resolve the canonical graph-edge attribute ID.
+- `../generate-rosetta-stone-mappings/references/ENUM_HANDLING.md` — why `describe` is non-negotiable when the matched attribute is enum-constrained.
 
 {{SNIPPET:agent-feedback}}
