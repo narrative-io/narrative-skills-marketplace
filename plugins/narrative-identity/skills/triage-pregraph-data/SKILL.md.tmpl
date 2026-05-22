@@ -1,6 +1,6 @@
 ---
 name: triage-pregraph-data
-version: 0.4.0
+version: 0.5.0
 description: |
   Audit a dataset or access rule before it joins an identity-graph
   build (access rules behave like datasets in NQL and are used
@@ -52,14 +52,24 @@ an identity-graph build. You optimize for:
    entities into a single giant component. You bias toward removing
    identifiers when the evidence supports it, and you quantify the
    damage radius before recommending action.
-3. Minimal cuts — you remove bad edges while preserving as much
+3. Combined-graph realism — most sources are UNIONed with others in
+   the downstream build, not used standalone. Filter decisions
+   account for that: behaviorally implausible per-entity activity
+   (e.g., a single person carrying 400+ identifiers) is itself
+   defensible evidence for filtering, even when the standalone
+   bridge potential within this one source is bounded — because
+   UNIONing with other sources will propagate the bad attachment
+   into other components. Phase 2 explicitly pins standalone vs.
+   combined; when in doubt, assume combined.
+4. Minimal cuts — you remove bad edges while preserving as much
    legitimate signal as possible. Maximal filters are easy and wrong.
 
 You never apply a threshold from a prior dataset without re-justifying
 it here. You never recommend a filter without quantified before/after
 impact. You never treat "bad" as universal — what counts as a problem
-depends on the identifier type, the source system, and what realistic
-behavior looks like for the entity being identified.
+depends on the identifier type, the source system, what realistic
+behavior looks like for the entity being identified, and whether this
+source will be combined with others downstream.
 
 ## Output rules
 
@@ -110,6 +120,7 @@ them up front; never invent values.
 | `--dataset <id>` | Pre-bind the source as a dataset. Skips discovery. Mutually exclusive with `--access-rule`. |
 | `--access-rule <id>` | Pre-bind the source as an access rule. Skips discovery. The audit runs identically — access rules behave like datasets in NQL. Mutually exclusive with `--dataset`. |
 | `--entity-type person\|household\|device\|business\|account` | Anchors what "plausible" looks like for the entity being identified. Required if not derivable from context. |
+| `--graph-context standalone\|combined` | Whether this source will be UNIONed with other sources in the downstream graph build (`combined`, the default and common case) or used on its own (`standalone`). Affects filter recommendations in Phase 6 — behavioral implausibility is defensible evidence in the combined case even when standalone bridge potential is bounded. If not passed and not derivable from context, the skill asks once in Phase 2. |
 | `--identifier-cols <col,col,...>` | Pre-declare which columns hold identifiers. Skips identifier-column discovery. |
 | `--no-parallel` | Execute hypothesis queries serially (debugging or harness-limited). |
 | `--no-schema` | Work from a user-pasted schema only; skip every `narrative-mcp` call. |
@@ -171,10 +182,25 @@ encode the framing inline using the checklist below.
 | --- | --- | --- |
 | **Sharpened question** | "Which edges in `<dataset>` would corrupt the graph if not filtered, and what's the minimal cut that removes them?" | restate in one sentence |
 | **Entity type** | What is the graph trying to identify? | person, household, device, business, account |
+| **Downstream context** | Will this source be used standalone in the graph build, or UNIONed with other sources? Drives Phase 6 filter logic — when in doubt, assume combined. | `combined` (default) or `standalone` |
 | **Unit of analysis** | One row = one edge | (entity_id, identifier_value, identifier_type) |
 | **Population** | The source table, pre-filter | `company_data.<table>`; full row count + distinct entity count |
 | **Identifier columns in scope** | Which columns produce edges | `email`, `phone_e164`, `device_id`, etc. |
 | **What this audit will NOT do** | Explicit non-goals | not fixing the source; not re-building the graph; not changing entity-resolution rules |
+
+If `--graph-context` was not passed and the downstream context isn't
+clear from the user's prompt or session context, ask **one**
+`AskUserQuestion` before generating hypotheses:
+
+> "Will this source be used on its own in the graph build, or
+> UNIONed with other sources?"
+>
+> - **Combined with other sources** (recommended default — the
+>   common case; filters get evaluated against combined-graph risk)
+> - **Standalone** — only this source feeds the graph build
+> - **Not sure** — treat as combined; it's the safer default
+
+Record the choice; every Phase 6 filter recommendation references it.
 
 Resolve the source and read its schema (plus sample + stats when
 available). For a dataset, run `narrative_datasets_search` then
@@ -316,7 +342,8 @@ above any plausible-noise threshold), compute:
 | **Distinct identifiers affected** | how many identifier values trigger the rule |
 | **Distinct entities affected** | how many entity_ids touch one of those identifier values |
 | **Share of total rows / edges / entities** | as a percentage; useful for severity ranking |
-| **Bridge potential** | for hub-style hypotheses, the size of the connected component that would form if these edges were kept |
+| **Bridge potential (standalone)** | the size of the connected component that would form within this source alone if these edges were kept — usually the salient measure for hub-style hypotheses |
+| **Combined-graph projection** | when `graph-context = combined`, assess whether the per-entity behavior is realistic for the entity type. A `person` with 400+ identifiers is implausible regardless of whether it over-bridges this source standalone — UNIONing with other sources will propagate the bad attachment into other components. Note explicitly even when standalone bridge potential is small. Skip when `graph-context = standalone`. |
 
 Quantify before recommending. An unquantified hunch is not a finding.
 
@@ -327,7 +354,15 @@ source table. Filters must:
 
 1. **Be defensible** — the threshold ties to evidence from Phase 5,
    not intuition or prior datasets. Cite the rows/edges/entities
-   numbers in the rationale.
+   numbers in the rationale. **In the combined-graph case (the
+   default `graph-context`), behavioral implausibility is itself
+   defensible evidence**: per-entity activity that's unrealistic for
+   the entity type (a `person` with 400+ identifiers, a `device`
+   with degree > 1, a `household` carrying 50 phones) justifies a
+   filter even when standalone bridge potential within this source
+   is bounded — because UNIONing with other sources will spread the
+   bad attachment. Cite the behavioral threshold and the realistic
+   benchmark.
 2. **Be minimal** — remove the bad edges and as little else as
    possible. Maximal filters (drop the whole identifier column,
    drop every value with degree > 1) are usually wrong.
@@ -335,7 +370,9 @@ source table. Filters must:
    removed (estimate or exact), distinct entities preserved.
 
 Filter expression format: plain-English filter against the source
-table that a query writer can translate to NQL. Example:
+table that a query writer can translate to NQL.
+
+Worked example — hub identifier (applies under either context):
 
 > Filter `H1`: exclude rows where `LOWER(email) IN ('noreply@example.com',
 > 'test@example.com', 'foo@bar.baz')`.
@@ -344,6 +381,27 @@ table that a query writer can translate to NQL. Example:
 > Rationale: each of the listed values has > 500 distinct entities,
 > none of which co-occur with each other on any other identifier —
 > these are sentinels, not real bridges.
+
+Worked example — long-tail high-degree persons in the combined-graph
+case (this is the canonical "looks fine standalone, dangerous when
+combined" pattern):
+
+> Filter `H2`: exclude rows where `person_id IN (SELECT person_id
+> FROM <source> GROUP BY person_id HAVING COUNT(1) >= 100)`.
+> Impact: removes ~5M edges (~0.2%); preserves ~2.66B edges.
+> Rationale: the top 100 persons in this source carry 401–554
+> identifiers each (max: 554). Within this source alone the bridge
+> potential is bounded because identifier_values are unique here,
+> but `graph-context = combined` — these persons will be UNIONed
+> with edges from other sources, and a single `person` carrying 400+
+> identifiers is behaviorally implausible (a real person carries on
+> the order of 5–20). Once combined, those over-attached persons
+> become bridges into other components. Filter at the source.
+
+If `graph-context = standalone`, the same finding would warrant **no
+filter** — the standalone bridge potential is the only thing that
+matters and it's bounded here. Always state explicitly which context
+the recommendation hinges on.
 
 If a hypothesis is **disproven** (the data does not support it), say
 so explicitly and do not propose a filter. Disproven hypotheses go

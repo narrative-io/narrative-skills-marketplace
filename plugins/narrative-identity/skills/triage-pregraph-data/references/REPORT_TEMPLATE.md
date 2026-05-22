@@ -17,6 +17,7 @@ either the validated `CREATE MATERIALIZED VIEW` query or the
 - Source: `<name>` (`<id>`, `dataset` | `access_rule`)
 - NQL reference: `<company_data.<table>>` or `<owning_company_slug>.<rule_name>`
 - Entity type: `<type>`
+- Downstream context: `combined` | `standalone` (drives Phase 6 filter logic — combined means filters are evaluated against UNION-with-other-sources risk, not just standalone bridge potential)
 - Identifier columns audited: `<list>`
 - Row count (pre-filter): `<N>`
 - Distinct entities (pre-filter): `<N>`
