@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.3.2
+version: 0.3.3
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -310,12 +310,6 @@ In either case, query the Narrative knowledge base
 
 Pass the same `data_plane_id` to validate, run, and get_job (rule
 detailed in the async snippet above).
-
-For pure forecasts (cost / row-count estimates without materializing
-data), submit `EXPLAIN <SELECT …>` instead — the job is a
-`nql-forecast` rather than a `materialize-view`, returns
-`{rows, cost}`, and does not consume execution budget. The
-`data_plane_id` rule still applies.
 
 Then poll `narrative_jobs_describe(job_ids: ["<job_id>"])` per the
 cadence above. While polling, tell the user what's happening once
