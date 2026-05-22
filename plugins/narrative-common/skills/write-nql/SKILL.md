@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.3.2
+version: 0.3.4
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -314,7 +314,7 @@ before validating; consult the KB for the long form.
 | Gotcha | Rule | KB page |
 | --- | --- | --- |
 | **Wildcards / `COUNT(*)`** | NQL does **not** support `SELECT *`, `SELECT t.*`, or `COUNT(*)`. Always list columns explicitly. Use `COUNT(1)` for row counts, `COUNT(<col>)` for non-null counts. This rule applies inside CTEs and subqueries too. | `/nql/general/explicit-columns` |
-| **Naked `SELECT` is not runnable** | You cannot submit a bare `SELECT` to `narrative_nql_run` and expect rows back. Every executed query must land somewhere — wrap the `SELECT` in `CREATE MATERIALIZED VIEW "<name>" AS SELECT …` (optionally with `REFRESH_SCHEDULE`, `EXPIRE`, `BUDGET`, etc.), then read the rows via `narrative_dataset_request_sample` + `narrative_datasets_describe(include=["sample"])`. Use `EXPLAIN <SELECT …>` for forecasts. Bare-`SELECT` validation passes, but execution requires the materialized-view wrapper. | `/nql/commands/create-materialized-view`, `/guides/nql/creating-materialized-views` |
+| **Naked `SELECT` is not runnable** | You cannot submit a bare `SELECT` to `narrative_nql_run` and expect rows back. Every executed query must land somewhere — wrap the `SELECT` in `CREATE MATERIALIZED VIEW "<name>" AS SELECT …` (optionally with `REFRESH_SCHEDULE`, `EXPIRE`, `BUDGET`, etc.), then read the rows via `narrative_dataset_request_sample` + `narrative_datasets_describe(include=["sample"])`. Bare-`SELECT` validation passes, but execution requires the materialized-view wrapper. | `/nql/commands/create-materialized-view`, `/guides/nql/creating-materialized-views` |
 | **No outer parens on the CMV body** | Write `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`, **not** `… AS (SELECT …)`. The validator accepts the parenthesized form, but `narrative_nql_run` returns HTTP 500 at execution time. | `/nql/commands/create-materialized-view` |
 | **Reserved keywords** | Reserved words (`type`, `value`, `user`, `order`, `group`, `select`, etc.) must be double-quoted when used as identifiers — including nested property paths like `data."value"`. | `/nql/general/reserved-keywords` |
 | **Dataset IDs are numeric** | Dataset IDs in `company_data` are numeric and must be double-quoted: `company_data."123"`. Bare `company_data.123` parses as a numeric literal. | `/concepts/nql/sql-comparison` |
@@ -370,8 +370,13 @@ Drafting heuristics specific to this skill:
   the user asked for more (or `--limit` overrode it). Aggregations
   (`COUNT`, `GROUP BY`) usually don't need one.
 - **Push work into the query.** If the user asked "how many distinct
-  users", emit `SELECT COUNT(DISTINCT user_id) …`, not a raw select
-  that you would then count agent-side.
+  users", emit `SELECT APPROX_COUNT_DISTINCT(user_id) …`, not a raw
+  select that you would then count agent-side. Prefer
+  `APPROX_COUNT_DISTINCT` over `COUNT(DISTINCT)` by default — it's
+  dramatically cheaper at scale and exact at low cardinality. Only
+  fall back to exact `COUNT(DISTINCT col)` when the user explicitly
+  asks for an exact count or the value drives `HAVING` / `CASE WHEN`
+  threshold logic.
 - **Project the columns the user asked about, not `*`.** Wide
   `SELECT *` queries produce noisy result payloads and slower jobs.
 - **Use ISO date literals.** `WHERE "event_ts" >= CAST('2026-04-19' AS timestamp)`
@@ -414,8 +419,10 @@ Explanation rules:
 - Use first person ("I'm asking the database to…") and conversational
   phrasing ("only the rows where", "grouped by month").
 - Avoid jargon. Translate: `JOIN` → "combine with"; `LIMIT 100` →
-  "the first 100 matching records"; `COUNT(DISTINCT x)` → "the number
-  of unique x values"; `GROUP BY` → "broken down by"; `WHERE` → "only
+  "the first 100 matching records"; `APPROX_COUNT_DISTINCT(x)` →
+  "the approximate number of unique x values (within a fraction of
+  a percent)"; `COUNT(DISTINCT x)` → "the exact number of unique x
+  values"; `GROUP BY` → "broken down by"; `WHERE` → "only
   including rows that…".
 - Call out filters in the order they reduce the data: which dataset,
   which time window, which other constraints, then the shape of the
@@ -526,7 +533,6 @@ The `result` field on a finished job is shaped by the job `type`:
 
 | Job type | Triggered by | `result` payload | Where the rows live |
 | --- | --- | --- | --- |
-| `nql-forecast` | `narrative_nql_run` with `EXPLAIN …` | `{rows, cost}` — an estimate, not actual rows | n/a — forecasts return numbers only |
 | `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. Do not put outer parens around the inner `SELECT`; the validator accepts them but execution 500s. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
 | `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
 
@@ -629,12 +635,6 @@ In either case, query the Narrative knowledge base
 
 Pass the same `data_plane_id` to validate, run, and get_job (rule
 detailed in the async snippet above).
-
-For pure forecasts (cost / row-count estimates without materializing
-data), submit `EXPLAIN <SELECT …>` instead — the job is a
-`nql-forecast` rather than a `materialize-view`, returns
-`{rows, cost}`, and does not consume execution budget. The
-`data_plane_id` rule still applies.
 
 Then poll `narrative_jobs_describe(job_ids: ["<job_id>"])` per the
 cadence above. While polling, tell the user what's happening once

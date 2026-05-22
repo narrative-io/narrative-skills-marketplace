@@ -62,7 +62,6 @@ The `result` field on a finished job is shaped by the job `type`:
 
 | Job type | Triggered by | `result` payload | Where the rows live |
 | --- | --- | --- | --- |
-| `nql-forecast` | `narrative_nql_run` with `EXPLAIN …` | `{rows, cost}` — an estimate, not actual rows | n/a — forecasts return numbers only |
 | `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. Do not put outer parens around the inner `SELECT`; the validator accepts them but execution 500s. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
 | `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
 

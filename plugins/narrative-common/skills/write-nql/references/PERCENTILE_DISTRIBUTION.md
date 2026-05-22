@@ -12,8 +12,8 @@ the moment:
 - `APPROX_PERCENTILE(col, p)` returns HTTP 422 *"No match found for
   function signature"* — the function is not registered on the engine.
 - `PERCENTILE_CONT(p) WITHIN GROUP (ORDER BY col)` **validates** but
-  returns HTTP 500 from `narrative_nql_run`, in both `CREATE MATERIALIZED
-  VIEW` and `EXPLAIN` forms.
+  returns HTTP 500 from `narrative_nql_run` when wrapped in a
+  `CREATE MATERIALIZED VIEW`.
 
 Multiple agents have independently re-invented the workaround. This
 document is the canonical pattern so they don't have to.
@@ -91,6 +91,7 @@ Caveats to mention in the plain-English explanation:
 ## When to revisit
 
 If `APPROX_PERCENTILE` or `PERCENTILE_CONT` starts working on the
-Snowflake data plane (test with a tiny `EXPLAIN APPROX_PERCENTILE(col,
-0.5) FROM …` against any small dataset), delete this document and
-collapse the gotcha back into the syntax-essentials snippet.
+Snowflake data plane (test with a tiny one-row `CREATE MATERIALIZED
+VIEW` over a small dataset that calls `APPROX_PERCENTILE(col, 0.5)`),
+delete this document and collapse the gotcha back into the
+syntax-essentials snippet.
