@@ -1,6 +1,6 @@
 ---
 name: generate-identity-graph
-version: 0.3.2
+version: 0.4.0
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -46,33 +46,14 @@ identity-graph workflow from first-party datasets and optional
 third-party edge sources. You optimize for:
 
 1. Contract-correctness — every input must conform to the fixed
-   graph-edge schema `{ SOURCE_ID, SOURCE_ID_TYPE, TARGET_ID,
-   TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }` before it joins the
-   UNION. No exceptions, no inline patching.
-
-   The schema is **bipartite**. Generally `SOURCE_ID` is the *less
-   shared* side of the edge — often an identifier unique within one
-   source system (a UUID, an auto-increment customer_id, a local-
-   namespace member ID), with `SOURCE_ID_TYPE` naming that source
-   (e.g. `first_party_crm`, `acxiom`, `experian`). `TARGET_ID` is
-   typically the **join key** — the value that recurs across sources
-   and lets components be stitched together (a hashed email, a phone
-   hash, a MAID), with `TARGET_ID_TYPE` naming the join-key type
-   (`sha256_email`, `e164_phone`, `maid`). The convention isn't a
-   hard structural rule — third-party providers occasionally invert
-   it — so the reliable move is always to inspect the data.
-
-   This dictates everything else:
-   `firstPartySources` / `thirdPartySources` hold the distinct
-   **SOURCE_ID_TYPE** values from the unioned edges, partitioned by
-   first-party vs third-party origin. `bridgeKeyTypeCol` is filled
-   by TARGET_ID_TYPE values (the join keys). Don't guess either —
-   pull them from dataset statistics on the edges table or run
-   `SELECT DISTINCT SOURCE_ID_TYPE FROM <edges_view>` (and the same
-   for `TARGET_ID_TYPE`) and use the result set verbatim. Putting a
-   TARGET_ID_TYPE value in `firstPartySources` / `thirdPartySources`
-   silently breaks resolution — the graph builds but those sources
-   match zero edges.
+   bipartite graph-edge schema `{ SOURCE_ID, SOURCE_ID_TYPE,
+   TARGET_ID, TARGET_ID_TYPE, IS_DIRECTED, ATTRIBUTES }` before it
+   joins the UNION. No exceptions, no inline patching. See
+   [`references/EDGE_CASES.md`](references/EDGE_CASES.md) for the
+   SOURCE/TARGET asymmetry, the
+   `firstPartySources` / `thirdPartySources` discovery rule (only
+   SOURCE_ID_TYPE values, never bridge keys), and how to spot-check
+   the data when shapes look wrong.
 2. Defer, don't re-implement — when the graph-edge attribute ID
    needs to be resolved, hand off to `/find-attribute`; when an
    input dataset isn't mapped to that attribute, hand off to
@@ -97,6 +78,20 @@ third-party edge sources. You optimize for:
 You never guess identifier-type strings, never list third-party
 schemas as something this skill can fix, and never present an
 unvalidated workflow.
+
+## Output rules
+
+**Don't surface `_nio_*` field names to the user.** Columns and
+fields whose names start with `_nio_` (e.g., `_nio_last_modified_at`,
+`_nio_sample_128`) are platform-managed internals. Handle them
+silently as this skill instructs — filtering, skipping, or accepting
+auto-generated mappings — but do not name them in user-facing output:
+lists, tables, summaries, warnings, status messages, or final
+responses. Refer to them generically ("platform-managed columns",
+"reserved internal fields") if you need to acknowledge them at all.
+
+Exception: if the user expressly asks about `_nio_*` fields, answer
+normally.
 
 ## Interaction mode (required — do not override)
 
@@ -524,106 +519,21 @@ which owns NQL drafting + server-side validation. Invoke it with
 `--no-explain` so it returns a clean validated statement (no user-
 facing prose) and **without** `--run` so the query is not executed.
 
-Input (the free-text question passed to `/write-nql`):
-
-> Write a `CREATE MATERIALIZED VIEW "<edges-view-name>"` statement
-> with:
->
-> - `DISPLAY_NAME = '<display name from phase 1>'`
-> - `DESCRIPTION = '<one-sentence description from phase 1>'`
-> - `TAGS = ('<graph-kind>', 'identity-graph')`
-> - `WRITE_MODE = 'overwrite'`
->
-> The body should `SELECT DISTINCT` the six graph-edge contract
-> columns (`SOURCE_ID`, `SOURCE_ID_TYPE`, `TARGET_ID`,
-> `TARGET_ID_TYPE`, `IS_DIRECTED`, `ATTRIBUTES`) from each dataset
-> using the Rosetta Stone graph-edge attribute access pattern, NOT
-> the dataset's raw column names. Alias the FROM clause (use a short
-> per-source slug) so the SELECT list doesn't have to repeat the
-> full dataset path on every column. Each `SELECT` block should
-> follow this exact shape:
->
-> ```
-> SELECT DISTINCT
->   <alias>._rosetta_stone.<graph_edge_attribute_name>.SOURCE_ID       AS SOURCE_ID,
->   <alias>._rosetta_stone.<graph_edge_attribute_name>.SOURCE_ID_TYPE  AS SOURCE_ID_TYPE,
->   <alias>._rosetta_stone.<graph_edge_attribute_name>.TARGET_ID       AS TARGET_ID,
->   <alias>._rosetta_stone.<graph_edge_attribute_name>.TARGET_ID_TYPE  AS TARGET_ID_TYPE,
->   <alias>._rosetta_stone.<graph_edge_attribute_name>.IS_DIRECTED     AS IS_DIRECTED,
->   <alias>._rosetta_stone.<graph_edge_attribute_name>.ATTRIBUTES      AS ATTRIBUTES
-> FROM <dataset_reference> AS <alias>
-> [WHERE <audit filters>]
-> ```
->
-> Pick a 2–4 character alias per source that's mnemonic for the
-> dataset (e.g., `fpc` for `first_party_crm_events`, `aci` for
-> `acxiom.consumer_identity_v3`). Aliases must be unique within the
-> statement.
->
-> Use the **graph-edge attribute name slug** returned by
-> `/find-attribute` in phase 4 (e.g., `graph_edge`) — not the
-> numeric attribute ID. UNION ALL every SELECT block in the order
-> listed. Apply the listed `WHERE`-clause conditions to each
-> dataset as given — they're pre-flight audit filters and must be
-> preserved verbatim (combine multiple conditions with `AND`):
->
-> Graph-edge attribute name (use verbatim in the
-> `_rosetta_stone.<name>` access path): `<attribute name slug from
-> phase 4>`
->
-> First-party datasets (use `company_data.<id>`):
->   - `<first_party_dataset_id_1>`
->     filters: `<expression>`, `<expression>`
->   - `<first_party_dataset_id_2>`
->     filters: (none)
->   - …
->
-> Third-party datasets (use `<provider>.<access_rule>`):
->   - `<provider_1>.<access_rule_1>`
->     filters: `<expression>`
->   - …
->
-> Validate the statement and return it. Don't run it.
-
-**Why the access pattern, not raw columns:** each first-party
-dataset is mapped to the graph-edge Rosetta Stone attribute as a
-preceding workflow task (see phase 8). Querying through the
-`_rosetta_stone.<name>` field gives the six contract columns
-without coupling the workflow to native column names — different
-datasets emit different native columns, but every mapped dataset
-exposes the same graph-edge access path.
-
-Third-party access rules are also queried through
-`_rosetta_stone.<name>`. The provider is responsible for mapping
-their access rule to the graph-edge attribute; the workflow does
-not map them. If a third party's access rule does not expose the
-graph-edge attribute, drop it from the input list — surface the
-gap to the user before continuing.
-
-When building the prompt, look up each dataset's entries in
-`audit_filters` from phase 0. If a dataset has one or more approved
-filters, list them under that dataset; if it has none, write
-"filters: (none)" so `/write-nql` doesn't add anything it wasn't
-told to add. Do not silently drop filters — every approved filter
-must appear in the prompt.
+Invoke `/write-nql` with the edges-view prompt template at
+[`references/EDGES_VIEW_NQL_PROMPT.md`](references/EDGES_VIEW_NQL_PROMPT.md).
+The prompt covers SELECT shape, alias rules, audit-filter threading,
+the access-pattern rationale, and validation-failure recovery.
 
 Contract:
 
-- **Input** to `/write-nql`: the prompt above with placeholders
-  filled from phases 0, 1, 3, 5, 6. Pass `--no-explain` only.
+- **Input** to `/write-nql`: the prompt template filled with
+  placeholders from phases 0 (`audit_filters`), 1 (graph kind,
+  display name, description), 3 (first-party datasets), 4
+  (graph-edge attribute name slug), 5 (`pending_mappings`), 6
+  (third-party access rules). Pass `--no-explain` only.
 - **Output** from `/write-nql`: a single validated NQL string (the
   full `CREATE MATERIALIZED VIEW ... AS ...` statement). Take the
   string as-is — do not edit it before embedding.
-
-If `/write-nql` reports validation failure after its own internal
-retries (a referenced dataset doesn't exist, a column is named
-differently than the contract expects, an audit-filter expression
-references a column the dataset doesn't have), surface the verbatim
-error to the user, ask whether to drop the offending dataset / drop
-the offending filter / remap, and re-invoke `/write-nql` with the
-corrected input list. Do **not** hand an unvalidated DDL to phase 8.
-Do **not** drop an audit filter without explicit user approval — the
-user already approved each one in phase 0b.
 
 Hold the returned NQL string as-is. Phase 8 will pass it through to
 `/create-workflow` verbatim.
@@ -637,107 +547,15 @@ user approval, submitting via `narrative_workflows_create`, and
 (optionally) firing the first run. Do not render or submit the
 workflow inside this skill.
 
-Invoke `/create-workflow` with a structured prompt that names
-example 11 explicitly and supplies every substitution. The shape:
-
-> `/create-workflow` Build the identity-graph workflow from
-> `assets/examples/11-identity-graph-multi-source-build.yaml`.
-> Substitute:
->
-> - `document.namespace`: `<kebab-case slug of the company name returned by narrative_context_get>`
-> - `document.name`: `<graph-kind>-identity-graph` (from phase 1 —
->   `person-identity-graph`, `household-identity-graph`, etc.;
->   append a qualifier if the user gave one, e.g. `us-person-identity-graph`)
-> - **Per-dataset mapping tasks** (one
->   `CreateRosettaStoneMappingsIfNotExist` task per entry in
->   `pending_mappings` from phase 5, in the order the datasets
->   appear in the `createEdges` UNION). Use this shape, substituting
->   the per-dataset `propertyMappings`:
->
->   ```yaml
->   - map<DatasetSlug>:
->       call: CreateRosettaStoneMappingsIfNotExist
->       with:
->         datasetName: <dataset id or slug>
->         allowPartial: true
->         mappings:
->           - attributeId: <graph-edge attribute ID from phase 4>
->             mapping:
->               type: object_mapping
->               propertyMappings:
->                 - path: SOURCE_ID
->                   expression: <NQL from phase 5>
->                 - path: SOURCE_ID_TYPE
->                   expression: <NQL from phase 5>
->                 - path: TARGET_ID
->                   expression: <NQL from phase 5>
->                 - path: TARGET_ID_TYPE
->                   expression: <NQL from phase 5>
->                 - path: IS_DIRECTED
->                   expression: <NQL from phase 5>
->                 - path: ATTRIBUTES
->                   expression: <NQL from phase 5>
->   ```
->
->   Datasets that phase 4 reported as already-mapped do not need a
->   task — `CreateRosettaStoneMappingsIfNotExist` is idempotent, but
->   re-emitting an existing mapping is wasted effort.
->
->   Third-party access rules do NOT get mapping tasks — their
->   schemas are the provider's contract.
->
-> - The `createEdges.with.nql` block: replace verbatim with this
->   already-validated NQL string. Do not modify it.
->
->   ```
->   <full NQL string returned by /write-nql in phase 7>
->   ```
->
-> - `labelComponents.with.edgeDataset`: `<edges-view-name>` (the
->   view created by `createEdges` above)
-> - `labelComponents.with.outputDataset`: `<graph-output-dataset-name>`
-> - `labelComponents.with.firstPartySources`: `[<distinct
->   **SOURCE_ID_TYPE** values emitted by the first-party datasets>]`.
->   **Only SOURCE_ID_TYPE values belong here** — TARGET_ID_TYPE
->   bridge keys (`sha256_email`, `maid`, `household_id`, etc.) must
->   not appear in either list. Discover the values empirically: ask
->   for column statistics on the edges materialized view, or have
->   `/write-nql --run` execute `SELECT DISTINCT SOURCE_ID_TYPE FROM
->   <edges_view>` (split by contributing dataset) once the view
->   exists. On a first build where the view doesn't exist yet, derive
->   the candidate values from the mapping expressions in phase 5
->   (the literal each `SOURCE_ID_TYPE` `propertyMapping` emits) and
->   ask the user to confirm; never invent values.
-> - `labelComponents.with.thirdPartySources`: `[<distinct
->   **SOURCE_ID_TYPE** values emitted by the third-party access
->   rules; empty array if none>]`. Same discovery rule as above —
->   query the data, never the bridge-key types.
-> - `labelComponents.with.maxDegreeThreshold`: `100` (default)
-> - `labelComponents.with.maxComponentSize`: `100` (default — surface
->   the default in your approval summary so the user can override
->   for B2B / household graphs)
-> - `labelComponents.with.maxIterations`: `25` (default)
-
-Pass any user-requested execution flags through the same invocation
-— `--trigger` if the user asked for an immediate run, `--data-plane
-<id>` if they already named a plane, `--schedule` if they want the
-cron activated on create (only valid if the user explicitly asked
-for a schedule, which this skill does not add by default — the
-example has no `schedule:` block).
-
-If the user did **not** name a plane, do not invent one here;
-`/create-workflow` will ask. Same for trigger / schedule — let
-`/create-workflow` own those gates.
-
-`/create-workflow` then runs end-to-end:
-
-1. Loads example 11.
-2. Substitutes the values above.
-3. Resolves the data plane (asks if not provided).
-4. Renders the YAML and explains it to the user.
-5. Gates submission on explicit user approval.
-6. Calls `narrative_workflows_create`.
-7. Optionally triggers the first run.
+Invoke `/create-workflow` with example 11
+(`assets/examples/11-identity-graph-multi-source-build.yaml`). The
+full substitution catalog — per-dataset
+`CreateRosettaStoneMappingsIfNotExist` YAML shape, source-discovery
+rules (only SOURCE_ID_TYPE values, never bridge keys), tuning-knob
+defaults (`maxDegreeThreshold: 100`, `maxComponentSize: 100`,
+`maxIterations: 25`), and execution-flag pass-through (`--trigger`,
+`--data-plane`, `--schedule`) — is at
+[`references/CREATE_WORKFLOW_HANDOFF.md`](references/CREATE_WORKFLOW_HANDOFF.md).
 
 When `/create-workflow` returns, take its result — workflow ID,
 data-plane ID, status, optional run ID — and pass it into "Final
@@ -792,133 +610,23 @@ re-invoking `/write-nql --run` with the same DDL string returned in
 phase 7. Offer this explicitly only when the user has signaled they
 want to inspect edge counts — do not auto-run.
 
-## Common cases
-
-### Person graph (the default)
-
-User wants to resolve people across two or more first-party CRM /
-event datasets, typically keyed on `sha256_email` and `maid` (those
-are TARGET_ID_TYPE bridge keys, not source list entries). Run
-phases 1-8 in order. Expect `firstPartySources` to be the distinct
-SOURCE_ID_TYPE values of the user's first-party systems (e.g.
-`first_party_crm`, `first_party_loyalty`); `thirdPartySources` to
-be empty unless the user explicitly named providers, in which case
-it's the providers' SOURCE_ID_TYPE values (e.g. `acxiom`,
-`experian`).
-
-### Household graph
-
-Same shape as a person graph, plus one dataset (often a third-party
-householding edge source) that produces edges with
-`TARGET_ID_TYPE = 'household_id'` or `'household_address'`. The UNION
-gains one or two more `SELECT` blocks. If that new dataset emits a
-new SOURCE_ID_TYPE (the household provider's system name), append
-it to `thirdPartySources` (or `firstPartySources` if the user owns
-the household source). Do **not** add `household_id` or
-`household_address` to either list — those are TARGET_ID_TYPE
-bridge keys, not source systems. Output dataset name defaults to
-`household_identity_graph`.
-
-### Device graph
-
-Inputs are device-side datasets (MAID, IDFA, GAID, cookies, CTV IDs).
-Often *no* first-party data — entirely third-party (a device-graph
-provider's access rule). If so, phases 3-5 collapse to a single
-question: "Which provider's device graph?". Phase 7 emits a workflow
-whose UNION is a single `SELECT ... FROM <provider>.<access_rule>`.
-
-### B2B / account graph
-
-Primary identifiers are `domain` and `company_id`; sometimes
-`employee_email`. Treat the same as a person graph, but warn the user
-in phase 8 that `maxComponentSize: 100` may need to be raised — B2B
-graphs frequently have legitimate large clusters (every employee of
-a Fortune 500 connects through one domain).
-
-### Evaluate / re-run an existing graph
-
-User points at an existing identity-graph workflow and asks to
-"refresh" or "rebuild". Pull the existing workflow's input list,
-re-validate each dataset's mapping status (phase 4), and surface
-which sources have changed. Append a version suffix (`_v2`,
-`_v3`, …) rather than overwriting the existing output dataset —
-downstream consumers may be pinned to it.
-
-## Edge cases and gotchas
-
-See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
-the fixed edge-contract schema, identifier-type casing, directed /
-undirected mixing, third-party schemas, tuning-knob defaults
-(`maxComponentSize` / `maxDegreeThreshold` / `maxIterations`),
-materialized-view name collisions, write-safety, and empty-UNION
-detection. Read when something feels off or the user is asking
-about tuning.
-
 ## Voice
 
-Use first person ("I found 3 datasets that match…", "I'll need to
-map dataset X before we build the graph"). Conversational, not
-formal. The summaries and AskUserQuestion prompts are user-facing in
-the Narrative Platform UI's workflow / chat surface.
+Use first person ("I found 3 datasets that match…", "I'll need to map dataset X before we build the graph"). Conversational, not formal. The summaries and AskUserQuestion prompts are user-facing in the Narrative Platform UI's workflow / chat surface.
 
-## Harness fallbacks
+## References
 
-See
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
-covers `narrative-mcp` unavailable (paste-driven flow,
-hand-authored DDL, what to tell the user when `/create-workflow`
-also can't submit), `narrative-knowledge-base` unavailable (the
-mild case), partial degradation per MCP tool, and the
-`AskUserQuestion` fallback for harnesses that don't expose it. Read
-when a tool call errors or the user is invoking the skill outside
-the Narrative Platform UI.
-
-## Further reading
-
-- `references/EDGE_CASES.md` — gotchas and tuning notes: the fixed
-  edge-contract schema, identifier-type casing, directed/undirected
-  mixing, `maxComponentSize` / `maxDegreeThreshold` / `maxIterations`
-  defaults, materialized-view naming, and write-safety rules. Read
-  when something feels off or the user is asking about tuning knobs.
-- `references/HARNESS_FALLBACK.md` — what to do when `narrative-mcp`
-  or `narrative-knowledge-base` is unavailable. Covers full and
-  partial degradation, and the per-phase substitutions for a
-  paste-driven flow. Read when a tool call errors or the user is
-  invoking the skill outside the Narrative Platform UI.
-- `../triage-pregraph-data/SKILL.md` — the pre-graph data-quality
-  audit this one hands off to in phase 0 when the user opts into a
-  pre-flight audit. Produces filter expressions per dataset; this
-  skill captures the approved ones and threads them into phase 7's
-  `/write-nql` prompt as `WHERE`-clause conditions on the
-  corresponding `SELECT` blocks.
-- `../../../narrative-common/skills/find-attribute/SKILL.md` — the
-  attribute-lookup skill this one defers to in phase 4
-  (`/find-attribute`, lives in the `narrative-common` plugin) to
-  resolve the canonical graph-edge attribute ID. Invoked with
-  `--phrase`, `--shape`, and `--no-confirm`.
-- `../../../narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md` —
-  the mapping skill this one defers to in phase 5
-  (`/generate-rosetta-stone-mappings`, lives in the
-  `narrative-common` plugin).
-- `../../../narrative-common/skills/write-nql/SKILL.md` — the NQL
-  drafting + validation skill this one defers to in phase 7
-  (`/write-nql`, lives in the `narrative-common` plugin). Invoked
-  with `--no-explain` and without `--run` so it returns a validated
-  `CREATE MATERIALIZED VIEW` statement without executing it.
-- `../../../narrative-common/skills/create-workflow/SKILL.md` — the
-  workflow composition + submission skill this one defers to in
-  phase 8 (`/create-workflow`, lives in the `narrative-common`
-  plugin). The identity-graph workflow shape lives in that skill's
-  `assets/examples/11-identity-graph-multi-source-build.yaml`;
-  phase 8 names that example explicitly in the handoff prompt.
-- `../../../narrative-common/skills/create-workflow/assets/examples/11-identity-graph-multi-source-build.yaml` —
-  the canonical identity-graph workflow example. Read it to see the
-  full shape the workflow will land in, including the per-source
-  `SELECT` blocks and the `LabelConnectedComponents` defaults.
-- `../../../narrative-common/skills/generate-rosetta-stone-mappings/references/KB_RESEARCH.md` —
-  how to query the `narrative-knowledge-base` MCP server for
-  identity-graph and `LabelConnectedComponents` docs when the local
-  references aren't enough.
+- [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — fixed edge-contract schema, identifier-type casing, directed/undirected mixing, `maxComponentSize` / `maxDegreeThreshold` / `maxIterations` defaults, MV naming, write-safety, empty-UNION. Read when something feels off or the user asks about tuning.
+- [`references/EDGES_VIEW_NQL_PROMPT.md`](references/EDGES_VIEW_NQL_PROMPT.md) — verbatim phase-7 prompt for `/write-nql` (SELECT shape, alias rules, audit-filter threading, validation recovery). Read when handing off the edges-view DDL.
+- [`references/CREATE_WORKFLOW_HANDOFF.md`](references/CREATE_WORKFLOW_HANDOFF.md) — full phase-8 substitution catalog for `/create-workflow` (per-dataset mapping-task YAML, source lists, tuning knobs). Read when composing the workflow handoff.
+- [`references/GRAPH_TYPES.md`](references/GRAPH_TYPES.md) — per-shape playbooks (person, household, device, B2B, re-run scenarios). Read when scoping a new graph build to confirm shape-specific defaults.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` / `narrative-knowledge-base` unavailable (paste-driven flow, hand-authored DDL), partial degradation, `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.
+- `../triage-pregraph-data/SKILL.md` — phase 0 pre-graph audit; produces filter expressions threaded into phase 7's `WHERE` clauses.
+- `../../../narrative-common/skills/find-attribute/SKILL.md` — phase 4 lookup of the canonical graph-edge attribute ID (`--phrase`, `--shape`, `--no-confirm`).
+- `../../../narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md` — phase 5 mapping skill.
+- `../../../narrative-common/skills/write-nql/SKILL.md` — phase 7 NQL writer (`--no-explain`, no `--run`).
+- `../../../narrative-common/skills/create-workflow/SKILL.md` — phase 8 workflow composer; the identity-graph shape lives in `assets/examples/11-identity-graph-multi-source-build.yaml`.
+- `../../../narrative-common/skills/generate-rosetta-stone-mappings/references/KB_RESEARCH.md` — how to query `narrative-knowledge-base` for identity-graph / `LabelConnectedComponents` docs.
 
 ## Feedback (only if something could be improved)
 
