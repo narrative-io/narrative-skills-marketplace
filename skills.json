@@ -228,8 +228,8 @@
     },
     {
       "name": "triage-pregraph-data",
-      "version": "0.3.1",
-      "description": "Audit a dataset before it joins an identity-graph build. Enumerates\ndataset-specific failure modes (hub identifiers, high-degree nodes,\nbehaviorally suspicious values, over-connected identifiers, source-\nspecific quirks), tests every hypothesis in parallel against the\ndata, quantifies damage by rows / edges / entities affected, proposes\nminimal filter expressions ranked by severity, and — when the audit\nfinds issues — returns a validated `CREATE MATERIALIZED VIEW` NQL the\ncaller can run to produce a graph-ready clean source. If the data\npasses the audit, says so plainly and recommends the source table\nunchanged. Plans, reports, and authors the clean-view NQL; does not\nexecute it.\nUse when: \"audit this dataset before the graph build\", \"find bad\nedges in <dataset>\", \"check identity data quality\", \"recommend\nfilters for the graph build\", \"find hub identifiers in <dataset>\",\n\"quantify damage from <identifier_type>\", \"give me the clean-view\nNQL for the graph build\", \"pre-graph DQ\".\n(narrative-identity)",
+      "version": "0.4.0",
+      "description": "Audit a dataset or access rule before it joins an identity-graph\nbuild (access rules behave like datasets in NQL and are used\ninterchangeably here). Enumerates failure modes (hub identifiers,\nhigh-degree nodes, behaviorally suspicious values, over-connected\nidentifiers, source-specific quirks), tests hypotheses in parallel,\nquantifies damage by rows / edges / entities, proposes minimal\nfilters ranked by severity, and — when issues are found — returns\na validated `CREATE MATERIALIZED VIEW` NQL the caller can run to\nproduce a graph-ready clean source. If the data passes, says so\nplainly and recommends the source unchanged. Plans, reports, and\nauthors the clean-view NQL; does not execute it.\nUse when: \"audit this dataset before the graph build\", \"audit this\naccess rule before the graph build\", \"find bad edges in <source>\",\n\"check identity data quality\", \"recommend filters for the graph\nbuild\", \"find hub identifiers in <source>\", \"quantify damage from\n<identifier_type>\", \"pre-graph DQ\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/triage-pregraph-data/SKILL.md",
       "compatibility": {
@@ -246,6 +246,8 @@
             "narrative_context_set_company",
             "narrative_datasets_search",
             "narrative_datasets_describe",
+            "narrative_access_rules_search",
+            "narrative_access_rules_describe",
             "narrative_dataset_get_column_stats",
             "narrative_nql_validate"
           ]
