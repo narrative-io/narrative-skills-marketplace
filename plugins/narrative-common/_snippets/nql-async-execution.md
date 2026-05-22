@@ -22,7 +22,7 @@ Resolution sequence:
 
 1. **Capture the dataset's data plane during describe.** `narrative_datasets_describe(dataset_ids: [<id>], include: ["metadata"])` exposes the dataset's plane assignment alongside its name and id. Record it next to the unique_name / id you'll use in the query.
 2. **Confirm every dataset on the query is on the same plane.** Cross-plane joins fail at execution; if a query references multiple datasets, all of them must share a plane. If they don't, that's the cross-data-plane gotcha — query each plane separately or materialize one side into the other plane first.
-3. **Pass the same `data_plane_id` to validate, run, and get_job.** If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first. See the gotchas table for the failure mode this prevents — most visibly, validator-only "Unknown Table" errors on numeric-id references that run accepts.
+3. **Pass the same `data_plane_id` to validate, run, and get_job.** If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first. See the gotchas reference for the failure mode this prevents — most visibly, validator-only "Unknown Table" errors on numeric-id references that run accepts.
 
 If the dataset describe response doesn't include a plane field for
 your tenant, fall back to: `narrative_data_planes_list(include: ["metadata"])`
@@ -49,77 +49,11 @@ Terminal states:
 
 | `state` | Meaning | Next step |
 | --- | --- | --- |
-| `completed` | Job finished. **The payload depends on job type — rows almost never live here.** See "What `completed` actually returns" below. |
+| `completed` | Job finished. **The payload depends on job type — rows almost never live here.** | See [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md) for what `result` looks like per job type. |
 | `failed` | Engine error mid-execution | Read `failures` from the job payload; show it to the user verbatim; revise query and retry |
 | `cancelled` | Operator or timeout abort | Tell the user the job was cancelled; offer to re-run |
 
 Non-terminal states (`queued`, `running`, `processing`) → keep
 polling. Never treat them as a result.
 
-### What `completed` actually returns
-
-The `result` field on a finished job is shaped by the job `type`:
-
-| Job type | Triggered by | `result` payload | Where the rows live |
-| --- | --- | --- | --- |
-| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. Do not put outer parens around the inner `SELECT`; the validator accepts them but execution 500s. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
-| `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
-
-### Reading rows after a `materialize-view` job completes
-
-Rows from a `CREATE MATERIALIZED VIEW` are never inlined on the job
-descriptor. To see them you have to run a second asynchronous job to
-materialize a sample, then fetch it. (And remember: a bare `SELECT`
-is not a runnable form — you must explicitly wrap it in
-`CREATE MATERIALIZED VIEW` before submitting to `narrative_nql_run`.)
-
-1. **Submit the sampling job.** `narrative_dataset_request_sample(dataset_id: <id>)` → returns a new `job_id`. Use the `dataset_id` from the prior job's `result`.
-2. **Poll that job to completion** with `narrative_jobs_describe(job_ids: ["<sample_job_id>"])`, using the same backoff as above.
-3. **Read the sample rows** with `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`. The sample lives in the control plane and is what `include=["sample"]` returns.
-
-```
-narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS SELECT …")
-  → poll narrative_jobs_describe → result.dataset_id = 1234
-narrative_dataset_request_sample(dataset_id: 1234)
-  → poll narrative_jobs_describe → completed
-narrative_datasets_describe(dataset_ids: [1234], include: ["sample"])
-  → returns the sample rows (capped at 1,000)
-```
-
-The sample is a **point-in-time snapshot capped at 1,000 rows** of the
-dataset as it stood when the sample job ran. All columns are included;
-data is unmodified (Rosetta Stone attributes show their normalized
-form). Samples persist on the control plane until deleted, so re-runs
-of `narrative_datasets_describe(include=["sample"])` return the same
-snapshot until a new sampling job is enqueued.
-
-**1,000-row implication for query design.** When the goal is for the
-user to inspect every row of the intended output (a dedup check, a
-small enumerated set, an audit cut), cap the query itself at 1,000
-rows — `LIMIT 1000` on the inner `SELECT`, or a `WHERE`/`GROUP BY`
-that you know produces ≤ 1,000 rows. If the materialized dataset has
-more than 1,000 rows, the sample is just an arbitrary 1,000 of them
-and rows past the cap are invisible without exporting. For the
-opposite case — billions of rows you don't actually need to see —
-keep the `LIMIT` low (or push the work into aggregates: `COUNT(1)`,
-`SUM`, `GROUP BY`) to control cost.
-
-### Cost-of-execution reminder
-
-Every `narrative_nql_run` consumes platform resources and the result
-set is materialized. Default to a `LIMIT` clause whenever the user's
-question doesn't explicitly need every row. Prefer aggregations
-(`COUNT(1)`, `SUM`, `GROUP BY`) over pulling raw rows and counting in
-the agent. NQL does not support `COUNT(*)` — use `COUNT(1)` (rows)
-or `COUNT(<col>)` (non-null values).
-
-### Other async tools that follow the same pattern
-
-`narrative_dataset_request_sample`,
-`narrative_dataset_refresh_materialized_view`, and
-`narrative_dataset_recalculate_statistics` use the same job-id +
-`narrative_jobs_describe` polling protocol. The state machine and
-backoff above apply identically. The recalculation case has one
-caveat: for datasets not yet on the new statistics framework, the
-returned id is **not** a job id and `narrative_jobs_describe` will
-not find it — surface that to the user rather than polling forever.
+> Payload shapes and the materialize-view → sample → describe dance are documented in [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md).

@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.3.4
+version: 0.4.0
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -51,6 +51,20 @@ into NQL queries against Narrative datasets. You optimize for:
 
 You never invent a column or function, never display an unvalidated
 query, and never claim a result until the job reports `completed`.
+
+## Output rules
+
+**Don't surface `_nio_*` field names to the user.** Columns and
+fields whose names start with `_nio_` (e.g., `_nio_last_modified_at`,
+`_nio_sample_128`) are platform-managed internals. Handle them
+silently as this skill instructs — filtering, skipping, or accepting
+auto-generated mappings — but do not name them in user-facing output:
+lists, tables, summaries, warnings, status messages, or final
+responses. Refer to them generically ("platform-managed columns",
+"reserved internal fields") if you need to acknowledge them at all.
+
+Exception: if the user expressly asks about `_nio_*` fields, answer
+normally.
 
 ## Overview
 
@@ -193,22 +207,15 @@ weigh in — they account for the majority of first-pass failures.
 
 ### Table references
 
-Every table reference is **schema-qualified**. The three schemas you'll
-meet in practice:
-
-| Schema | Holds | Example |
-| --- | --- | --- |
-| `company_data` | Your own datasets, views, and the data shared into your tenant. | `company_data.web_events` |
-| `<provider_slug>` | Another company's resources, exposed to you through an access rule. The schema name is that company's slug. | `acme."ar_fitness"` |
-| `narrative` | Platform-wide special tables — most notably `narrative.rosetta_stone` for global identity resolution. | `narrative.rosetta_stone` |
-
-Within a schema, a dataset, view, or access rule can be addressed two
-ways:
-
-| Form | Looks like | When to use |
-| --- | --- | --- |
-| **`unique_name`** (preferred) | `company_data.web_events` | Always, when you know it. Stable across environments, readable in code review, and survives dataset re-creation. Datasets, views, and access rules share a single `unique_name` namespace, so the same syntax works for all three. |
-| Numeric id | `company_data."12345"` | Only when you don't have a `unique_name` — e.g. a freshly created dataset, or one referenced from a job payload. The id is numeric and **must** be double-quoted, otherwise NQL parses it as a number. |
+Use `company_data.<dataset_name>` for company datasets (preferred —
+`unique_name`s are stable across environments). Fall back to
+`company_data."<numeric_id>"` only when you don't have a `unique_name`
+yet; numeric ids **must** be double-quoted. Cross-company access rules
+live under the provider's slug schema (e.g. `acme."ar_fitness"`), and
+global identity resolution lives at `narrative.rosetta_stone`. See
+[`references/NQL_QUOTING_AND_TABLE_REFS.md`](references/NQL_QUOTING_AND_TABLE_REFS.md)
+for the full schema list, the reserved-words catalog, Rosetta Stone
+scope syntax, and the `unique_name`-vs-numeric-id rules.
 
 ```sql
 -- Preferred: address by unique_name
@@ -217,43 +224,6 @@ SELECT user_id, email FROM company_data.web_events LIMIT 10
 -- Fallback: address by numeric id (quoted)
 SELECT user_id, email FROM company_data."12345" LIMIT 10
 ```
-
-The schema name itself is just an identifier, so `"company_data"."12345"`
-is equivalent to `company_data."12345"` — bare is the convention.
-
-**Quoting a `unique_name`.** Leave safe snake_case slugs unquoted
-(`web_events`). Double-quote when the name collides with a reserved
-word, contains uppercase letters or dashes, or — as the docs do for
-access rules — when you want to be defensive about an externally
-supplied name: `acme."ar_fitness"`, `company_data."Order_History"`.
-
-**Cross-dataset queries.** Fully qualify each side and alias them. This
-works identically whether you mix forms or not:
-
-```sql
-SELECT u.user_id, o.order_id, o.total_cents
-FROM company_data.users        AS u
-JOIN company_data.order_history AS o ON u.user_id = o.user_id
-```
-
-**Special: Rosetta Stone scopes.** The `_rosetta_stone` virtual table
-attaches to any schema or dataset to surface normalized identity data.
-The same name/id rule applies to the dataset segment:
-
-```sql
--- Global
-FROM narrative.rosetta_stone
--- Company-scoped
-FROM company_data._rosetta_stone
--- Dataset-scoped, by unique_name
-FROM company_data.web_events._rosetta_stone
--- Dataset-scoped, by id
-FROM company_data."12345"._rosetta_stone
-```
-
-When you don't already know the `unique_name`, look it up with
-`narrative_datasets_search` / `narrative_datasets_describe` before
-falling back to the id.
 
 ### Identifier vs. literal quoting
 
@@ -268,10 +238,8 @@ them is the single most common validation error.
 | String literal | `"email"` | `'email'` |
 | Type discriminator value | `email` | `'email'` |
 
-Reserved words that must always be double-quoted when used as
-identifiers: `type`, `value`, `user`, `order`, `group`, `select`,
-`from`, `where`, `join`, `case`, `when`, `then`, `else`, `end`,
-`null`, `true`, `false`.
+The full reserved-words list and quoting deep-dive lives in
+[`references/NQL_QUOTING_AND_TABLE_REFS.md`](references/NQL_QUOTING_AND_TABLE_REFS.md).
 
 ### Functions
 
@@ -307,45 +275,11 @@ identifier semantics.
 
 ### Common NQL gotchas
 
-The KB's troubleshooting and performance pages document the failure
-modes that consistently bite first-pass queries. Apply the rules here
-before validating; consult the KB for the long form.
-
-| Gotcha | Rule | KB page |
-| --- | --- | --- |
-| **Wildcards / `COUNT(*)`** | NQL does **not** support `SELECT *`, `SELECT t.*`, or `COUNT(*)`. Always list columns explicitly. Use `COUNT(1)` for row counts, `COUNT(<col>)` for non-null counts. This rule applies inside CTEs and subqueries too. | `/nql/general/explicit-columns` |
-| **Naked `SELECT` is not runnable** | You cannot submit a bare `SELECT` to `narrative_nql_run` and expect rows back. Every executed query must land somewhere — wrap the `SELECT` in `CREATE MATERIALIZED VIEW "<name>" AS SELECT …` (optionally with `REFRESH_SCHEDULE`, `EXPIRE`, `BUDGET`, etc.), then read the rows via `narrative_dataset_request_sample` + `narrative_datasets_describe(include=["sample"])`. Bare-`SELECT` validation passes, but execution requires the materialized-view wrapper. | `/nql/commands/create-materialized-view`, `/guides/nql/creating-materialized-views` |
-| **No outer parens on the CMV body** | Write `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`, **not** `… AS (SELECT …)`. The validator accepts the parenthesized form, but `narrative_nql_run` returns HTTP 500 at execution time. | `/nql/commands/create-materialized-view` |
-| **Reserved keywords** | Reserved words (`type`, `value`, `user`, `order`, `group`, `select`, etc.) must be double-quoted when used as identifiers — including nested property paths like `data."value"`. | `/nql/general/reserved-keywords` |
-| **Dataset IDs are numeric** | Dataset IDs in `company_data` are numeric and must be double-quoted: `company_data."123"`. Bare `company_data.123` parses as a numeric literal. | `/concepts/nql/sql-comparison` |
-| **Fully qualify columns in joins** | Use `company_data."123".col` (or aliased equivalents) in `JOIN`s and `WHERE`s — ambiguous column references fail at parse. | `/guides/nql/filtering-transforming` |
-| **`GEOMETRY` cannot be in `SELECT`** | Geometry types (e.g. the output of `STCIRCLE`) cannot be returned in result sets. Keep geometry expressions inside `JOIN` and `WHERE` clauses; return `latitude` / `longitude` / identifiers instead. | `/guides/nql/troubleshooting/unsupported-type-error` |
-| **`\|\|` concatenation is string-only** | The `\|\|` operator requires both operands to be strings. Structured fields need `.value` extracted first; non-string types need `CAST(... AS VARCHAR)`. | `/guides/nql/troubleshooting/unsupported-type-error` |
-| **Cross-data-plane queries fail** | A single query cannot reference datasets that live in different data planes. Verify dataset plane assignments before drafting joins; either query each plane separately or materialize into a common plane. | `/guides/nql/troubleshooting/cross-data-plane-queries` |
-| **Pass `data_plane_id` to validate, run, and get_job** | All three tools accept `data_plane_id` and all three default to the company default plane when it's omitted — usually wrong on multi-plane tenants. Capture the dataset's plane from `narrative_datasets_describe` (or `narrative_data_planes_list`) once, and pass the same value to every call. Omitting it on validate is the common cause of validator-only "Unknown Table" errors on numeric-id references like `company_data."38206"` (run accepts what validate rejects). | `/reference/integrations/mcp-server`, `/guides/nql/troubleshooting/cross-data-plane-queries` |
-| **`OR` in `JOIN` clauses** | `ON a.x = b.x OR a.y = b.y` defeats hash-join optimization and can run 100× slower. Restructure with `CROSS JOIN UNNEST([…])` on a flattened key column, or `UNION` two single-key joins. | `/guides/nql/query-optimization/avoid-or-in-join` |
-| **Filter before joining** | Push filters into CTEs / subqueries on each side of the join, not after. Cuts the rows hashed and the rows scanned. | `/cookbooks/nql/performance-patterns` |
-| **Prefer `APPROX_COUNT_DISTINCT`** | Cheaper and faster than `COUNT(DISTINCT col)`; exact at low cardinality, near-exact at scale. Reserve `COUNT(DISTINCT col)` for `HAVING` / `CASE WHEN` threshold logic. | `/cookbooks/nql/performance-patterns` |
-| **`QUALIFY` over subquery dedup** | `QUALIFY ROW_NUMBER() OVER (...) = 1` is the idiomatic NQL dedup; cheaper than a `WHERE rn = 1` wrapper around a `ROW_NUMBER()` subquery. | `/cookbooks/nql/performance-patterns` |
-| **Top-N inside a `CREATE MATERIALIZED VIEW`** | A materialized view stores an unordered bag of rows — `ORDER BY` in the body affects insertion order at best, not what later reads return. For "top N by aggregate" patterns inside a CMV, use `QUALIFY ROW_NUMBER() OVER (ORDER BY <measure> DESC) <= N` instead of `ORDER BY <measure> DESC LIMIT N`. Outside a CMV (an ad-hoc `SELECT` you'd then sample), `ORDER BY … LIMIT` is fine. | `/cookbooks/nql/performance-patterns` |
-| **Percentile / distribution summaries** | NQL on Snowflake does not currently support `APPROX_PERCENTILE` (function not registered, HTTP 422) or `PERCENTILE_CONT(p) WITHIN GROUP` (validates but 500s at run). Use bucketed counts (`SUM(CASE WHEN x >= threshold THEN 1 ELSE 0 END)`) or row-position derivation for exact percentiles. See the percentile reference below. | n/a — see `references/PERCENTILE_DISTRIBUTION.md` |
+> Common NQL gotchas (GEOMETRY, OR-in-JOIN, cross-plane, QUALIFY-in-CMV, percentile fallbacks) are catalogued in [`references/NQL_GOTCHAS.md`](references/NQL_GOTCHAS.md). Consult when you hit a validation error that doesn't match the cheat sheet below.
 
 ### Validation error → fix cheat sheet
 
-| Error symptom | Likely cause | Fix |
-| --- | --- | --- |
-| "syntax error at or near 'type'" | Unquoted reserved word | Quote as `"type"` |
-| "column not found" | Wrong identifier name / casing | Re-check schema via `narrative_datasets_describe` |
-| "function does not exist" | Wrong function name (e.g., `LCASE`) | Use the function list above |
-| "No match found for function signature `date_parse`/`parse_datetime`" | Function not exposed | Use `to_timestamp(text, format)` or `CAST(... AS timestamp)` |
-| "No match found for function signature `APPROX_PERCENTILE`" or run-time 500 on `PERCENTILE_CONT` | Percentile functions not available on the Snowflake data plane | Bucketed counts or row-position derivation — see `references/PERCENTILE_DISTRIBUTION.md` |
-| Validate-only "Unknown Table" on `company_data."<numeric_id>"` that run accepts | Validate call omitted `data_plane_id` and fell back to the company default plane | Pass `data_plane_id` to `narrative_nql_validate` matching the dataset's plane — same value as you'll pass to `narrative_nql_run` |
-| "cannot cast string to long" | Implicit coercion | Wrap with `CAST(... AS long)` or `NULLIF` |
-| "unexpected ELSE without CASE" | Mismatched CASE/END | Count `CASE … END` pairs |
-| "wildcard not supported" / "SELECT \* not supported" | Used `SELECT *` or `COUNT(*)` | Enumerate columns; use `COUNT(1)` or `COUNT(<col>)` |
-| "Unsupported GEOMETRY type" | `GEOMETRY` returned in `SELECT` | Move geometry to `JOIN` / `WHERE` only; project `latitude` / `longitude` / ids |
-| "String Concatenation" type error | `\|\|` mixing non-string types | `CAST(<x> AS VARCHAR)`, or extract `.value` from structured fields |
-| "Cross-Data Plane Query" error | Datasets in different planes | Query each plane separately, or materialize into one plane |
+> If `narrative_nql_validate` returns an error, look up the message in [`references/NQL_VALIDATION_ERRORS.md`](references/NQL_VALIDATION_ERRORS.md) for the canonical fix.
 
 When the local rules above aren't enough — type system edge cases,
 window functions, advanced join semantics — query the
@@ -493,7 +427,7 @@ Resolution sequence:
 
 1. **Capture the dataset's data plane during describe.** `narrative_datasets_describe(dataset_ids: [<id>], include: ["metadata"])` exposes the dataset's plane assignment alongside its name and id. Record it next to the unique_name / id you'll use in the query.
 2. **Confirm every dataset on the query is on the same plane.** Cross-plane joins fail at execution; if a query references multiple datasets, all of them must share a plane. If they don't, that's the cross-data-plane gotcha — query each plane separately or materialize one side into the other plane first.
-3. **Pass the same `data_plane_id` to validate, run, and get_job.** If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first. See the gotchas table for the failure mode this prevents — most visibly, validator-only "Unknown Table" errors on numeric-id references that run accepts.
+3. **Pass the same `data_plane_id` to validate, run, and get_job.** If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first. See the gotchas reference for the failure mode this prevents — most visibly, validator-only "Unknown Table" errors on numeric-id references that run accepts.
 
 If the dataset describe response doesn't include a plane field for
 your tenant, fall back to: `narrative_data_planes_list(include: ["metadata"])`
@@ -520,80 +454,14 @@ Terminal states:
 
 | `state` | Meaning | Next step |
 | --- | --- | --- |
-| `completed` | Job finished. **The payload depends on job type — rows almost never live here.** See "What `completed` actually returns" below. |
+| `completed` | Job finished. **The payload depends on job type — rows almost never live here.** | See [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md) for what `result` looks like per job type. |
 | `failed` | Engine error mid-execution | Read `failures` from the job payload; show it to the user verbatim; revise query and retry |
 | `cancelled` | Operator or timeout abort | Tell the user the job was cancelled; offer to re-run |
 
 Non-terminal states (`queued`, `running`, `processing`) → keep
 polling. Never treat them as a result.
 
-### What `completed` actually returns
-
-The `result` field on a finished job is shaped by the job `type`:
-
-| Job type | Triggered by | `result` payload | Where the rows live |
-| --- | --- | --- | --- |
-| `materialize-view` | `narrative_nql_run` with `CREATE MATERIALIZED VIEW "<name>" AS SELECT …`. Wrap **every** runnable `SELECT` in `CREATE MATERIALIZED VIEW` — a naked `SELECT` is not a runnable form, even when it validates. Do not put outer parens around the inner `SELECT`; the validator accepts them but execution 500s. | `{dataset_id, snapshot_id, recalculation_id}` | In the **data plane**, on the dataset identified by `dataset_id`. Not on the job. |
-| `dataset-sample` | `narrative_dataset_request_sample` | Status only | A sample is stored on the dataset in the **control plane**; fetch it via `narrative_datasets_describe(include=["sample"])`. |
-
-### Reading rows after a `materialize-view` job completes
-
-Rows from a `CREATE MATERIALIZED VIEW` are never inlined on the job
-descriptor. To see them you have to run a second asynchronous job to
-materialize a sample, then fetch it. (And remember: a bare `SELECT`
-is not a runnable form — you must explicitly wrap it in
-`CREATE MATERIALIZED VIEW` before submitting to `narrative_nql_run`.)
-
-1. **Submit the sampling job.** `narrative_dataset_request_sample(dataset_id: <id>)` → returns a new `job_id`. Use the `dataset_id` from the prior job's `result`.
-2. **Poll that job to completion** with `narrative_jobs_describe(job_ids: ["<sample_job_id>"])`, using the same backoff as above.
-3. **Read the sample rows** with `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`. The sample lives in the control plane and is what `include=["sample"]` returns.
-
-```
-narrative_nql_run(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS SELECT …")
-  → poll narrative_jobs_describe → result.dataset_id = 1234
-narrative_dataset_request_sample(dataset_id: 1234)
-  → poll narrative_jobs_describe → completed
-narrative_datasets_describe(dataset_ids: [1234], include: ["sample"])
-  → returns the sample rows (capped at 1,000)
-```
-
-The sample is a **point-in-time snapshot capped at 1,000 rows** of the
-dataset as it stood when the sample job ran. All columns are included;
-data is unmodified (Rosetta Stone attributes show their normalized
-form). Samples persist on the control plane until deleted, so re-runs
-of `narrative_datasets_describe(include=["sample"])` return the same
-snapshot until a new sampling job is enqueued.
-
-**1,000-row implication for query design.** When the goal is for the
-user to inspect every row of the intended output (a dedup check, a
-small enumerated set, an audit cut), cap the query itself at 1,000
-rows — `LIMIT 1000` on the inner `SELECT`, or a `WHERE`/`GROUP BY`
-that you know produces ≤ 1,000 rows. If the materialized dataset has
-more than 1,000 rows, the sample is just an arbitrary 1,000 of them
-and rows past the cap are invisible without exporting. For the
-opposite case — billions of rows you don't actually need to see —
-keep the `LIMIT` low (or push the work into aggregates: `COUNT(1)`,
-`SUM`, `GROUP BY`) to control cost.
-
-### Cost-of-execution reminder
-
-Every `narrative_nql_run` consumes platform resources and the result
-set is materialized. Default to a `LIMIT` clause whenever the user's
-question doesn't explicitly need every row. Prefer aggregations
-(`COUNT(1)`, `SUM`, `GROUP BY`) over pulling raw rows and counting in
-the agent. NQL does not support `COUNT(*)` — use `COUNT(1)` (rows)
-or `COUNT(<col>)` (non-null values).
-
-### Other async tools that follow the same pattern
-
-`narrative_dataset_request_sample`,
-`narrative_dataset_refresh_materialized_view`, and
-`narrative_dataset_recalculate_statistics` use the same job-id +
-`narrative_jobs_describe` polling protocol. The state machine and
-backoff above apply identically. The recalculation case has one
-caveat: for datasets not yet on the new statistics framework, the
-returned id is **not** a job id and `narrative_jobs_describe` will
-not find it — surface that to the user rather than polling forever.
+> Payload shapes and the materialize-view → sample → describe dance are documented in [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md).
 
 Before submitting, wrap your validated `SELECT` in `CREATE MATERIALIZED
 VIEW` — a bare `SELECT` is not a runnable form against
@@ -717,61 +585,17 @@ across planes; the validator will reject it. Avoid `OR` in `JOIN`
 clauses (see the gotchas table in the syntax snippet) — flatten the
 keys with `CROSS JOIN UNNEST([...])` or `UNION` two single-key joins.
 
-## Edge cases and gotchas
+## References
 
-See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
-nonexistent columns, wildcard scans against huge datasets,
-`--run` plus cost warnings, validator-vs-user disagreement, and
-schema drift mid-conversation. Read when something doesn't add up.
-
-## Harness fallbacks
-
-See
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
-covers `narrative-mcp` unavailable (paste-driven schema flow, no
-server validation, caveat the user) and the `AskUserQuestion`
-fallback for harnesses that don't expose it. Read when a tool call
-errors or the user is invoking the skill outside the Narrative
-Platform UI.
-
-## Further reading
-
-- `references/EDGE_CASES.md` — gotchas and authoring pitfalls:
-  nonexistent columns, wildcard scans on huge datasets, cost
-  warnings under `--run`, validator-vs-user disagreement, schema
-  drift. Read when something doesn't add up.
-- `references/PERCENTILE_DISTRIBUTION.md` — patterns for percentile
-  and distribution summaries on the Snowflake data plane, where
-  `APPROX_PERCENTILE` and `PERCENTILE_CONT` are not currently usable.
-  Read when the user's question is about distribution shape, quartiles,
-  thresholds, or "how skewed is X."
-- `references/HARNESS_FALLBACK.md` — what to do when
-  `narrative-mcp` is unavailable, and how to deliver the same flow
-  when `AskUserQuestion` isn't exposed. Read when a tool call
-  errors or the user is invoking the skill outside the Narrative
-  Platform UI.
-- `narrative-knowledge-base` MCP — `/concepts/nql/…`,
-  `/cookbooks/nql/…`, `/api-reference/nql/…`,
-  `/reference/integrations/mcp-server` (parameter contracts for
-  `narrative_nql_run` / `narrative_nql_get_job`, including
-  `data_plane_id` / `compute_pool_id`). Use when the local
-  syntax-essentials snippet doesn't cover the operator, function, or
-  pattern you need. For gotchas specifically, prefer:
-  - `/guides/nql/troubleshooting` (and `unsupported-type-error`,
-    `cross-data-plane-queries`) — the canonical troubleshooting catalog.
-  - `/nql/general/explicit-columns` — why `SELECT *` and `COUNT(*)`
-    are rejected and what to write instead.
-  - `/nql/general/reserved-keywords` — when to double-quote identifiers.
-  - `/nql/commands/create-materialized-view` — required wrapper for
-    runnable queries; full option reference.
-  - `/concepts/primitives/data-planes` — why every run needs an
-    explicit `data_plane_id` matching the dataset's plane.
-  - `/guides/nql/query-optimization/avoid-or-in-join` and
-    `/cookbooks/nql/performance-patterns` — performance gotchas
-    (OR-in-join, filter-before-join, `APPROX_COUNT_DISTINCT`, `QUALIFY`).
-- `plugins/narrative-common/skills/generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md`
-  — sibling skill's reference; deeper coverage of timestamp parsing,
-  enum handling, and reserved-name nesting if you hit them here.
+- [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — nonexistent columns, wildcard scans on huge datasets, `--run` cost warnings, validator-vs-user disagreement, schema drift. Read when something doesn't add up.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` unavailable (paste-driven schema, no server validation), `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.
+- [`references/PERCENTILE_DISTRIBUTION.md`](references/PERCENTILE_DISTRIBUTION.md) — percentile/distribution patterns on the Snowflake data plane where `APPROX_PERCENTILE` and `PERCENTILE_CONT` aren't usable. Read for distribution shape, quartiles, thresholds, skew.
+- [`references/NQL_GOTCHAS.md`](references/NQL_GOTCHAS.md) — full failure-mode catalog (GEOMETRY, OR-in-JOIN, cross-plane, QUALIFY-in-CMV, percentile fallbacks, reserved keywords, dataset-id quoting). Read when a draft fails validation or a passed-validation query 500s at run.
+- [`references/NQL_VALIDATION_ERRORS.md`](references/NQL_VALIDATION_ERRORS.md) — error-message → canonical-fix cheat sheet. Read when `narrative_nql_validate` returns an error and you want the shortest path to green.
+- [`references/NQL_QUOTING_AND_TABLE_REFS.md`](references/NQL_QUOTING_AND_TABLE_REFS.md) — schema list (`company_data` / `<provider_slug>` / `narrative`), `unique_name`-vs-numeric-id rules, reserved-words catalog, Rosetta Stone scope syntax. Read when a happy-path `company_data.<dataset_name>` reference isn't enough.
+- [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md) — `completed` payload shape per job type, the materialize-view → sample → describe dance, sibling async tools. Read when a job finishes but you can't find the rows.
+- `narrative-knowledge-base` MCP — `/concepts/nql/…`, `/cookbooks/nql/…`, `/api-reference/nql/…`, `/reference/integrations/mcp-server` for parameter contracts (`data_plane_id`, `compute_pool_id`). For gotchas: `/guides/nql/troubleshooting`, `/nql/general/explicit-columns`, `/nql/general/reserved-keywords`, `/nql/commands/create-materialized-view`, `/concepts/primitives/data-planes`, `/guides/nql/query-optimization/avoid-or-in-join`, `/cookbooks/nql/performance-patterns`.
+- `plugins/narrative-common/skills/generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md` — sibling reference covering timestamp parsing, enum handling, reserved-name nesting.
 
 ## Feedback (only if something could be improved)
 
