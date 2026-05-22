@@ -261,7 +261,7 @@
     },
     {
       "name": "triage-pregraph-data",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "description": "Audit a dataset or access rule before it joins an identity-graph\nbuild (access rules behave like datasets in NQL and are used\ninterchangeably here). Enumerates failure modes (hub identifiers,\nhigh-degree nodes, behaviorally suspicious values, over-connected\nidentifiers, source-specific quirks), tests hypotheses in parallel,\nquantifies damage by rows / edges / entities, proposes minimal\nfilters ranked by severity, and — when issues are found — returns\na validated `CREATE MATERIALIZED VIEW` NQL the caller can run to\nproduce a graph-ready clean source. If the data passes, says so\nplainly and recommends the source unchanged. Plans, reports, and\nauthors the clean-view NQL; does not execute it.\nUse when: \"audit this dataset before the graph build\", \"audit this\naccess rule before the graph build\", \"find bad edges in <source>\",\n\"check identity data quality\", \"recommend filters for the graph\nbuild\", \"find hub identifiers in <source>\", \"quantify damage from\n<identifier_type>\", \"pre-graph DQ\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/triage-pregraph-data/SKILL.md",
