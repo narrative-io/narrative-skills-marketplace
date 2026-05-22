@@ -192,7 +192,7 @@
     },
     {
       "name": "generate-identity-graph",
-      "version": "0.3.2",
+      "version": "0.4.0",
       "description": "Interactively build a Narrative identity graph workflow from one or\nmore first-party datasets and (optionally) third-party data sources.\nConfirms each input dataset is mapped to the Rosetta Stone graph\nedge attribute (mapping it via /generate-rosetta-stone-mappings if\nnot), then composes and submits a workflow that unions every edge\nsource and labels connected components.\nUse when: \"build an identity graph\", \"generate an identity graph\",\n\"create an identity graph\", \"stitch these datasets into a graph\",\n\"make a graph workflow\", \"label connected components on these\ndatasets\", \"I want a person graph / household graph / device graph\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-identity-graph/SKILL.md",
