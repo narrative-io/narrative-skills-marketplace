@@ -1,23 +1,23 @@
 ---
 name: triage-pregraph-data
-version: 0.3.1
+version: 0.4.0
 description: |
-  Audit a dataset before it joins an identity-graph build. Enumerates
-  dataset-specific failure modes (hub identifiers, high-degree nodes,
-  behaviorally suspicious values, over-connected identifiers, source-
-  specific quirks), tests every hypothesis in parallel against the
-  data, quantifies damage by rows / edges / entities affected, proposes
-  minimal filter expressions ranked by severity, and — when the audit
-  finds issues — returns a validated `CREATE MATERIALIZED VIEW` NQL the
-  caller can run to produce a graph-ready clean source. If the data
-  passes the audit, says so plainly and recommends the source table
-  unchanged. Plans, reports, and authors the clean-view NQL; does not
-  execute it.
-  Use when: "audit this dataset before the graph build", "find bad
-  edges in <dataset>", "check identity data quality", "recommend
-  filters for the graph build", "find hub identifiers in <dataset>",
-  "quantify damage from <identifier_type>", "give me the clean-view
-  NQL for the graph build", "pre-graph DQ".
+  Audit a dataset or access rule before it joins an identity-graph
+  build (access rules behave like datasets in NQL and are used
+  interchangeably here). Enumerates failure modes (hub identifiers,
+  high-degree nodes, behaviorally suspicious values, over-connected
+  identifiers, source-specific quirks), tests hypotheses in parallel,
+  quantifies damage by rows / edges / entities, proposes minimal
+  filters ranked by severity, and — when issues are found — returns
+  a validated `CREATE MATERIALIZED VIEW` NQL the caller can run to
+  produce a graph-ready clean source. If the data passes, says so
+  plainly and recommends the source unchanged. Plans, reports, and
+  authors the clean-view NQL; does not execute it.
+  Use when: "audit this dataset before the graph build", "audit this
+  access rule before the graph build", "find bad edges in <source>",
+  "check identity data quality", "recommend filters for the graph
+  build", "find hub identifiers in <source>", "quantify damage from
+  <identifier_type>", "pre-graph DQ".
   (narrative-identity)
 compatibility:
   recommends:
@@ -31,6 +31,8 @@ compatibility:
       - narrative_context_set_company
       - narrative_datasets_search
       - narrative_datasets_describe
+      - narrative_access_rules_search
+      - narrative_access_rules_describe
       - narrative_dataset_get_column_stats
       - narrative_nql_validate
 ---
@@ -59,6 +61,10 @@ impact. You never treat "bad" as universal — what counts as a problem
 depends on the identifier type, the source system, and what realistic
 behavior looks like for the entity being identified.
 
+## Output rules
+
+{{SNIPPET:internal-field-hygiene}}
+
 ## Overview
 
 Audit a dataset that is about to be ingested into an identity-graph
@@ -81,7 +87,18 @@ This skill produces two deliverables, packaged into a single report:
    pipeline, or the downstream graph-build skill).
 
 If the audit confirms zero issues, the skill says so plainly and
-recommends the source table unchanged — no materialization required.
+recommends the source unchanged — no materialization required.
+
+### A note on sources: datasets and access rules
+
+Throughout this skill, "dataset" is shorthand for **the NQL-queryable
+source under audit, which may be a Narrative dataset *or* an access
+rule.** Access rules look, act, and feel like datasets as far as NQL
+is concerned. From Phase 3 (hypothesis generation) onward, treat them
+identically. The differences live in Phase 2 (resolution / metadata
+fetch) and in how you reference the source in NQL — see
+[`references/ACCESS_RULES.md`](references/ACCESS_RULES.md) for tool
+substitutions and NQL reference patterns.
 
 ## Arguments
 
@@ -90,7 +107,8 @@ them up front; never invent values.
 
 | Argument | Meaning |
 | --- | --- |
-| `--dataset <id>` | Pre-bind the source dataset. Skips dataset discovery. |
+| `--dataset <id>` | Pre-bind the source as a dataset. Skips discovery. Mutually exclusive with `--access-rule`. |
+| `--access-rule <id>` | Pre-bind the source as an access rule. Skips discovery. The audit runs identically — access rules behave like datasets in NQL. Mutually exclusive with `--dataset`. |
 | `--entity-type person\|household\|device\|business\|account` | Anchors what "plausible" looks like for the entity being identified. Required if not derivable from context. |
 | `--identifier-cols <col,col,...>` | Pre-declare which columns hold identifiers. Skips identifier-column discovery. |
 | `--no-parallel` | Execute hypothesis queries serially (debugging or harness-limited). |
@@ -103,12 +121,16 @@ If invoked with no arguments, walk the user through interactively.
 
 Triggers:
 
-- "Audit this dataset before the graph build"
-- "Find bad edges in `<dataset>`" / "check identity data quality"
-- "Find hub identifiers in `<dataset>`"
+- "Audit this dataset before the graph build" / "audit this access rule
+  before the graph build"
+- "Find bad edges in `<source>`" / "check identity data quality"
+- "Find hub identifiers in `<source>`"
 - "Recommend filters for the graph build"
 - "Quantify damage from `<identifier_type>`"
 - "Pre-graph DQ on `<source system>`"
+
+Source is a Narrative dataset or an access rule — see the
+"A note on sources" callout in [Overview](#overview).
 
 Do NOT use for:
 
@@ -154,20 +176,25 @@ encode the framing inline using the checklist below.
 | **Identifier columns in scope** | Which columns produce edges | `email`, `phone_e164`, `device_id`, etc. |
 | **What this audit will NOT do** | Explicit non-goals | not fixing the source; not re-building the graph; not changing entity-resolution rules |
 
-Resolve the source dataset and read schema + sample + stats:
+Resolve the source and read its schema (plus sample + stats when
+available). For a dataset, run `narrative_datasets_search` then
+`narrative_datasets_describe` with `include: ["metadata", "schema",
+"sample", "stats"]`. If the source is an access rule, see
+[`references/ACCESS_RULES.md`](references/ACCESS_RULES.md) for tool
+substitutions and the sample/stats workaround. If neither
+`--dataset` nor `--access-rule` was passed and the source type is
+ambiguous, ask **one** `AskUserQuestion` to disambiguate before
+searching.
 
-```
-narrative_datasets_search(search_term: "<phrase>")
-narrative_datasets_describe(
-  dataset_ids: [<id>],
-  include: ["metadata", "schema", "sample", "stats"]
-)
-```
+Once you have schema and (where applicable) sample / stats, record the
+**fully qualified NQL reference** for the source — `company_data.<table>`
+for a dataset or `<owning_company_slug>.<rule_name>` for an access
+rule. Every downstream phase uses this reference as `<source>`.
 
 End this phase with a two-line summary you show the user before
 running any hypothesis query:
 
-> Auditing `<dataset>` (`<row_count>` rows, `<entity_count>` distinct
+> Auditing `<source>` (`<row_count>` rows, `<entity_count>` distinct
 > entities) for pre-graph data quality. Entity type: `<type>`.
 > Identifier columns: `<col1>`, `<col2>`, … . Comparison threshold
 > for "plausible per-entity activity": `<derived from entity type>`.
@@ -180,20 +207,12 @@ collected, what the identifiers represent, and what realistic
 behavior looks like for the entity type.** The taxonomy is a starting
 point, not a checklist.
 
-#### Starter taxonomy (extend, do not just copy)
+Common failure modes to check: hub identifiers, high-degree nodes,
+behavioral-suspicious values, over-connected identifiers,
+source-specific quirks. Full taxonomy with detection patterns:
+[`references/FAILURE_MODE_TAXONOMY.md`](references/FAILURE_MODE_TAXONOMY.md).
 
-| Failure mode | What to look for | Why it kills graph quality |
-| --- | --- | --- |
-| **Hub identifiers** | A single identifier value shared across many entities — placeholders, defaults, sentinels: `NULL`, empty string, `foo@bar.baz`, `noreply@*`, `0000000000`, `test@`, source-system sentinels. | One value forms a hub that bridges every entity that ever fell back to it. |
-| **High-degree nodes** | Identifiers connected to far more entities than is plausible, even if not obviously a placeholder. Top-N by degree, plus the long tail. | Each high-degree node is a potential bridge between unrelated components. |
-| **Behaviorally suspicious** | Activity volume that doesn't fit the entity type (an "individual" producing hundreds of rows per day a real person couldn't generate). | Suggests the identifier is a service / bot / system actor, not the labeled entity. |
-| **Over-connected** | Same email across N customer accounts, same phone across many households. Threshold varies by identifier type: email legitimately spans 2–3 family members; device IDs generally shouldn't span more than 1; phones span 4–5 in a household. | Plausible-vs-implausible co-occurrence collapses households or accounts that should remain distinct. |
-| **Malformed identifiers** | Format violations: emails without `@`, phone numbers without enough digits, UUIDs with wrong length. | Often pass through ETL silently and form their own little hub at the malformed value. |
-| **Identifier-encodes-session-not-entity** | The "identifier" is actually a session_id, transaction_id, or cookie that should not persist across entities. | Edges built on these will fragment one entity across many components. |
-| **Format-changes-over-time** | The identifier format changed at a known cutover (vendor change, schema migration, regex upgrade) and the same logical value now appears under two formats. | Both formats reference the same entity but build separate components; opposite of the hub problem, equally bad. |
-| **Identifiers that are labels** | A field labeled `customer_id` actually stores a free-text customer name or an enum code. | The "identifier" lacks the uniqueness contract the graph builder assumes. |
-
-Look beyond this table. Think about source-specific issues — the
+Look beyond the taxonomy. Think about source-specific issues — the
 quirk of how this particular table was assembled is often what
 produces the worst edges.
 
@@ -332,50 +351,13 @@ in the report so the next audit doesn't re-test them blindly.
 
 ### 7. Draft the audit report — mandatory
 
-Compose the audit findings section of the report. Use the template
-below; order **by severity (rows / edges / entities affected,
-descending)** per the user's explicit ask. The "Recommended clean-view
-NQL" block is filled in by Phase 8 — leave it as a placeholder for now.
-
-```markdown
-# Pre-graph DQ audit: <dataset>
-
-## Audit framing
-- Dataset: `<name>` (`<id>`)
-- Entity type: `<type>`
-- Identifier columns audited: `<list>`
-- Row count (pre-filter): `<N>`
-- Distinct entities (pre-filter): `<N>`
-- What this audit did NOT do: `<scope notes>`
-
-## Headline
-- Hypotheses tested: `<N>`
-- Confirmed issues: `<N>`
-- Disproven hypotheses: `<N>`
-- Recommended filters: `<N>`
-- Total rows recommended for removal: `<N>` (`<pct>`%)
-- Estimated edges removed: `<N>`
-- Largest hub component prevented: ~`<N>` entities
-
-## Findings (ordered by severity, descending)
-
-### Finding 1 — <one-line title> [SEVERITY: high|medium|low]
-- **Hypothesis**: <falsifiable claim from Phase 3>
-- **Query** (purpose, source + grain, filters, group-by, measures, validation):
-  <plain-English brief; the actual SQL/NQL lives in the query-writer's output>
-- **Result**: <numbers from Phase 5>
-- **Filter**: <expression, before/after counts, rationale tied to result>
-
-### Finding 2 — …
-
-### Disproven hypotheses (kept for the record)
-- **H<n>**: <claim>. **Result**: not supported (<evidence>). **No filter proposed.**
-
-## Recommended clean-view NQL
-<filled in by Phase 8 — either the validated CREATE MATERIALIZED VIEW
-query, or the "no materialization required" note when the audit found
-no issues>
-```
+Draft the report using the template at
+[`references/REPORT_TEMPLATE.md`](references/REPORT_TEMPLATE.md).
+Fill in the headings + tables; the template handles structure. Order
+findings **by severity (rows / edges / entities affected,
+descending)** per the user's explicit ask. The "Recommended
+clean-view NQL" block is filled in by Phase 8 — leave it as a
+placeholder for now.
 
 The findings are the audit's diagnostic deliverable; the clean-view
 NQL (Phase 8) is its operational deliverable. Both ship together in
@@ -396,169 +378,51 @@ clean source.
   Phase 2): **skip the NQL composition**. In the report's
   "Recommended clean-view NQL" section, write exactly:
 
-  > The source table passed the audit. No materialization is required;
-  > `<source_table>` is graph-ready as-is. Pass it to the graph build
+  > The source passed the audit. No materialization is required;
+  > `<source>` is graph-ready as-is. Pass it to the graph build
   > directly.
 
-  Stop. Do not invoke `/write-nql`.
+  `<source>` is the fully qualified NQL reference recorded in Phase 2
+  — `company_data.<table>` for a dataset, `<owning_company_slug>.<rule_name>`
+  for an access rule. Stop. Do not invoke `/write-nql`.
 
 - **One or more confirmed issues**: continue to the next step.
 
-#### Consolidate filters
-
-Before invoking `/write-nql`, normalize the filter set from Phase 6:
-
-1. **Dedupe** overlapping filters (e.g., a sentinel-email filter that
-   subsumes a malformed-email filter). Keep the broader filter; drop
-   the narrower one.
-2. **Phrase each filter as a row-level predicate** that evaluates
-   `TRUE` for rows to **keep** (the materialized view's `WHERE`
-   clause is a positive predicate, not an exclusion list). For each
-   Phase 6 filter expressed as "exclude rows where X", invert it to
-   "keep rows where NOT (X)".
-3. **List every column the source carries** — NQL rejects `SELECT *`,
-   so the materialization must project explicit columns. Capture the
-   column list from the Phase 2 schema read.
-
 #### Hand off to `/write-nql` (validate-only)
 
-Invoke `/write-nql` directly with a brief that asks for a single
-validated query, no execution:
-
-```
-/write-nql --dataset <id> --no-explain
-  Author a single CREATE MATERIALIZED VIEW over <fully-qualified
-  source table> that produces a graph-ready clean view. Project
-  these columns explicitly: <col1>, <col2>, ... . Apply the
-  following keep-predicates (combined with AND):
-    K1: <predicate from Phase 6 finding 1, phrased to keep good rows>
-    K2: <predicate from Phase 6 finding 2, phrased to keep good rows>
-    ...
-  Suggested view name: `<source_table>_graph_clean_<yyyymmdd>`.
-  EXPIRE policy: short (e.g., 'P7D') — the caller can promote to a
-  scheduled refresh if needed.
-  Validate only. Do NOT run. Return the validated NQL verbatim.
-```
-
-This is the **one** place this skill calls `/write-nql` directly. The
-Phase 4 hypothesis testing still routes through `/design-analysis`
-because that workload is multi-query and analytical. Phase 8 is a
-single deterministic translation from an already-decided filter set
-into a `CREATE MATERIALIZED VIEW` — no analyst orchestration adds
-value, so the direct call keeps the path short.
-
-Wait for `/write-nql` to return a validated query. If validation
-fails (e.g., a filter references a column that does not exist in
-the schema, or a function call doesn't compile), loop back to Phase
-6, revise the offending filter, and re-hand off. **Never ship an
-unvalidated NQL block.**
+Invoke `/write-nql --no-explain` with the brief at
+[`references/CLEAN_VIEW_NQL_PROMPT.md`](references/CLEAN_VIEW_NQL_PROMPT.md).
+That reference covers the pre-flight filter consolidation (dedupe,
+keep-predicate phrasing, explicit column projection), the verbatim
+prompt body, and the post-flight validation loop. If the source is
+an access rule, also see
+[`references/ACCESS_RULES.md`](references/ACCESS_RULES.md) for the
+invocation delta (drop `--dataset`, swap the source reference, adjust
+the view name).
 
 #### Embed in the report
 
-Replace the Phase 7 "Recommended clean-view NQL" placeholder with:
-
-````markdown
-## Recommended clean-view NQL
-
-The query below applies every recommended filter as a single
-`CREATE MATERIALIZED VIEW`. **Validated against the dataset's schema
-but NOT executed.** Run it (or hand it to whoever runs
-materializations) to produce the graph-ready source table; then point
-the graph build at the resulting view.
-
-```sql
-<verbatim NQL returned by /write-nql>
-```
-
-Estimated impact (from Phase 5, deduped across filters):
-- Rows kept: `<N>` of `<total>` (`<pct>`%)
-- Rows removed: `<N>` (`<pct>`%)
-- Distinct entities preserved: `<N>`
-- Hub components prevented: `<list of largest>`
-````
+Replace the Phase 7 "Recommended clean-view NQL" placeholder with
+the fill-in block from
+[`references/REPORT_TEMPLATE.md`](references/REPORT_TEMPLATE.md)
+— the verbatim NQL plus the estimated-impact bullets (rows kept /
+removed, entities preserved, hub components prevented).
 
 The NQL block is the final hand-off. This skill does not run it, does
 not schedule it, and does not trigger the graph build.
 
-## Common cases
+## References
 
-### Person graph with email + phone identifiers
-
-Typical hypotheses worth pre-loading (still re-justify on the data):
-
-- `email IN (sentinel set)` — `noreply@*`, `test@*`, common
-  placeholders.
-- `LOWER(email)` degree > 10 distinct entities — email legitimately
-  spans 2–3 family members; > 10 is almost always a shared inbox or
-  service email.
-- `phone_e164` degree > 5 distinct households — phones reasonably
-  span a household, but not 50.
-- Rows per entity per day implies bot traffic.
-
-### Device graph with cookie + device_id identifiers
-
-- Cookies have very high churn — almost any cookie with degree > 1
-  is suspicious because cookies are usually 1:1 with browser-session.
-- `device_id` should be very sticky; degree > 1 is unusual and worth
-  inspection.
-- Watch for cookie format that changed at a vendor migration —
-  pre- and post-migration cookies look identical-shape but reference
-  different sessions.
-
-### Customer graph from a CRM export
-
-- Test accounts (`email LIKE '%@<your-company>.com'` if the export
-  isn't supposed to include internal users).
-- System users / API-integration users (often have very high
-  activity volume).
-- Opt-out sentinel rows where every identifier is blanked but the
-  row still has an entity_id.
-
-## Edge cases and gotchas
-
-See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
-datasets with no identifier columns, all-unique identifiers, very
-low row counts, mixed source-table grains, evidence-free threshold
-demands, filters that remove > 10% of rows, overlapping
-hypotheses, post-build invocations, zero-issue audits, and
-materialization queries `/write-nql` refuses to validate. Read
-when the dataset doesn't fit the audit's assumptions.
-
-## Harness fallbacks
-
-See
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
-covers `narrative-mcp` unavailable (paste-driven flow, annotate the
-report), `/design-analysis` unavailable (hand the user a manual
-brief), `/write-nql` unavailable in Phase 8 (ship findings without
-the validated NQL block), and the `AskUserQuestion` fallback for
-harnesses that don't expose it. Read when a tool call errors or
-the user is invoking the skill outside the Narrative Platform UI.
-
-## Further reading
-
-- `references/EDGE_CASES.md` — gotchas and audit assumptions:
-  no-identifier datasets, all-unique identifiers, low row counts,
-  mixed grains, evidence-free thresholds, oversized filters,
-  overlapping hypotheses, post-build invocations, zero-issue
-  outcomes, and unvalidatable materialization queries. Read when
-  the dataset doesn't fit the audit's assumptions.
-- `references/HARNESS_FALLBACK.md` — what to do when
-  `narrative-mcp`, `/design-analysis`, or `/write-nql` is
-  unavailable, and how to deliver the same flow when
-  `AskUserQuestion` isn't exposed. Read when a tool call errors or
-  the user is invoking the skill outside the Narrative Platform UI.
+- [`references/ACCESS_RULES.md`](references/ACCESS_RULES.md) — dataset-vs-access-rule tool substitutions, NQL reference patterns, sample/stats workarounds, and Phase 8 invocation deltas. Read in Phase 2 if the source is (or might be) an access rule.
+- [`references/FAILURE_MODE_TAXONOMY.md`](references/FAILURE_MODE_TAXONOMY.md) — full 8-row starter taxonomy with detection patterns and graph-quality impact. Read in Phase 3 when generating hypotheses.
+- [`references/COMMON_CASES.md`](references/COMMON_CASES.md) — per-graph-type hypothesis starters (person, device, CRM). Read when scoping the audit to confirm which failure modes to prioritize for the specific graph shape.
+- [`references/REPORT_TEMPLATE.md`](references/REPORT_TEMPLATE.md) — verbatim markdown skeleton for the Phase 7 audit report, plus the Phase 8 fill-in block for the clean-view NQL.
+- [`references/CLEAN_VIEW_NQL_PROMPT.md`](references/CLEAN_VIEW_NQL_PROMPT.md) — Phase 8 brief body for `/write-nql --no-explain`, pre-flight checklist, and post-flight validation loop.
+- [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — no-identifier datasets, all-unique identifiers, low row counts, mixed grains, evidence-free thresholds, oversized filters, overlapping hypotheses, post-build invocations, zero-issue outcomes, unvalidatable materialization queries. Read when the dataset doesn't fit the audit's assumptions.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` / `/design-analysis` / `/write-nql` unavailable, `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.
 - `docs/authoring-skills.md` — house conventions this skill follows.
-- `plugins/narrative-common/skills/design-analysis/` — the analyst.
-  This skill hands the Phase 4 hypothesis-testing workload off to
-  `/design-analysis`; the analyst orchestrates the parallel
-  `/write-nql` batch.
-- `plugins/narrative-common/skills/write-nql/` — the query writer.
-  Reached transitively via `/design-analysis` for Phase 4, and
-  directly (validate-only) for Phase 8's single materialization-view
-  query. Phase 8 is the only direct call this skill makes.
-- `plugins/narrative-common/skills/generate-rosetta-stone-mappings/`
-  — run first if the dataset's identifier columns are not yet mapped
-  to Rosetta Stone attributes.
+- `plugins/narrative-common/skills/design-analysis/` — Phase 4 hypothesis-testing handoff; orchestrates the parallel `/write-nql` batch.
+- `plugins/narrative-common/skills/write-nql/` — Phase 8 direct call (validate-only); reached transitively via `/design-analysis` for Phase 4.
+- `plugins/narrative-common/skills/generate-rosetta-stone-mappings/` — run first if identifier columns aren't yet mapped.
 
 {{SNIPPET:agent-feedback}}

@@ -130,7 +130,7 @@ Identity-graph workflows backed by the narrative-mcp server — pre-graph data-q
 | Skill | Use when |
 |-------|----------|
 | `/generate-identity-graph` | "build an identity graph", "generate an identity graph", "create an identity graph", "stitch these datasets into a graph", "make a graph workflow", "label connected components on these datasets", "I want a person graph / household graph / device graph". |
-| `/triage-pregraph-data` | "audit this dataset before the graph build", "find bad edges in <dataset>", "check identity data quality", "recommend filters for the graph build", "find hub identifiers in <dataset>", "quantify damage from <identifier_type>", "give me the clean-view NQL for the graph build", "pre-graph DQ". |
+| `/triage-pregraph-data` | "audit this dataset before the graph build", "audit this access rule before the graph build", "find bad edges in <source>", "check identity data quality", "recommend filters for the graph build", "find hub identifiers in <source>", "quantify damage from <identifier_type>", "pre-graph DQ". |
 
 <!-- END PLUGINS -->
 
