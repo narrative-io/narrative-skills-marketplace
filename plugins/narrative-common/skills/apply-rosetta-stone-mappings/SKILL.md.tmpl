@@ -1,6 +1,6 @@
 ---
 name: apply-rosetta-stone-mappings
-version: 0.2.0
+version: 0.3.0
 description: |
   Apply a set of Rosetta Stone attribute mappings to a Narrative
   dataset by wrapping them in a one-shot workflow that calls the
@@ -47,8 +47,11 @@ production change against a Narrative dataset. You optimize for:
    user approved; no silent rewrites of expressions or attribute IDs.
 2. Pre-flight safety — every expression is re-validated against the
    dataset's *current* schema before the workflow is rendered.
-3. Transparency — the user sees the full rendered workflow YAML and
-   approves it explicitly before anything is created server-side.
+3. Transparency — the user sees a plain-English summary of what
+   will be applied and approves it explicitly before anything is
+   created server-side. Most users on this skill are non-technical;
+   the raw YAML is hidden by default and shown only when the user
+   asks for it (`--show-spec` or `--dry-run`).
 
 You never submit without showing the spec first, never invent an
 `attributeId` or expression, never bypass validation when the
@@ -95,7 +98,8 @@ them up front; never invent values.
 | `--mappings <json>` | Inline JSON string with the mappings input. Useful when invoked programmatically from `/generate-rosetta-stone-mappings`. |
 | `--allow-partial` / `--no-allow-partial` | Sets the task's `allowPartial` flag (default `true` — individual mapping failures don't abort the others). |
 | `--data-plane <id>` | UUID of the data plane to target. Skips data-plane resolution. |
-| `--dry-run` | Render the full spec, re-validation results, and the create-call parameters; do NOT submit. |
+| `--dry-run` | Render the full spec, re-validation results, and the create-call parameters; do NOT submit. Implies `--show-spec`. |
+| `--show-spec` | Include the full rendered workflow YAML in the approval preview. Off by default — most users only need the plain-English summary. |
 | `--no-trigger` | Submit the workflow but do not pass `trigger_immediately: true`. The user must trigger it manually later (rare). |
 | `--no-revalidate` | Skip Phase 5 NQL re-validation. Intended for same-conversation hand-off from `/generate-rosetta-stone-mappings` (which already validated every expression against the current schema). Do NOT pass when the input is from a file, a paste, or a prior conversation — the schema may have drifted. |
 
@@ -305,11 +309,10 @@ state stays as it was before the run.
 
 Show the user, in this order:
 
-1. The full YAML in a fenced ```yaml block.
-2. A plain-English summary: dataset, count of mappings, breakdown
+1. A plain-English summary: dataset, count of mappings, breakdown
    (`N value_mappings`, `M object_mappings`), any conflicts
    pre-detected in Phase 4, and the chosen `allowPartial` setting.
-3. The create-call parameters as a compact table:
+2. The create-call parameters as a compact table:
 
    | Field | Value |
    | --- | --- |
@@ -317,6 +320,13 @@ Show the user, in this order:
    | `trigger_immediately` | `true` (or `false` if `--no-trigger`) |
    | `schedule_immediately` | `false` |
    | `tags` | `["rosetta-stone", "apply-mappings"]` |
+
+3. **Only if `--show-spec` or `--dry-run` was passed**: the full
+   rendered YAML in a fenced ```yaml block. Otherwise omit it —
+   non-technical users find a wall of YAML counter-productive, and
+   the plain-English summary plus parameters table is enough to make
+   the approval decision. Mention in passing that they can re-run
+   with `--show-spec` if they want to see the spec.
 
 Surface caveats up front, not in a post-script:
 

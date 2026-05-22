@@ -26,7 +26,7 @@
   "skills": [
     {
       "name": "apply-rosetta-stone-mappings",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Apply a set of Rosetta Stone attribute mappings to a Narrative\ndataset by wrapping them in a one-shot workflow that calls the\n`CreateRosettaStoneMappingsIfNotExist` task. Consumes the structured\noutput of `/generate-rosetta-stone-mappings`, normalizes the\ngenerator's snake_case to the workflow task's camelCase, re-validates\nevery expression against the dataset's current schema, gates on\nuser approval, submits via `narrative_workflows_create`, polls the\ntriggered run, and reports per-mapping created / conflict / failed.\nUse when: \"apply these mappings to dataset N\", \"create the\nRosetta Stone mappings I just generated\", \"push the mappings I\nsaved earlier to <dataset>\", \"productionize this mapping list\",\n\"submit the suggested_mappings array\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/apply-rosetta-stone-mappings/SKILL.md",
@@ -59,7 +59,7 @@
     },
     {
       "name": "create-workflow",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "description": "Author and submit a Narrative workflow from a natural-language\nintent. Picks the closest example from `assets/examples/`, adapts\nit to the user's case, walks the YAML against the spec, resolves\nthe data plane, and submits via `narrative_workflows_create` only\nafter the user has approved the rendered spec.\nUse when: \"create a workflow that does X\", \"schedule a daily\nrefresh of dataset Y\", \"wrap this NQL as a workflow\", \"build a\npipeline that creates view A then refreshes view B\", \"submit this\nworkflow YAML\", \"productionize this query as a recurring job\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/create-workflow/SKILL.md",

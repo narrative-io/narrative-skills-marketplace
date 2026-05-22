@@ -1,6 +1,6 @@
 ---
 name: create-workflow
-version: 0.5.0
+version: 0.6.0
 description: |
   Author and submit a Narrative workflow from a natural-language
   intent. Picks the closest example from `assets/examples/`, adapts
@@ -58,10 +58,13 @@ optimize for:
    `assets/examples/`, adapt it, and only add structure the user
    actually asked for. No conditional branches, no parallel fan-out,
    no retry logic — those are not supported.
-3. Transparency before submit — the user sees and approves the full
-   rendered YAML, the chosen data plane, and the `trigger_immediately`
-   / `schedule_immediately` flags before anything is created server-
-   side.
+3. Transparency before submit — the user sees and approves a
+   plain-English description of what the workflow does, the chosen
+   data plane, and the `trigger_immediately` / `schedule_immediately`
+   flags before anything is created server-side. Most users on this
+   skill are non-technical; the raw YAML is hidden by default and
+   shown only when the user asks for it (`--show-spec` or
+   `--dry-run`).
 
 You never submit a workflow without showing the spec first, never
 invent a task name, parameter, or NQL identifier, and never claim a
@@ -110,7 +113,8 @@ slash command. Parse them up front; never invent values.
 | `--trigger` | Pass `trigger_immediately: true` on create — fires one run as soon as the workflow is registered. |
 | `--schedule` | Pass `schedule_immediately: true` on create — activates the `schedule:` cron. Requires the spec to contain a `schedule:` block. |
 | `--tags <a,b,c>` | Comma-separated tags to attach to the workflow. |
-| `--dry-run` | Render and display the full spec, the chosen data plane, and the create-call parameters — but do NOT call `narrative_workflows_create`. |
+| `--dry-run` | Render and display the full spec, the chosen data plane, and the create-call parameters — but do NOT call `narrative_workflows_create`. Implies `--show-spec`. |
+| `--show-spec` | Include the full rendered YAML in the approval preview. Off by default — most users only need the plain-English summary. |
 | Free-text tail | The user's intent (e.g., `/create-workflow daily refresh of active_users at midnight UTC`). |
 
 If invoked with no arguments and no free-text tail, ask the user via
@@ -253,13 +257,12 @@ either change planes or change datasets. Do not guess.
 
 ### 6. Render the spec and explain it — mandatory
 
-Always show the user three things, in this order:
+Always show the user, in this order:
 
-1. The full YAML in a fenced ```yaml block.
-2. A plain-English summary of what each task does, in order. Avoid
+1. A plain-English summary of what each task does, in order. Avoid
    jargon: "First, build the `active_users` view from `users`. Then
    refresh `active_users_aggregates`."
-3. The create-call parameters as a compact table:
+2. The create-call parameters as a compact table:
 
    | Field | Value |
    | --- | --- |
@@ -267,6 +270,13 @@ Always show the user three things, in this order:
    | `trigger_immediately` | `true` / `false` |
    | `schedule_immediately` | `true` / `false` |
    | `tags` | `[…]` or `(none)` |
+
+3. **Only if `--show-spec` or `--dry-run` was passed**: the full
+   rendered YAML in a fenced ```yaml block. Otherwise omit it —
+   non-technical users find a wall of YAML counter-productive, and
+   the plain-English summary plus parameters table is enough to make
+   the approval decision. Mention in passing that they can re-run
+   with `--show-spec` if they want to inspect the raw spec.
 
 Surface caveats up front, not in a post-script:
 
