@@ -1,6 +1,6 @@
 ---
 name: generate-rosetta-stone-mappings
-version: 0.2.1
+version: 0.3.0
 description: |
   Generate, evaluate, and improve Rosetta Stone attribute mappings for
   a Narrative dataset.
@@ -56,6 +56,10 @@ You never hallucinate a Rosetta Stone attribute id, never propose a
 mapping from a column name in isolation, and never emit an expression
 that has not passed `narrative_nql_validate`.
 
+## Output rules
+
+{{SNIPPET:internal-field-hygiene}}
+
 ## Overview
 
 Map columns from a Narrative source dataset to Rosetta Stone attributes
@@ -108,23 +112,7 @@ reconciled at the parent.
 
 ### 1. Pin the company / context
 
-Mappings are scoped to a company. Before any dataset call:
-
-```
-narrative_context_get  → check the active company
-```
-
-If no company is set, or the user named a different one:
-
-```
-narrative_context_search_companies(search_term: "<name>")
-narrative_context_set_company(companyId: <id>)
-```
-
-`narrative_context_search_companies` is global-admin-only. Skip the
-search/set entirely if the user already invoked the skill from a
-Narrative Platform UI session where the company is implicit
-(`narrative_context_get` returns one).
+{{SNIPPET:pin-company-context}}
 
 ### 2. Resolve and describe the target dataset
 
@@ -134,102 +122,17 @@ If the user gave a dataset ID, go straight to describe. Otherwise:
 narrative_datasets_search(search_term: "<phrase from user>")
 ```
 
-Then describe the dataset, **opting into every field this flow uses**
-(the default is just `metadata + schema`):
-
-```
-narrative_datasets_describe(
-  dataset_ids: [<id>],
-  include: ["metadata", "schema", "mappings", "stats", "sample"]
-)
-```
-
-`dataset_ids` is an array — pass up to 50 IDs to describe multiple
-datasets in one call. The `include` allowlist is
-`column_stats_config, mappings, metadata, nql, retention_policy,
-sample, schema, stats`.
-
-What to extract from the response:
-
-- Column list with types (always present via `schema`)
-- Existing mappings (only present when you `include: ["mappings"]`).
-  If `mappings[]` is non-empty, the task is evaluation or incremental
-  — see `## Evaluate existing mappings`.
-- Most recent sample rows (only present when you `include: ["sample"]`)
-- Per-column stats summary (only present when you `include: ["stats"]`)
-- Dataset name, record count, freshness — from `metadata`, used for the summary
-
-**Skip underscore-prefixed columns.** Columns whose names start with
-`_` (e.g., `_nio_last_modified_at`, `_nio_sample_128`) are reserved
-platform-managed columns. The platform generates the mappings it needs
-for them automatically (typically tagged `nio_system` /
-`nio_dataset_implicit_attribute` in `mappings[]`). Do not propose
-user-facing mappings for them, and do not score them as "unmapped" in
-warnings.
-
-If the dataset is small or unfamiliar, the broad include above gives
-you everything in one round trip. For very wide schemas, split:
-describe once with `include: ["metadata", "schema", "mappings"]` to
-scope which columns matter, then pull `sample` and `stats` as needed.
-
-**Stop and confirm with the user if**: the dataset has 50+ columns and
-the user gave no scoping hint. Ask which columns or which Rosetta
-Stone domain (identity, demographics, behavior, geo, etc.) they care
-about. Mapping a 200-column dataset blind is rarely what they meant.
+Call `narrative_datasets_describe` with the dataset's ID. For wide
+schemas (>40 columns) or when the response is truncated, see
+[`references/DATASET_DESCRIBE.md`](references/DATASET_DESCRIBE.md)
+for the split-describe pattern and underscore-prefixed-column rule.
 
 ### 3. Pull sample rows and column stats
 
-The dataset's *most recent* sample and per-column stats come straight
-out of step 2's describe call when you include `sample` and `stats`.
-Use this step only when you need a fresher sample, finer-grained
-stats, or histograms.
-
-To enqueue a brand-new sampling job (async — returns a job id you
-must poll with `narrative_jobs_describe(job_ids: ["<id>"])` until
-`state` is `completed`):
-
-```
-narrative_dataset_request_sample(dataset_id: <id>)
-```
-
-There is no `limit` parameter; the platform decides sample size. Skip
-this if the sample returned from step 2 is recent enough.
-
-To pull per-column stats without re-describing the dataset, or to
-opt into histograms:
-
-```
-narrative_dataset_get_column_stats(
-  dataset_id: <id>,
-  columns: ["<name>", "<name>"],
-  include: ["basic_column_stats"]
-)
-```
-
-`columns` is an array — omit it to get stats for every column with
-stats (one call covers a 200-column dataset). Pass
-`include: ["basic_column_stats", "histogram"]` with a
-`histogram_bin_limit` (e.g., 25) when you need value distributions;
-histograms are off by default because they can blow the response cap
-on wide columns.
-
-If stats are missing entirely, call
-`narrative_dataset_recalculate_statistics(dataset_id: <id>)` (async,
-returns a `recalculation_id`) and proceed with sample data only,
-noting it in a `data_quality` global warning. Don't block on the
-recalculation completing.
-
-What to look for in stats:
-
-- `null_rate` — high null rates (>30%) → per-suggestion `data_quality` warning
-- `distinct_count` and `top_values` — clue to enum-like columns
-- `min`/`max` — clue to numeric ranges, timestamps, identifiers
-
-What to look for in sample rows:
-
-- Email shape (`@` symbol), phone shape, hash length (32 = MD5, 40 = SHA1, 64 = SHA256)
-- ISO timestamp shape, US ZIP shape, IATA codes, etc.
-- Whether a column is a literal type discriminator (e.g., `'email'`, `'phone'`, `'sha256_email'`)
+Step 2's describe response includes sample rows and column stats. If
+you need more (richer histograms, a fresh sample, recomputed stats),
+see [`references/SAMPLE_AND_STATS.md`](references/SAMPLE_AND_STATS.md)
+for the sub-API calls.
 
 ### 4. Find candidate Rosetta Stone attributes
 
@@ -277,8 +180,8 @@ cluster and let step 5's value/object decision and step 6's expression
 generation discriminate.
 
 When you already know the target attribute ID (the user named one
-explicitly, or you are evaluating existing mappings — see the
-"Evaluate existing mappings" common case), skip `/find-attribute`
+explicitly, or you are evaluating existing mappings — see
+[`references/MODES.md`](references/MODES.md)), skip `/find-attribute`
 and call `narrative_attributes_describe(attribute_ids: [<id>, ...])`
 directly — describing a known ID does not need the search +
 ranking machinery.
@@ -409,6 +312,37 @@ If nothing is mappable, return an empty `suggested_mappings` and use
 the summary to recommend the user define a custom attribute, naming
 the specific columns that have no Rosetta Stone equivalent.
 
+### 9. Offer to apply — opt-in hand-off
+
+Once the `final_answer` is on screen and `suggested_mappings` is
+non-empty, ask the user whether to apply the list now via
+`AskUserQuestion`:
+
+> "Apply these mappings to `<dataset>` now?"
+>
+> - **Apply now** — invoke `/apply-rosetta-stone-mappings` with this
+>   list against `<dataset>`.
+> - **Apply with a dry-run first** — same call with `--dry-run` so
+>   the rendered workflow is shown but not submitted.
+> - **Not yet** — keep the JSON; the user will apply later.
+
+On "Apply now" or "Apply with a dry-run first", hand off by calling
+`/apply-rosetta-stone-mappings --dataset <id-from-step-2> --mappings
+'<the suggested_mappings JSON>'` (add `--dry-run` for the second
+choice). Do not re-validate or re-render anything yourself — the
+downstream skill owns input normalization, expression re-validation
+against the current schema, the approval gate, and run polling. The
+data contract is the `suggested_mappings` array from step 8.
+
+Skip this step entirely when:
+
+- The skill was invoked in one of the alternate modes in
+  [`references/MODES.md`](references/MODES.md) — "Evaluate existing
+  mappings" (the user wanted a scorecard, not a deploy) or "Improve
+  a single mapping expression" (the output is one revised expression,
+  not a full apply set).
+- `suggested_mappings` is empty (nothing to apply).
+
 ## Common cases
 
 ### Mapping generation (no existing mappings)
@@ -417,107 +351,25 @@ The default. Follow steps 1-8 in order. Sort suggested_mappings by
 confidence descending; for object_mappings, sort by the minimum
 property confidence.
 
-### Evaluate existing mappings
-
-If `narrative_datasets_describe` (with `include: ["mappings"]`)
-returns a non-empty `mappings[]` array, or the user said "evaluate" /
-"rate" / "why is X low confidence":
-
-1. Skip the attribute-search step — the target attribute is already
-   chosen. Pass the existing attribute IDs as an array to
-   `narrative_attributes_describe(attribute_ids: [<id>, ...])`.
-2. For each existing mapping, build a query that selects the mapping
-   expression and the underlying source columns with a `limit` cap,
-   and submit it via `narrative_nql_run(nql: '...')`. Poll the
-   returned job with `narrative_jobs_describe(job_ids: ["<id>"])`
-   until `state` is `completed`, then read the result rows to see
-   what the mapping actually produces.
-3. Score confidence per the table above, using *execution evidence*
-   not just static reasoning.
-4. Emit a `final_answer` whose `data` has `evaluations[]` and
-   `warnings[]`. Each evaluation entry has `attribute_id`, `confidence`,
-   `reasoning`, an optional `suggested_fix`, and — for object_mappings —
-   `property_scores[]` with one entry per property_mapping path.
-5. Include a `suggested_fix` on any recommendation that has a concrete,
-   testable replacement expression. Validate every `suggested_fix`
-   expression with `narrative_nql_validate` first.
-
-### Improve a single mapping expression
-
-If the user pasted an expression and feedback (e.g., "lowercase the
-emails, our match rate is bad"):
-
-1. Pull the existing sample via
-   `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`
-   so you can see what the relevant column actually contains. Only
-   enqueue a fresh `narrative_dataset_request_sample` if the existing
-   sample is stale or missing.
-2. Generate a single revised expression.
-3. Validate it: wrap as a select and call `narrative_nql_validate(nql: ...)`.
-   If it fails, fix and revalidate.
-4. Return a `final_answer` whose `data` contains the revised
-   `expression`, its `confidence`, `reasoning`, and an optional
-   `warnings[]` array.
-
-Do not re-run the full generation flow for a one-line improvement.
-
-## Edge cases and gotchas
-
-See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
-reserved-identifier quoting, enum case sensitivity, null handling,
-object-mapping replace-all semantics, custom-attribute fallback,
-confidence-vs-validity, token economy, and underscore-prefixed
-column handling. Read when an expression won't validate or a
-mapping is failing for a reason the body procedure doesn't
-address.
+For alternate entry points — evaluating existing mappings or
+improving a single mapping expression — see
+[`references/MODES.md`](references/MODES.md).
 
 ## Voice
 
-Use first person ("I analyzed 12 columns…") and conversational language
-("cleaned up", not "normalized") in the `summary` field and in
-`reasoning` fields — these strings are user-facing in the Narrative
-Platform UI's Rosetta Stone normalization tab.
+Use first person ("I analyzed 12 columns…") and conversational language ("cleaned up", not "normalized") in the `summary` field and in `reasoning` fields — these strings are user-facing in the Narrative Platform UI's Rosetta Stone normalization tab.
 
-## Harness fallbacks
+## References
 
-See
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
-covers `narrative-mcp` unavailable (paste-driven schema + sample
-flow, confidence haircut for unvalidated expressions) and the
-`AskUserQuestion` fallback for harnesses that don't expose it.
-Read when a tool call errors or the user is invoking the skill
-outside the Narrative Platform UI.
-
-## Further reading
-
-- `references/EDGE_CASES.md` — gotchas and authoring pitfalls:
-  reserved-identifier quoting, enum case sensitivity, null
-  handling, object-mapping replace-all semantics, custom-attribute
-  fallback, confidence-vs-validity, token economy, and
-  underscore-prefixed columns. Read when an expression won't
-  validate or a mapping feels off.
-- `references/HARNESS_FALLBACK.md` — what to do when
-  `narrative-mcp` is unavailable, and how to deliver the same flow
-  when `AskUserQuestion` isn't exposed. Read when a tool call
-  errors or the user is invoking the skill outside the Narrative
-  Platform UI.
-- `../find-attribute/SKILL.md` — the attribute-lookup skill this one
-  defers to in step 4 (`/find-attribute`) to resolve candidate
-  Rosetta Stone attributes per column cluster. Invoked in parallel,
-  one call per cluster, with `--no-confirm` so the skill returns
-  structured results directly.
-- `references/EXPRESSION_SYNTAX.md` — SQL/NQL quoting, function, and
-  CASE WHEN rules. Read when an expression fails
-  `narrative_nql_validate` or when mapping a column with a
-  reserved-word name.
-- `references/ENUM_HANDLING.md` — generation-vs-evaluation rules for
-  enum-constrained attributes, including CASE WHEN transformation
-  patterns. Read when `narrative_attributes_describe` shows
-  `{value1|value2|...}` constraints on the target attribute or
-  property.
-- `references/KB_RESEARCH.md` — how to query the
-  `narrative-knowledge-base` MCP server for Rosetta Stone best
-  practices and NQL function/operator references when the local
-  reference files aren't enough.
+- [`references/DATASET_DESCRIBE.md`](references/DATASET_DESCRIBE.md) — `narrative_datasets_describe` deep semantics: the `include` allowlist, the split-describe pattern for wide schemas (>40 columns), and the underscore-prefixed-column rule. Read when step 2's happy-path describe isn't enough.
+- [`references/SAMPLE_AND_STATS.md`](references/SAMPLE_AND_STATS.md) — sub-API calls for fresh samples, histogram-bearing column stats, and stats recalculation. Read when step 2's bundled sample + stats don't suffice.
+- [`references/MODES.md`](references/MODES.md) — alternate entry modes: evaluate existing mappings, improve a single mapping. Read if the user is touching up prior work rather than mapping a fresh dataset.
+- [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — reserved-identifier quoting, enum case sensitivity, null handling, object-mapping replace-all semantics, custom-attribute fallback, confidence-vs-validity, token economy, underscore-prefixed columns. Read when an expression won't validate or a mapping feels off.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` unavailable (paste-driven schema + sample, confidence haircut), `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.
+- [`references/EXPRESSION_SYNTAX.md`](references/EXPRESSION_SYNTAX.md) — SQL/NQL quoting, function, and CASE WHEN rules. Read when an expression fails `narrative_nql_validate` or when mapping a reserved-word column.
+- [`references/ENUM_HANDLING.md`](references/ENUM_HANDLING.md) — generation-vs-evaluation rules for enum-constrained attributes. Read when `narrative_attributes_describe` shows `{value1|value2|...}` constraints.
+- [`references/KB_RESEARCH.md`](references/KB_RESEARCH.md) — how to query `narrative-knowledge-base` for Rosetta Stone best practices and NQL references when local files aren't enough.
+- `../find-attribute/SKILL.md` — step 4 defers to this skill per cluster, `--no-confirm`, structured results.
+- `../apply-rosetta-stone-mappings/SKILL.md` — downstream consumer of the `suggested_mappings` array from step 8.
 
 {{SNIPPET:agent-feedback}}

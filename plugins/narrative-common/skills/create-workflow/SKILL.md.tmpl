@@ -1,6 +1,6 @@
 ---
 name: create-workflow
-version: 0.4.0
+version: 0.5.0
 description: |
   Author and submit a Narrative workflow from a natural-language
   intent. Picks the closest example from `assets/examples/`, adapts
@@ -64,6 +64,10 @@ optimize for:
 You never submit a workflow without showing the spec first, never
 invent a task name, parameter, or NQL identifier, and never claim a
 run succeeded without observing it in `narrative_workflow_runs_list`.
+
+## Output rules
+
+{{SNIPPET:internal-field-hygiene}}
 
 ## Overview
 
@@ -192,35 +196,11 @@ fill it.
 
 ### 4. Draft the YAML — mandatory
 
-Take the chosen example as the skeleton and substitute the user's
-values. Hold these invariants while editing:
-
-- `document.dsl` is always `'1.0.0'`. `document.version` is a semver
-  string in quotes; bump it manually on every spec change.
-- `do:` is an ordered list. Tasks run sequentially. There is no
-  parallel execution, no conditional logic, no loops, no automatic
-  retries. If the user asks for any of those, push back: the platform
-  does not support them today.
-- Every task `call:` is one of the seven supported tasks:
-  `CreateMaterializedViewIfNotExists`, `RefreshMaterializedView`,
-  `ExecuteDml`, `RunModelInference`, `LabelConnectedComponents`,
-  `CreateRosettaStoneMappingsIfNotExist`, `CreateDatasetSample`.
-  Never invent a task name.
-- NQL goes inside `with.nql` as a single string. Wrap multi-line NQL
-  in YAML's `|` block scalar — it preserves newlines without
-  ambiguity. If you need a real NQL validation pass before submitting
-  the workflow, call `narrative_nql_validate` (or hand off to
-  `/write-nql`) — `narrative_workflows_create` checks the YAML shape
-  and the task contract, but not the NQL semantics inside `nql:`
-  fields end-to-end.
-- `datasetName` parameters must match `^[A-Za-z0-9_]{1,256}$`. When
-  referencing a dataset in NQL, the qualified form is
-  `company_data.<name>`.
-- `export.as` is a jq expression. `.` is the current task's output,
-  `$context` is the accumulated workflow context (starts as `{}`).
-  See `examples/04-data-passing-export-context.yaml`.
-- In `${...}` variable expressions, a bare `${expr}` preserves the
-  JSON type; inside a string, use jq interpolation `\(expr)`.
+Render the YAML using the chosen example as a base and substitute the
+user's values. For DSL invariants (version pinning, task allowlist,
+NQL block-scalar rules, `datasetName` regex, `export.as` jq semantics,
+`${...}` interpolation), see
+[`references/DSL_INVARIANTS.md`](references/DSL_INVARIANTS.md).
 
 ### 5. Resolve the data plane — mandatory
 
@@ -334,103 +314,16 @@ If the workflow was created with `schedule_immediately: true`, note
 the next cron firing time in UTC so the user knows when to expect the
 first scheduled run.
 
-## Common cases
+## References
 
-### "Wrap this NQL as a recurring daily view refresh"
-
-Intent: the user has an existing NQL query and wants it to run every
-day, persisted to a queryable view.
-
-Start from `examples/01-single-materialized-view.yaml` + the
-`schedule:` block from `examples/05-scheduled-daily-refresh.yaml`.
-The result is one workflow that creates the view (idempotent) and, on
-subsequent days, refreshes it via a separate `RefreshMaterializedView`
-task. Submit with `--schedule` so the cron activates on create.
-
-### "Build dataset A, then derive B from it"
-
-Intent: a two-step pipeline where the second task can only run after
-the first persists.
-
-Start from `examples/03-multi-step-pipeline.yaml`. Confirm that the
-second task references the first task's output by name
-(`company_data.<dataset_name>`) — workflows run sequentially, so the
-dataset will exist by the time the second task runs.
-
-### "Refresh the view, then write a row to the audit log"
-
-Intent: a refresh + an audit insert that captures the dataset ID.
-
-Start from `examples/08-dml-audit-log.yaml`. The pattern combines
-`RefreshMaterializedView`, `export` of `datasetId` into `$context`,
-and a downstream `ExecuteDml` that interpolates the ID into an
-`INSERT`. The audit table must already exist — confirm before
-submitting.
-
-### "Run customer identity resolution nightly"
-
-Intent: a scheduled bipartite label-propagation job that produces a
-canonical-component dataset from an edge table.
-
-Start from `examples/07-identity-resolution-label-components.yaml`
-and add a `schedule:` block from `examples/05-…`. Confirm with the
-user the priority order of `firstPartySources` — it determines which
-source ID wins as the component representative.
-
-### "Submit this YAML I already have"
-
-Intent: the user has an existing spec (paste, file, prior draft).
-
-Take `--spec <path>` (or paste contents). Skip drafting. Go straight
-to step 5 (data plane), step 6 (render + explain), step 7 (gate), and
-step 8 (submit). Do not silently modify the user's YAML — surface any
-issues you spot and ask before changing anything.
-
-## Edge cases and gotchas
-
-See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
-unsupported features (parallelism / branching / loops / retries),
-`schedule_immediately` without a `schedule:` block, destructive
-`--trigger`, `datasetName` validation, cross-plane NQL references,
-wrong `dsl` versions, and name+namespace conflict on re-submit.
-Read when something feels off or the validator rejects the spec.
-
-## Harness fallbacks
-
-See
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
-covers `narrative-mcp` unavailable (no supported submission path —
-stop at render), `narrative-knowledge-base` unavailable (the mild
-case), and the `AskUserQuestion` fallback for harnesses that don't
-expose it. Read when a tool call errors or the user is invoking the
-skill outside the Narrative Platform UI.
-
-## Further reading
-
-- `references/EDGE_CASES.md` — gotchas and platform limits: parallelism /
-  branching / retries are not supported, `datasetName` validation,
-  cross-plane NQL references, `dsl` version handling, conflict on
-  re-submit. Read when something feels off or the validator rejects
-  the spec.
-- `references/HARNESS_FALLBACK.md` — what to do when `narrative-mcp`
-  or `narrative-knowledge-base` is unavailable, and how to deliver
-  the same flow when `AskUserQuestion` isn't exposed. Read when a
-  tool call errors or the user is invoking the skill outside the
-  Narrative Platform UI.
+- [`references/MODES.md`](references/MODES.md) — worked recipes per intent (wrap-NQL, multi-step, refresh+audit, identity-nightly, submit-existing). Read after picking an example from the step-2 router for fuller per-recipe walkthroughs.
+- [`references/DSL_INVARIANTS.md`](references/DSL_INVARIANTS.md) — DSL/version pinning, seven-task allowlist, NQL block-scalar rules, `datasetName` regex, `export.as` jq semantics, `${...}` interpolation. Read when deviating from an example or when the validator rejects the spec.
+- [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — unsupported features (parallelism/branching/retries), `schedule_immediately` without `schedule:`, destructive `--trigger`, `datasetName` validation, cross-plane NQL refs, `dsl` version drift, name+namespace conflicts. Read when something feels off or the validator rejects the spec.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` unavailable (no submission path — stop at render), `narrative-knowledge-base` unavailable, `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.
 - `assets/INDEX.md` — intent → example router (read it in step 2).
-- `assets/examples/*.yaml` — task-shape reference, one example per
-  intent. Each file's leading comments document when to use it.
-- `assets/templates/workflow-skeleton.yaml` — bare scaffold when no
-  example matches the user's case.
-- `narrative-knowledge-base` MCP — `/reference/workflows/specification-syntax`
-  (full DSL reference), `/reference/workflows/tasks` (every supported
-  task, all parameters, output schemas), `/guides/workflows/workflow-orchestration`
-  (end-to-end create + trigger + monitor walkthrough),
-  `/concepts/workflows/workflow-orchestration` (why the system is
-  sequential + fail-fast).
-- Sibling skills: `/write-nql` for the NQL inside `with.nql` fields,
-  `/generate-rosetta-stone-mappings` for the mapping definitions
-  consumed by `CreateRosettaStoneMappingsIfNotExist`, `/find-attribute`
-  to resolve the canonical `attributeId` of any Rosetta Stone mapping.
+- `assets/examples/*.yaml` — task-shape reference, one per intent. Leading comments document when to use each.
+- `assets/templates/workflow-skeleton.yaml` — bare scaffold when no example matches.
+- `narrative-knowledge-base` MCP — `/reference/workflows/specification-syntax` (DSL), `/reference/workflows/tasks` (task catalog), `/guides/workflows/workflow-orchestration` (end-to-end walkthrough), `/concepts/workflows/workflow-orchestration` (why sequential + fail-fast).
+- Sibling skills: `/write-nql` for `with.nql` bodies, `/generate-rosetta-stone-mappings` for mappings consumed by `CreateRosettaStoneMappingsIfNotExist`, `/find-attribute` to resolve a Rosetta Stone `attributeId`.
 
 {{SNIPPET:agent-feedback}}
