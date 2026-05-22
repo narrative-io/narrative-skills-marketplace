@@ -117,6 +117,7 @@ Common Narrative workflows backed by the narrative-mcp server — starting with 
 
 | Skill | Use when |
 |-------|----------|
+| `/apply-rosetta-stone-mappings` | "apply these mappings to dataset N", "create the Rosetta Stone mappings I just generated", "push the mappings I saved earlier to <dataset>", "productionize this mapping list", "submit the suggested_mappings array". |
 | `/create-workflow` | "create a workflow that does X", "schedule a daily refresh of dataset Y", "wrap this NQL as a workflow", "build a pipeline that creates view A then refreshes view B", "submit this workflow YAML", "productionize this query as a recurring job". |
 | `/design-analysis` | "why did X drop", "is there a relationship between A and B", "who are our highest-value customers", "what's driving the change in Y", "investigate this trend", "design an analysis for", "scope this analytical question". |
 | `/find-attribute` | "find the X attribute", "what's the graph-edge attribute ID", "look up the email Rosetta Stone attribute", "search the attribute catalog for Y", "which attribute has SOURCE_ID + TARGET_ID + IS_DIRECTED". |
