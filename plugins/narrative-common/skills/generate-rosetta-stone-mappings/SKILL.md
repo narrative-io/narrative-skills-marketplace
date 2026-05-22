@@ -1,6 +1,6 @@
 ---
 name: generate-rosetta-stone-mappings
-version: 0.3.0
+version: 0.4.0
 description: |
   Generate, evaluate, and improve Rosetta Stone attribute mappings for
   a Narrative dataset.
@@ -317,34 +317,55 @@ For object_mappings, the mapping's confidence is the **minimum** of its
 property confidences. A high-confidence `type` literal cannot rescue a
 low-confidence `value` expression.
 
-### 8. Emit the response object
+### 8. Present the mappings to the user
 
-Return JSON in this shape:
+Show a human-readable summary, not raw JSON. Three parts:
+
+1. A 2-4 sentence overview in first person ("I analyzed 12 columns…").
+2. One row per suggested mapping — a markdown table or bulleted list
+   with these fields:
+   - **Source** — the source column(s); for object_mappings, list each
+     contributing column.
+   - **Target** — the Rosetta Stone attribute's `display_name`, with
+     `attribute_id` in parentheses.
+   - **Expression** — the NQL expression for `value_mapping`, or one
+     `path → expression` line per property for `object_mapping`.
+   - **Confidence** — the score from step 7.
+   - **Reasoning** — one short line.
+3. Any dataset-wide warnings (e.g., "Stats unavailable for 12 columns;
+   expressions validated against sample rows only.").
+
+Do NOT print the underlying JSON. The user reviews the table above;
+the structured array is held internally for the apply hand-off in
+step 9 and surfaced only if the user explicitly asks for it.
+
+Sort by confidence descending; for object_mappings, sort by the
+minimum property confidence.
+
+Hold the structured mapping list in memory for step 9. Each entry
+follows the `value_mapping` or `object_mapping` shape from step 5
+(an array of those entries, no envelope):
 
 ```json
-{
-  "type": "final_answer",
-  "data": {
-    "summary": "<2-4 sentence overview, first person 'I'>",
-    "suggested_mappings": [ /* one entry per mapped column */ ],
-    "warnings": [ /* dataset-wide concerns */ ]
+[
+  {
+    "attribute_id": 123,
+    "mapping": { "type": "value_mapping", "expression": "LOWER(email_column)" },
+    "confidence": 95,
+    "reasoning": "…",
+    "warnings": []
   }
-}
+]
 ```
 
-Each entry in `suggested_mappings` follows the `value_mapping` or
-`object_mapping` shape from step 5. Each `warnings` entry is a string
-naming a dataset-wide concern (e.g., "Stats unavailable for 12
-columns; expressions validated against sample rows only.").
-
-If nothing is mappable, return an empty `suggested_mappings` and use
-the summary to recommend the user define a custom attribute, naming
-the specific columns that have no Rosetta Stone equivalent.
+If nothing is mappable, say so plainly in the summary, recommend
+defining a custom attribute, and name the specific columns with no
+Rosetta Stone equivalent. Skip step 9.
 
 ### 9. Offer to apply — opt-in hand-off
 
-Once the `final_answer` is on screen and `suggested_mappings` is
-non-empty, ask the user whether to apply the list now via
+Once the human-readable summary is on screen and the structured
+mapping list is non-empty, ask the user whether to apply now via
 `AskUserQuestion`:
 
 > "Apply these mappings to `<dataset>` now?"
@@ -353,15 +374,20 @@ non-empty, ask the user whether to apply the list now via
 >   list against `<dataset>`.
 > - **Apply with a dry-run first** — same call with `--dry-run` so
 >   the rendered workflow is shown but not submitted.
-> - **Not yet** — keep the JSON; the user will apply later.
+> - **Not yet** — the user will apply later (offer to print the JSON
+>   on request).
 
 On "Apply now" or "Apply with a dry-run first", hand off by calling
-`/apply-rosetta-stone-mappings --dataset <id-from-step-2> --mappings
-'<the suggested_mappings JSON>'` (add `--dry-run` for the second
-choice). Do not re-validate or re-render anything yourself — the
-downstream skill owns input normalization, expression re-validation
-against the current schema, the approval gate, and run polling. The
-data contract is the `suggested_mappings` array from step 8.
+`/apply-rosetta-stone-mappings --dataset <id-from-step-2>
+--no-revalidate --mappings '<the bare-array JSON from step 8>'` (add
+`--dry-run` for the second choice). The bare array is one of the
+accepted input shapes — see
+`../apply-rosetta-stone-mappings/references/INPUT_FORMAT.md`. Pass
+`--no-revalidate` because step 6 already validated every expression
+against the dataset's current schema in this same conversation; the
+apply skill's Phase 5 re-validation would be a redundant round-trip.
+Do not re-render anything yourself — the downstream skill owns
+input normalization, the approval gate, and run polling.
 
 Skip this step entirely when:
 
@@ -370,15 +396,15 @@ Skip this step entirely when:
   mappings" (the user wanted a scorecard, not a deploy) or "Improve
   a single mapping expression" (the output is one revised expression,
   not a full apply set).
-- `suggested_mappings` is empty (nothing to apply).
+- The structured mapping list is empty (nothing to apply).
 
 ## Common cases
 
 ### Mapping generation (no existing mappings)
 
-The default. Follow steps 1-8 in order. Sort suggested_mappings by
-confidence descending; for object_mappings, sort by the minimum
-property confidence.
+The default. Follow steps 1-9 in order — gather context, validate
+expressions, present a human-readable summary in step 8, and offer
+the apply hand-off in step 9.
 
 For alternate entry points — evaluating existing mappings or
 improving a single mapping expression — see
@@ -399,7 +425,7 @@ Use first person ("I analyzed 12 columns…") and conversational language ("clea
 - [`references/ENUM_HANDLING.md`](references/ENUM_HANDLING.md) — generation-vs-evaluation rules for enum-constrained attributes. Read when `narrative_attributes_describe` shows `{value1|value2|...}` constraints.
 - [`references/KB_RESEARCH.md`](references/KB_RESEARCH.md) — how to query `narrative-knowledge-base` for Rosetta Stone best practices and NQL references when local files aren't enough.
 - `../find-attribute/SKILL.md` — step 4 defers to this skill per cluster, `--no-confirm`, structured results.
-- `../apply-rosetta-stone-mappings/SKILL.md` — downstream consumer of the `suggested_mappings` array from step 8.
+- `../apply-rosetta-stone-mappings/SKILL.md` — downstream consumer of the bare mapping array from step 8.
 
 ## Feedback (only if something could be improved)
 

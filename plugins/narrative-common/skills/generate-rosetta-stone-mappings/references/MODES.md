@@ -26,10 +26,12 @@ returns a non-empty `mappings[]` array, or the user said "evaluate" /
    what the mapping actually produces.
 3. Score confidence per the main procedure's table, using *execution
    evidence* not just static reasoning.
-4. Emit a `final_answer` whose `data` has `evaluations[]` and
-   `warnings[]`. Each evaluation entry has `attribute_id`, `confidence`,
-   `reasoning`, an optional `suggested_fix`, and — for object_mappings —
-   `property_scores[]` with one entry per property_mapping path.
+4. Present a human-readable scorecard to the user — a row per existing
+   mapping with `attribute_id`, `confidence`, `reasoning`, and an
+   optional `suggested_fix`. For object_mappings include per-property
+   scores (one entry per property_mapping path). Surface any
+   dataset-wide warnings underneath. Do not print the underlying
+   JSON unless the user asks.
 5. Include a `suggested_fix` on any recommendation that has a concrete,
    testable replacement expression. Validate every `suggested_fix`
    expression with `narrative_nql_validate` first.
@@ -47,8 +49,8 @@ emails, our match rate is bad"):
 2. Generate a single revised expression.
 3. Validate it: wrap as a select and call `narrative_nql_validate(nql: ...)`.
    If it fails, fix and revalidate.
-4. Return a `final_answer` whose `data` contains the revised
-   `expression`, its `confidence`, `reasoning`, and an optional
-   `warnings[]` array.
+4. Show the user the revised `expression`, its `confidence`, a one-line
+   `reasoning`, and any `warnings`. Keep it terse — one expression,
+   one paragraph of justification. No JSON envelope.
 
 Do not re-run the full generation flow for a one-line improvement.

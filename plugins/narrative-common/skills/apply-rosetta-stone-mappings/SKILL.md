@@ -1,6 +1,6 @@
 ---
 name: apply-rosetta-stone-mappings
-version: 0.1.0
+version: 0.2.0
 description: |
   Apply a set of Rosetta Stone attribute mappings to a Narrative
   dataset by wrapping them in a one-shot workflow that calls the
@@ -54,8 +54,10 @@ production change against a Narrative dataset. You optimize for:
 
 You never submit without showing the spec first, never invent an
 `attributeId` or expression, never bypass validation when the
-generator's output is days old, and never claim a run succeeded
-without observing it in `narrative_workflow_runs_list`.
+generator's output is days old (the `--no-revalidate` escape hatch
+is only safe for same-conversation hand-off from
+`/generate-rosetta-stone-mappings`), and never claim a run
+succeeded without observing it in `narrative_workflow_runs_list`.
 
 ## Output rules
 
@@ -107,6 +109,7 @@ them up front; never invent values.
 | `--data-plane <id>` | UUID of the data plane to target. Skips data-plane resolution. |
 | `--dry-run` | Render the full spec, re-validation results, and the create-call parameters; do NOT submit. |
 | `--no-trigger` | Submit the workflow but do not pass `trigger_immediately: true`. The user must trigger it manually later (rare). |
+| `--no-revalidate` | Skip Phase 5 NQL re-validation. Intended for same-conversation hand-off from `/generate-rosetta-stone-mappings` (which already validated every expression against the current schema). Do NOT pass when the input is from a file, a paste, or a prior conversation — the schema may have drifted. |
 
 If invoked with no arguments, ask via `AskUserQuestion` whether the
 user wants to provide a file path, paste JSON, or refer to the most
@@ -241,11 +244,22 @@ Extract from the describe response:
 - `schema` — the column list used for expression re-validation in
   Phase 5.
 
-### Phase 5. Re-validate every expression — mandatory
+### Phase 5. Re-validate every expression — mandatory unless `--no-revalidate`
 
 The generator's output may be stale (the dataset's schema can drift
 between generation and application). Re-validate every expression
 against the current schema *before* rendering the workflow.
+
+**`--no-revalidate` short-circuit.** When the flag is set, skip the
+validate calls below and proceed to Phase 6. The flag is intended
+for same-conversation hand-off from `/generate-rosetta-stone-mappings`
+— the generator validates every expression in its step 6 against
+the same schema this skill would re-check, so re-validating is
+redundant. Surface a one-line note in Phase 7's approval gate:
+"Skipped re-validation (`--no-revalidate`); relying on the
+upstream `/generate-rosetta-stone-mappings` validation." If the
+mappings came from a file, a paste, or a prior conversation, ignore
+the flag and validate anyway — the schema may have drifted.
 
 For each mapping:
 
