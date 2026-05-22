@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.3.4
+version: 0.4.0
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -49,6 +49,10 @@ into NQL queries against Narrative datasets. You optimize for:
 
 You never invent a column or function, never display an unvalidated
 query, and never claim a result until the job reports `completed`.
+
+## Output rules
+
+{{SNIPPET:internal-field-hygiene}}
 
 ## Overview
 
@@ -399,60 +403,16 @@ across planes; the validator will reject it. Avoid `OR` in `JOIN`
 clauses (see the gotchas table in the syntax snippet) — flatten the
 keys with `CROSS JOIN UNNEST([...])` or `UNION` two single-key joins.
 
-## Edge cases and gotchas
+## References
 
-See [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — covers
-nonexistent columns, wildcard scans against huge datasets,
-`--run` plus cost warnings, validator-vs-user disagreement, and
-schema drift mid-conversation. Read when something doesn't add up.
-
-## Harness fallbacks
-
-See
-[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) —
-covers `narrative-mcp` unavailable (paste-driven schema flow, no
-server validation, caveat the user) and the `AskUserQuestion`
-fallback for harnesses that don't expose it. Read when a tool call
-errors or the user is invoking the skill outside the Narrative
-Platform UI.
-
-## Further reading
-
-- `references/EDGE_CASES.md` — gotchas and authoring pitfalls:
-  nonexistent columns, wildcard scans on huge datasets, cost
-  warnings under `--run`, validator-vs-user disagreement, schema
-  drift. Read when something doesn't add up.
-- `references/PERCENTILE_DISTRIBUTION.md` — patterns for percentile
-  and distribution summaries on the Snowflake data plane, where
-  `APPROX_PERCENTILE` and `PERCENTILE_CONT` are not currently usable.
-  Read when the user's question is about distribution shape, quartiles,
-  thresholds, or "how skewed is X."
-- `references/HARNESS_FALLBACK.md` — what to do when
-  `narrative-mcp` is unavailable, and how to deliver the same flow
-  when `AskUserQuestion` isn't exposed. Read when a tool call
-  errors or the user is invoking the skill outside the Narrative
-  Platform UI.
-- `narrative-knowledge-base` MCP — `/concepts/nql/…`,
-  `/cookbooks/nql/…`, `/api-reference/nql/…`,
-  `/reference/integrations/mcp-server` (parameter contracts for
-  `narrative_nql_run` / `narrative_nql_get_job`, including
-  `data_plane_id` / `compute_pool_id`). Use when the local
-  syntax-essentials snippet doesn't cover the operator, function, or
-  pattern you need. For gotchas specifically, prefer:
-  - `/guides/nql/troubleshooting` (and `unsupported-type-error`,
-    `cross-data-plane-queries`) — the canonical troubleshooting catalog.
-  - `/nql/general/explicit-columns` — why `SELECT *` and `COUNT(*)`
-    are rejected and what to write instead.
-  - `/nql/general/reserved-keywords` — when to double-quote identifiers.
-  - `/nql/commands/create-materialized-view` — required wrapper for
-    runnable queries; full option reference.
-  - `/concepts/primitives/data-planes` — why every run needs an
-    explicit `data_plane_id` matching the dataset's plane.
-  - `/guides/nql/query-optimization/avoid-or-in-join` and
-    `/cookbooks/nql/performance-patterns` — performance gotchas
-    (OR-in-join, filter-before-join, `APPROX_COUNT_DISTINCT`, `QUALIFY`).
-- `plugins/narrative-common/skills/generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md`
-  — sibling skill's reference; deeper coverage of timestamp parsing,
-  enum handling, and reserved-name nesting if you hit them here.
+- [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — nonexistent columns, wildcard scans on huge datasets, `--run` cost warnings, validator-vs-user disagreement, schema drift. Read when something doesn't add up.
+- [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` unavailable (paste-driven schema, no server validation), `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.
+- [`references/PERCENTILE_DISTRIBUTION.md`](references/PERCENTILE_DISTRIBUTION.md) — percentile/distribution patterns on the Snowflake data plane where `APPROX_PERCENTILE` and `PERCENTILE_CONT` aren't usable. Read for distribution shape, quartiles, thresholds, skew.
+- [`references/NQL_GOTCHAS.md`](references/NQL_GOTCHAS.md) — full failure-mode catalog (GEOMETRY, OR-in-JOIN, cross-plane, QUALIFY-in-CMV, percentile fallbacks, reserved keywords, dataset-id quoting). Read when a draft fails validation or a passed-validation query 500s at run.
+- [`references/NQL_VALIDATION_ERRORS.md`](references/NQL_VALIDATION_ERRORS.md) — error-message → canonical-fix cheat sheet. Read when `narrative_nql_validate` returns an error and you want the shortest path to green.
+- [`references/NQL_QUOTING_AND_TABLE_REFS.md`](references/NQL_QUOTING_AND_TABLE_REFS.md) — schema list (`company_data` / `<provider_slug>` / `narrative`), `unique_name`-vs-numeric-id rules, reserved-words catalog, Rosetta Stone scope syntax. Read when a happy-path `company_data.<dataset_name>` reference isn't enough.
+- [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md) — `completed` payload shape per job type, the materialize-view → sample → describe dance, sibling async tools. Read when a job finishes but you can't find the rows.
+- `narrative-knowledge-base` MCP — `/concepts/nql/…`, `/cookbooks/nql/…`, `/api-reference/nql/…`, `/reference/integrations/mcp-server` for parameter contracts (`data_plane_id`, `compute_pool_id`). For gotchas: `/guides/nql/troubleshooting`, `/nql/general/explicit-columns`, `/nql/general/reserved-keywords`, `/nql/commands/create-materialized-view`, `/concepts/primitives/data-planes`, `/guides/nql/query-optimization/avoid-or-in-join`, `/cookbooks/nql/performance-patterns`.
+- `plugins/narrative-common/skills/generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md` — sibling reference covering timestamp parsing, enum handling, reserved-name nesting.
 
 {{SNIPPET:agent-feedback}}

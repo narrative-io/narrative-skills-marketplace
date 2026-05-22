@@ -304,6 +304,26 @@ Every skill body should have these sections, in this order:
 
 ## 6. Progressive disclosure
 
+### Why it matters
+
+Context is a finite, expensive resource. Every token loaded into the
+model's working set costs latency, money, and — most critically —
+attention. A model staring at 50 KB of skill documentation performs
+worse on the actual task than one with 3 KB of *the right*
+documentation. Five lean skills can coexist in context; five verbose
+ones crowd each other out.
+
+Skills are about *capability*, not *instruction*. A good skill
+teaches the model where to look when a specific case comes up, not
+the contents of every possible case. `SKILL.md` is a table of
+contents and a routing layer; the heavy material lives one hop
+deeper. Skills written this way age better too — edge cases land in
+a per-case reference instead of bloating the body, and the
+separation between *when / why* (tier 2) and *how* (tier 3) keeps
+each file legible.
+
+### The three tiers
+
 The agent loads metadata for every skill at startup, the body when
 activated, and `references/` / `scripts/` / `assets/` files only when
 the body explicitly points to them. Structure content accordingly.
@@ -314,22 +334,53 @@ the body explicitly points to them. Structure content accordingly.
 | 2 — body | Phased procedure, common cases, gotchas | When this skill is activated |
 | 3 — references / scripts / assets | Deep syntax tables, error catalogs, prompt fragments, code, datasets | Only when the body references them |
 
-**Move material to tier 3 when:**
+### Push material to tier 3 when
 
-- The body is over ~500 lines.
-- The material is consulted in 1 of N runs (lookup tables, error
-  catalogs, alternative voice profiles).
-- It's executable (always put scripts in `scripts/`, never inline a
-  100-line bash heredoc).
-- It's a long enumerated list (column types, supported functions,
-  enum-handling rules) that only matters when you hit a specific case.
+- **The body is over ~500 lines.** That's the budget; past it, the
+  payload starts crowding the task.
+- **It's consulted in 1 of N runs.** Lookup tables, error catalogs,
+  alternative voice profiles, enum-handling rules — anything the
+  agent only reads when it hits a specific case.
+- **It's a branching path.** Sub-workflows that share only a thin
+  top layer (different file types, different intents, different
+  downstream tools) belong in separate references the body routes
+  to. Don't try to keep five workflows coherent in one body.
+- **It's executable.** Scripts go in `scripts/`, boilerplate and
+  example outputs in `assets/`. Reference the path and let the
+  model read it when it's about to use it; never inline a 100-line
+  bash heredoc.
+- **It's discovery-driven.** When the right details depend on the
+  environment (available datasets, mounted MCP servers, the current
+  shape of an upstream API), document the *discovery step* in the
+  body and let the discovered values flow in at runtime.
 
-**Keep material in tier 2 when:**
+### Keep material in tier 2 when
 
-- The agent needs it in *every* run (default behavior, mandatory
-  checks, gate logic).
-- It's the user-facing summary — the explanation of what the skill is
-  doing, not the mechanics.
+- **The agent needs it on every run.** Default behavior, mandatory
+  checks, gate logic.
+- **It's the user-facing summary.** The explanation of *what* the
+  skill is doing — the when/why layer, not the mechanics.
+- **It's needed to decide whether to use the skill at all.**
+  Triggers, scope, "use this for cold outreach, the sibling for
+  warm." Hiding the routing logic behind another file read defeats
+  the purpose.
+- **It's a critical warning or non-negotiable constraint.** If
+  misuse causes data loss, sends a real email, or produces a
+  silently wrong answer, the warning belongs upfront. The tokens
+  are paid every run — and so is the protection.
+- **The skill is small to begin with.** If the whole thing is 40
+  lines, splitting it into four files of ten just makes the model
+  do extra tool calls for no benefit. Inline it.
+- **The procedure is tightly interleaved.** If step 3 only makes
+  sense in the context of steps 1, 2, 4, and 5, don't shatter them
+  across files chasing an abstract neatness goal. Cohesion beats
+  brevity when they conflict.
+
+A useful heuristic: the body should answer "should I use this skill,
+and where do I look next?" Everything past that is a candidate for
+deferral. When in doubt, ask whether a piece of content is needed
+*every time the skill runs* or only *sometimes*. The "sometimes"
+content is what progressive disclosure is for.
 
 When you reference a tier-3 file from the body, use a relative path
 from the skill root and say *when* the agent should read it:
