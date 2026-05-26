@@ -29,6 +29,7 @@ compatibility:
       - narrative_dataset_recalculate_statistics
       - narrative_dataset_request_sample
       - narrative_jobs_describe
+      - narrative_jobs_search
       - narrative_nql_validate
       - narrative_workflows_create
       - narrative_workflow_runs_list
@@ -122,12 +123,15 @@ Trigger when the user types `/generate-match-report` or asks any of:
    (`source_id`, `source_id_type`, `target_id`, `target_id_type`).
 3. One or more partner access rules are already shared with them.
 
-If a prerequisite is missing, hand off — don't reimplement:
+If a prerequisite is missing, the procedure surfaces the gap and
+asks the user whether to route to the relevant sibling skill — don't
+reimplement here. The `graph_edge` branch is a live check in
+**Phase 2.5**:
 
 | Missing | Hand off to |
 |---|---|
 | No dataset | Ask the user to register one first |
-| No `graph_edge` mapping | `/create-mapping` |
+| No `graph_edge` mapping | `/create-mapping` (asked in Phase 2.5) |
 | No partner ARs | `/share-enclave-dataset` |
 
 **Do NOT use this skill for:**
@@ -199,6 +203,11 @@ fall back to searching owned datasets and then
 `narrative_datasets_describe(... include=["mappings"])` to filter
 client-side.
 
+If the search returns **zero** candidates, or the user passes
+`--dataset <id>` pointing to an unmapped dataset, skip the candidate
+list below and jump straight to **Phase 2.5**'s mapping-check
+question.
+
 > **Context:** Picking **your data** in the comparison.
 > **Plain English:** Which dataset is "yours"? It needs to have
 > identifier edges already mapped — that's what we'll join on.
@@ -212,6 +221,51 @@ client-side.
 
 Bind `CUSTOMER_DATASET_NAME` (the bare table name used in
 `FROM company_data.<name>`) and `CUSTOMER_DATASET_ID`.
+
+---
+
+### Phase 2.5. Confirm `graph_edge` mapping
+
+A match report can't run without identifier edges. After binding
+`CUSTOMER_DATASET_ID` — whether from the Phase 2 prompt or from
+`--dataset <id>` — verify the chosen dataset actually has a
+`graph_edge` Rosetta Stone mapping:
+
+```
+narrative_datasets_describe(
+  dataset_ids=[CUSTOMER_DATASET_ID],
+  include=["mappings"]
+)
+```
+
+If `graph_edge` is present → continue to Phase 3.
+
+If it is **absent** (or Phase 2's owned-and-mapped search returned
+zero candidates to begin with), ask the user:
+
+> **Context:** The dataset you picked isn't ready for a match report yet.
+> **Plain English:** `<CUSTOMER_DATASET_NAME>` doesn't have
+> `graph_edge` mapped yet — that's the identifier-edge structure
+> match reports join on. Without it, there's nothing to compare to
+> the partner.
+> **Recommend:** Route to `/create-mapping` so the dataset gets the
+> mapping it needs, then come back here.
+>
+> Options:
+> - **A)** Route me to `/create-mapping` for `<CUSTOMER_DATASET_NAME>` (recommended)
+> - **B)** Pick a different dataset (return to Phase 2)
+> - **C)** Cancel
+
+- **A** → Hand off cleanly: tell the user to run
+  `/create-mapping --dataset <CUSTOMER_DATASET_ID>` and re-invoke
+  `/generate-match-report` once the mapping lands. Exit with status
+  `NEEDS_CONTEXT`.
+- **B** → Loop back to Phase 2's candidate prompt (or free-text
+  search if the user reached Phase 2.5 via `--dataset <id>`).
+- **C** → Exit with status `NEEDS_CONTEXT`.
+
+Do **not** try to author the mapping inline — `/create-mapping` owns
+that contract end-to-end.
 
 ---
 
@@ -463,13 +517,41 @@ Call `narrative_workflows_create` with:
 - `tags` = `["_nio_ci_match_report_workflow", "<RUN_SLUG_LOWER>"]`
 - `trigger_immediately` = `true`
 
-Capture `workflowId` and `runId` from the response. Poll the run via
-`narrative_workflow_runs_list(workflow_id=workflowId)` until terminal
-(`completed`, `failed`, or `terminated`).
+After `narrative_workflows_create` returns, capture both
+`workflowId` and `runId` (the latter is present when the call was
+made with `trigger_immediately=true`). Poll the run until terminal:
 
-If `failed`, the runner returns an error message naming the failing
-step. Surface it verbatim and STOP — do not try to re-run with
-modified NQL.
+```
+narrative_workflow_runs_list(workflow_id=workflowId)
+```
+
+Terminal states are `completed`, `failed`, and `terminated`.
+
+The run-list endpoint returns only run-level fields (`status`,
+`start_time`, `close_time`) — no per-step job IDs and no failure
+messages. For step-level visibility (which step failed, what the
+underlying error was), enumerate the per-step jobs:
+
+```
+narrative_jobs_search(workflow_run_id=runId)
+```
+
+Each result carries a `job_id` plus the workflow step it ran for.
+Pull the failing one's detail with
+`narrative_jobs_describe(job_id=<...>)` to read the actual error
+message. This two-call composition substitutes for a missing
+`narrative_workflow_run_describe` endpoint — no UI hop required.
+
+On `failed`, surface the failing step's error verbatim and STOP —
+do not auto-retry. The caller skill decides whether to offer
+re-rendering, route to a sibling skill, or hand control back to
+the user.
+
+**Match-report-specific failure handling.** The YAML in
+`assets/workflow.yaml.tmpl` is an external contract — do not
+re-render with modified NQL. If the failing step's error points to
+the templated query (e.g., a missing column), STOP and surface to
+the user; fixes belong in the template, not in this skill's runtime.
 
 ---
 
@@ -608,9 +690,9 @@ authored; for now, the rules below are self-contained.
 - **Pre-flight NQL validation fails.** STOP. Surface the validator's
   error verbatim. Do not "fix" the templated NQL — the YAML is an
   external contract.
-- **Workflow runner returns `failed`.** Surface the runner's error
-  verbatim and STOP. Do not re-render with modified NQL; route the
-  user to the workflow's run-detail view instead.
+- **Workflow runner returns `failed`.** Surface the failing step's
+  error verbatim and STOP. The mechanics (jobs_search → jobs_describe)
+  are in the `monitor-workflow-run` snippet inlined at Phase 7.
 - **`ENRICHMENT_JOIN_PATH` starts with `e.`.** Template prepends the
   alias; a leading `e.` produces `e.e._rosetta_stone...` and the join
   fails silently. Validate before binding.
