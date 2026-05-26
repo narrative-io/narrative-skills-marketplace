@@ -616,10 +616,7 @@ for the EXPIRE window, it's hidden from the main UI by tag, and it
 auto-deletes. Nothing to clean up by hand.
 
 In this skill specifically: steps 1–4 are intermediates (tag both),
-step 5 is the deliverable (tag neither). Do **not** add a
-`DropMaterializedView` task to the workflow YAML — the runner will
-reject the unknown task type and the run will fail before step 5.
-The DSL has no drop task; EXPIRE handles retention server-side.
+step 5 is the deliverable (tag neither).
 
 ---
 
