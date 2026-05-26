@@ -587,31 +587,39 @@ Render:
 
 #### Intermediate datasets — auto-expire + hidden from UI
 
-The four intermediate MVs
-(`<RUN_SLUG_UPPER>_STEP1_CUSTOMER_EDGES` … `_STEP4_MATCH_ENRICHED`)
-borrow the interactive-query cleanup pattern used in the platform UI:
+For datasets that should be **temporary** — ad-hoc scratch
+artifacts, intermediate steps in a workflow, or anything created on
+the fly that shouldn't outlive its immediate purpose — set both:
 
-- `EXPIRE = 'P1D'` — the platform garbage-collects each MV one day
-  after creation, so the storage and Dataset entries are removed
-  automatically. Plenty of time to debug a failed run.
-- `TAGS = (..., '_nio_interactive')` — the dataset store's default
-  `datasets` getter filters out anything carrying `_nio_interactive`,
-  so these MVs never appear in the customer's Datasets list, Audience
-  Studio source pickers, Graph Studio inputs, etc. They surface only
+- `EXPIRE = 'P1D'` (or another ISO-8601 duration). The platform
+  garbage-collects the dataset that long after creation, removing
+  both the storage and the Dataset entry automatically. `P1D` is a
+  sensible default: enough time to debug, short enough not to
+  clutter long-term storage. Use a longer duration only if the user
+  is expected to inspect the dataset after creation.
+- `TAGS = ( '_nio_materialized_view', '_nio_interactive', ... )` —
+  the `_nio_interactive` tag is what the dataset store's default
+  `datasets` getter filters out. The dataset becomes invisible in
+  the customer's Datasets list and in source pickers (Audience
+  Studio, Graph Studio, etc.). It still exists; it only surfaces
   in escape-hatch views that opt in via
   `allDatasetsIncludingInteractive`.
 
-The final report (step 5) carries neither — it's the customer-facing
-artifact and should be persistent and visible.
+Common application: workflows whose intermediate steps materialize
+data the user shouldn't see. Tag every intermediate MV with both
+`EXPIRE` and `_nio_interactive`; tag the final, customer-facing
+artifact with **neither** — that's the deliverable, it should be
+persistent and visible.
 
-If the user asks "where did the STEP1..STEP4 datasets go," explain:
-they exist for ≤24h, they're hidden from the main UI by tag, and
-they auto-delete. Nothing for the user to clean up by hand.
+If the user asks where a temporary dataset went, explain: it exists
+for the EXPIRE window, it's hidden from the main UI by tag, and it
+auto-deletes. Nothing to clean up by hand.
 
-Do not invent a `DropMaterializedView` call inside the YAML — the
-workflow runner will reject the unknown task type and the run will
-fail before step 5. The DSL still has no drop task; we don't need
-one because EXPIRE handles retention server-side.
+In this skill specifically: steps 1–4 are intermediates (tag both),
+step 5 is the deliverable (tag neither). Do **not** add a
+`DropMaterializedView` task to the workflow YAML — the runner will
+reject the unknown task type and the run will fail before step 5.
+The DSL has no drop task; EXPIRE handles retention server-side.
 
 ---
 
@@ -668,10 +676,6 @@ new company context.
 ---
 
 ## Edge cases and gotchas
-
-One-line cheat sheet. The full prose and example flows live in
-[`references/EDGE_CASES.md`](references/EDGE_CASES.md) when
-authored; for now, the rules below are self-contained.
 
 - **Zero-overlap partner.** Surface a blocker; do not submit an empty
   comparison. Offer to switch partners or route to `/create-mapping`.
