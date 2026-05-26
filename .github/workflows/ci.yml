@@ -62,6 +62,9 @@ jobs:
       - name: Knip (unused code/deps)
         run: bun run knip
 
+      - name: Tests
+        run: bun run test
+
   shellcheck:
     name: Shellcheck setup script
     runs-on: ubuntu-latest

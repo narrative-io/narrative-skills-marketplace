@@ -101,7 +101,9 @@ let candidates: string[];
 if (args.paths.length > 0) {
   candidates = args.paths.map((p) => relative(ROOT, resolve(ROOT, p))).filter((p) => isTmpl(p));
 } else {
-  candidates = discoverTemplates(ROOT).map((t) => t.tmpl);
+  candidates = discoverTemplates(ROOT)
+    .map((t) => t.tmpl)
+    .filter((p) => isTmpl(p));
 }
 
 const errors: string[] = [];
