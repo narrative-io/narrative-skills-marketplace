@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.4.0
+version: 0.4.1
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
