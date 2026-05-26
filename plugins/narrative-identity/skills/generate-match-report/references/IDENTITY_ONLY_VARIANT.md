@@ -28,11 +28,3 @@ Everything else in step 5 — identifier-counts, the `kpi_*` family,
 and the `customer_*` / `match_totals` / `supplier_*` aggregations —
 is still meaningful in identity-only mode. The report UI handles
 missing `match_attribute_*` rows gracefully.
-
-## Cleaner long-term path
-
-The substitution-time branching above is the v0.1 approach. The
-cleaner long-term solution is a second template at
-`assets/workflow.identity-only.yaml.tmpl` that the skill selects by
-file path based on the Phase 5 answer. Land that when the branching
-logic in this skill outgrows ~30 lines of substitution code.
