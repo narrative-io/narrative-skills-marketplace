@@ -106,6 +106,16 @@ could attach to each person if they bought the data.
    mapped attributes, not from your imagination. The user unchecks
    what they don't want.
 
+## Arguments
+
+- `/generate-match-report` — full interactive workflow.
+- `/generate-match-report --dataset <id>` — skip the customer prompt.
+- `/generate-match-report --supplier-ar <id>` — skip the partner prompt.
+- `/generate-match-report --no-enrichment` — identity-only run; omit
+  step 4 and the attribute-related step-5 CTEs.
+- `/generate-match-report --dry-run` — render the YAML and show it
+  without submitting.
+
 ## When to use
 
 Trigger when the user types `/generate-match-report` or asks any of:
@@ -140,16 +150,6 @@ reimplement here. The `graph_edge` branch is a live check in
 - Auditing pre-graph data quality → use `/triage-pregraph-data`.
 - Authoring a new Rosetta Stone mapping → use `/create-mapping`.
 - Exposing your own data to a partner → use `/share-enclave-dataset`.
-
-## Arguments
-
-- `/generate-match-report` — full interactive workflow.
-- `/generate-match-report --dataset <id>` — skip the customer prompt.
-- `/generate-match-report --supplier-ar <id>` — skip the partner prompt.
-- `/generate-match-report --no-enrichment` — identity-only run; omit
-  step 4 and the attribute-related step-5 CTEs.
-- `/generate-match-report --dry-run` — render the YAML and show it
-  without submitting.
 
 ---
 
@@ -720,10 +720,9 @@ new company context.
 
 ## Harness fallbacks
 
-- **No `narrative_nql_validate` MCP tool available.** Skip the
-  pre-flight validation in Phase 6 and surface the gap to the user
-  before submit. Do not auto-resort to running NQL via
-  `narrative_nql_run` — it allocates compute.
+- **No `narrative_nql_validate`.** Skip Phase 6 pre-flight; do not
+  substitute `narrative_nql_run`. See
+  [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 - **No `AskUserQuestion`.** If the harness does not expose `AskUserQuestion` as a named tool
 (Claude Code does; most others don't), ask the user the same question
 in plain prose — **one question per turn**, never batched — and wait

@@ -282,6 +282,7 @@
             "narrative_dataset_recalculate_statistics",
             "narrative_dataset_request_sample",
             "narrative_jobs_describe",
+            "narrative_jobs_search",
             "narrative_nql_validate",
             "narrative_workflows_create",
             "narrative_workflow_runs_list"
