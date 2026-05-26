@@ -547,12 +547,6 @@ do not auto-retry. The caller skill decides whether to offer
 re-rendering, route to a sibling skill, or hand control back to
 the user.
 
-**Match-report-specific failure handling.** The YAML in
-`assets/workflow.yaml.tmpl` is an external contract — do not
-re-render with modified NQL. If the failing step's error points to
-the templated query (e.g., a missing column), STOP and surface to
-the user; fixes belong in the template, not in this skill's runtime.
-
 ---
 
 ### Phase 8. Read the final report sample and summarize
