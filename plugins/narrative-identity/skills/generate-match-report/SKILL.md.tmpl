@@ -476,16 +476,10 @@ If `--dry-run`, stop here, print the YAML, and exit.
 #### Pre-flight: validate each NQL block
 
 Before submit, run each step's NQL through `narrative_nql_validate`.
-The validator catches the cheap mistakes (mis-quoted columns,
-unresolved table references) without consuming compute. The workflow
-itself takes 10–25 minutes; an upfront 5-second validation pass is
-free insurance.
+The workflow itself takes 10–25 minutes — catching a typo up front
+beats waiting for the runner to fail.
 
-If any validation fails → STOP. Surface the exact error and ask
-whether to:
-- (A) Stop and let the user investigate.
-- (B) Submit anyway (the workflow runner may handle the error
-  differently than the standalone validator).
+{{SNIPPET:validate-nql}}
 
 ---
 
