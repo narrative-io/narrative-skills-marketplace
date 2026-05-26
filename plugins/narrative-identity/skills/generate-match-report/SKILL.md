@@ -655,8 +655,9 @@ tools or generic Read / Bash / Write.
 - [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
   — prose-mode fallbacks for `narrative_nql_validate` and
   `AskUserQuestion` (both Claude-Code-specific).
-- Sibling skills: `/generate-identity-graph` (build the graph),
-  `/create-mapping` (author a Rosetta Stone mapping),
+- Sibling skills: `/create-workflow` (for more information on
+  creating workflows in general), `/generate-identity-graph` (build
+  the graph), `/create-mapping` (author a Rosetta Stone mapping),
   `/share-enclave-dataset` (expose your data to a partner).
 
 ---
