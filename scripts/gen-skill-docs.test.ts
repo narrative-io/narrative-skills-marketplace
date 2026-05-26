@@ -5,14 +5,14 @@
  * plus a `snippets/` dir for repo-shared snippets, writes one or more
  * `*.tmpl` fixtures, and calls processTemplate(tmplPath, root) directly.
  *
- * Run with: bun test scripts/__tests__/gen-skill-docs.test.ts
+ * Run with: bun test
  */
 
 import { describe, expect, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { bannerFor, isOptOut, OPT_OUT_MARKER, processTemplate } from '../gen-skill-docs';
+import { bannerFor, isOptOut, OPT_OUT_MARKER, processTemplate } from './gen-skill-docs';
 
 type Files = Record<string, string>;
 

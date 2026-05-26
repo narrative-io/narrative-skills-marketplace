@@ -772,7 +772,7 @@ bun run check:manifests      # Validate marketplace.json, plugin.json, SKILL.md 
 bun run check                # Biome — format + lint.
 bun run typecheck            # tsc --noEmit, strict mode.
 bun run knip                 # Unused files / deps / exports.
-bun run test                 # bun test — renderer unit tests in scripts/__tests__.
+bun run test                 # bun test — colocated unit tests (scripts/*.test.ts).
 bun run ci                   # Everything above, in order.
 ```
 
