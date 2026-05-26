@@ -73,36 +73,14 @@ You never rewrite the workflow YAML or its NQL, never submit before
 each step's NQL validates, and never invent identifier types the
 customer dataset doesn't actually emit.
 
-## What this skill does
-
 Translates the user's plain-English overlap question into a workflow
 submission against `assets/workflow.yaml.tmpl`. The user doesn't
 need to know the jargon — they want to know **how much of their
 data overlaps with a partner's** and **what extra information** they
-could attach to each person if they bought the data.
-
-## The hard rules
-
-1. **The workflow YAML is an external artifact.** Read it from
-   `assets/workflow.yaml.tmpl`. Macro-substitute the variables
-   listed in Appendix A. **Do not rewrite the YAML or the NQL.** The
-   downstream report UI expects an exact output schema; any change to
-   the queries risks breaking the rendered report.
-2. **Output schema is immutable.** Step 5 produces rows with
-   `ATTRIBUTE_TYPE` + `BUCKETS` and a specific set of `ATTRIBUTE_TYPE`
-   values (`customer_inventory`, `match_totals`,
-   `match_attribute_coverage`, the `kpi_*` family, etc.). The UI keys
-   off these. Don't add, rename, or remove `ATTRIBUTE_TYPE` rows.
-3. **Submit the whole workflow.** Don't run the MVs one at a time
-   unless the user explicitly asks to debug a single step. The
-   workflow runner handles ordering, retries, and final-MV dataset
-   resolution.
-4. **Interview, don't ask open-ended.** Every `AskUserQuestion` has
-   2–4 recommended options. Reserve free-text only for inputs MCP
-   cannot enumerate (e.g., a free-text run name).
-5. **Pre-tick the right answer.** Defaults come from the partner AR's
-   mapped attributes, not from your imagination. The user unchecks
-   what they don't want.
+could attach to each person if they bought the data. Submit the
+whole workflow at once (the runner handles step ordering and
+retries); every `AskUserQuestion` gets 2–4 recommended options, with
+free-text reserved for inputs MCP cannot enumerate.
 
 ## Arguments
 
@@ -219,6 +197,9 @@ narrative_datasets_describe(
 )
 ```
 
+If the describe call errors or returns no result, exit with status
+`NEEDS_CONTEXT` and surface the error verbatim to the user.
+
 If `graph_edge` is present → continue to Phase 3.
 
 If it is **absent** (or Phase 2's owned-and-mapped search returned
@@ -244,6 +225,11 @@ zero candidates to begin with), ask the user:
 - **B** → Loop back to Phase 2's candidate prompt (or free-text
   search if the user reached Phase 2.5 via `--dataset <id>`).
 - **C** → Exit with status `NEEDS_CONTEXT`.
+- **Free text** (user types a different dataset name instead of
+  picking A/B/C) → treat as B: search owned datasets matching the
+  text, bind the result if found, and re-enter Phase 2.5 with the
+  new `CUSTOMER_DATASET_ID`. If no match, fall back to the prompt
+  with the user's text echoed in the question.
 
 Do **not** try to author the mapping inline — `/create-mapping` owns
 that contract end-to-end.
@@ -475,9 +461,8 @@ If `--dry-run`, stop here, print the YAML, and exit.
 
 #### Pre-flight: validate each NQL block
 
-Before submit, run each step's NQL through `narrative_nql_validate`.
-The workflow itself takes 10–25 minutes — catching a typo up front
-beats waiting for the runner to fail.
+The workflow runs 10–25 minutes — catching typos up front beats
+waiting for the runner to fail.
 
 {{SNIPPET:validate-nql}}
 
