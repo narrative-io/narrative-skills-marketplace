@@ -794,15 +794,25 @@ and the `graph_edge` container.
 ```python
 for m in ar.mappings:
     if m.attribute_name.startswith("_nio_"):
-        continue                              # internal — skip
+        continue                                  # internal — skip
     elif m.attribute_id == 362:
-        graphEdge = m                         # structural
+        graphEdge = m                             # structural
     elif m.attribute_id in IDENTIFIER_ATTRIBUTE_IDS:
-        identifiers.append(m)                 # join-able
+        identifiers.append(m)                     # join-able (fast path)
     else:
-        demographics.append(m)                # enrichment
+        # Fallback: unknown id, describe + keyword-classify
+        attr = narrative_attributes_describe(attribute_ids=[m.attribute_id])
+        if matches_identifier_keywords(attr.name):
+            identifiers.append(m)
+            note_unknown(m, "identifier")
+        else:
+            demographics.append(m)
+            note_unknown(m, "enrichment")
 ```
 
-The hand-curated `IDENTIFIER_ATTRIBUTE_IDS` set lives in
+The curated `IDENTIFIER_ATTRIBUTE_IDS` set, the keyword heuristic for
+the fallback branch, and the user-facing note format all live in
 [`references/IDENTIFIER_ATTRIBUTES.md`](references/IDENTIFIER_ATTRIBUTES.md).
-Load it on demand — these 30-odd IDs change rarely.
+Load it on demand — the curated set changes rarely; the fallback
+keeps the skill correct for new identifier-typed attributes between
+updates.

@@ -1,9 +1,9 @@
 # Identifier attribute IDs
 
-Hand-curated subset of the Rosetta Stone attribute catalog. The IDs
-in this list are the **identifier-typed** attributes — the columns
-whose values are meant to identify a person, device, or household
-across systems.
+Curated subset of the Rosetta Stone attribute catalog. The IDs in this
+list are the **identifier-typed** attributes — the columns whose
+values are meant to identify a person, device, or household across
+systems.
 
 This skill uses the set to partition any access rule's mappings into
 three buckets: identifiers (join-able), demographics (enrichment),
@@ -50,19 +50,39 @@ identifier nor enrichment. Treat it separately.
 ```python
 for m in ar.mappings:
     if m.attribute_name.startswith("_nio_"):
-        continue                              # internal — skip
+        continue                                  # internal — skip
     elif m.attribute_id == 362:
-        graphEdge = m                         # structural
+        graphEdge = m                             # structural
     elif m.attribute_id in IDENTIFIER_ATTRIBUTE_IDS:
-        identifiers.append(m)                 # join-able
+        identifiers.append(m)                     # join-able (fast path)
     else:
-        demographics.append(m)                # enrichment
+        # Fallback: unknown id, describe + keyword-classify
+        attr = narrative_attributes_describe(attribute_ids=[m.attribute_id])
+        if matches_identifier_keywords(attr.name):
+            identifiers.append(m)
+            note_unknown(m, "identifier")
+        else:
+            demographics.append(m)
+            note_unknown(m, "enrichment")
 ```
 
-## Maintenance
+## Fallback for unknown IDs
 
-This set is hand-curated against the live catalog. When new
-identifier-typed attributes ship in Rosetta Stone, add their IDs
-here. The canonical source is `/find-attribute` against the live
-attribute service; if a query against that service disagrees with
-this list, trust the service and update this file.
+If a mapping's `attribute_id` is **not** in the curated set above and
+**not** `362` (`graph_edge`), call
+`narrative_attributes_describe(attribute_ids=[<id>])` once. Apply
+this keyword heuristic to the returned `name` (case-insensitive):
+
+- Classify as **identifier** if the name contains any of:
+  `_id`, `email`, `phone`, `hash`, `cookie`, `ip_address`, `device`,
+  `advertising`, `identifier`.
+- Otherwise classify as **enrichment**.
+
+When the fallback fires, surface a one-line note to the user in the
+Phase 4 / Phase 5 summary:
+
+> Found attribute `<name>` (id `<id>`) on `<AR>`; treating as
+> `<identifier|enrichment>`.
+
+Observational only — describe what was found and how it was
+classified. No further commentary.
