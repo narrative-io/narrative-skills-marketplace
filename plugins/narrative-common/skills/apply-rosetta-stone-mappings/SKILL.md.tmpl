@@ -1,6 +1,6 @@
 ---
 name: apply-rosetta-stone-mappings
-version: 0.3.0
+version: 0.3.1
 description: |
   Apply a set of Rosetta Stone attribute mappings to a Narrative
   dataset by wrapping them in a one-shot workflow that calls the
