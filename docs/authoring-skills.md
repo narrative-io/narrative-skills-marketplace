@@ -420,6 +420,15 @@ exists), no link is needed — see `write-nql` and
 `generate-rosetta-stone-mappings`, which keep all edge cases inline
 because they don't have a separate `EDGE_CASES.md`.
 
+Reference files can themselves be templates. Name a reference
+`references/FOO.md.tmpl` and the renderer produces `references/FOO.md`
+with `{{SNIPPET:...}}` / resolver expansion, exactly as it does for
+`SKILL.md.tmpl` (see [§8](#8-dry-via-the-template-system)). This lets
+the same shared snippet that a body pulls in (e.g.
+`{{SNIPPET:askuserquestion-fallback}}`) also feed the matching
+reference file, so the DRY split extends past the body into tier 3
+instead of forcing each reference to copy the prose by hand.
+
 ---
 
 ## 7. Composing skills
@@ -460,7 +469,7 @@ Don't paraphrase the same idea in two places.
 
 ### Snippets
 
-Author the skill as `SKILL.md.tmpl` and reference shared markdown
+Author the file as a `*.tmpl` template and reference shared markdown
 chunks with `{{SNIPPET:<name>}}`.
 
 ```markdown
@@ -468,6 +477,17 @@ chunks with `{{SNIPPET:<name>}}`.
 
 {{SNIPPET:pin-company-context}}
 ```
+
+The renderer (`bun run gen:skill-docs`) processes **any `*.tmpl` file
+under a skill directory**, not just `SKILL.md.tmpl`. A
+`references/HARNESS_FALLBACK.md.tmpl` renders to
+`references/HARNESS_FALLBACK.md`, an `assets/config.yaml.tmpl` renders
+to `assets/config.yaml`, and so on. Each rendered file gets an
+`AUTO-GENERATED` banner in the comment syntax for its extension —
+HTML comments for `.md`, `#` lines for `.yaml`/`.yml`. Extensions with
+no comment syntax (`.json`, …) render without a banner and the
+renderer warns. As always: **edit the `.tmpl`, never the rendered
+sibling.**
 
 Snippet lookup order:
 
@@ -477,6 +497,22 @@ Snippet lookup order:
 
 Snippets are plain markdown — no frontmatter. They can themselves
 contain `{{...}}` placeholders (resolved transitively, up to 5 passes).
+
+#### Opting a template out of rendering
+
+Some files carry a `.tmpl` extension to signal *runtime* macro
+substitution by an agent (e.g. a workflow YAML full of
+`<RUN_SLUG_KEBAB>`-style macros) rather than build-time snippet
+expansion. Mark these with an opt-out marker as the first non-blank
+line so the renderer skips them and leaves the source untouched:
+
+```yaml
+# narrative-skills:no-render
+```
+
+```markdown
+<!-- narrative-skills:no-render -->
+```
 
 ### When to extract a snippet
 
@@ -730,12 +766,13 @@ feedback the skill writes for its caller.
 The same checks CI runs locally:
 
 ```bash
-bun run gen:skill-docs       # Render every SKILL.md.tmpl in place.
-bun run check:skill-docs     # Fail if any SKILL.md is stale vs. its .tmpl.
+bun run gen:skill-docs       # Render every *.tmpl in place (SKILL + references + assets).
+bun run check:skill-docs     # Fail if any rendered file is stale vs. its .tmpl.
 bun run check:manifests      # Validate marketplace.json, plugin.json, SKILL.md frontmatter.
 bun run check                # Biome — format + lint.
 bun run typecheck            # tsc --noEmit, strict mode.
 bun run knip                 # Unused files / deps / exports.
+bun run test                 # bun test — colocated unit tests (scripts/*.test.ts).
 bun run ci                   # Everything above, in order.
 ```
 
