@@ -189,7 +189,7 @@
     },
     {
       "name": "write-nql",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/write-nql/SKILL.md",
@@ -255,6 +255,54 @@
           "mcp-tools": [
             "search_narrative_i_o_knowledge_base",
             "query_docs_filesystem_narrative_i_o_knowledge_base"
+          ]
+        }
+      }
+    },
+    {
+      "name": "generate-match-report",
+      "version": "0.5.0",
+      "description": "Compare your data to a partner's data in the marketplace. Given a\ndataset you already own with person/edge data, this skill walks you\nthrough picking a partner data source to match against, choosing which\nidentifier types to match on, optionally selecting which enrichment\nattributes to attach, and then submits the report — returning overlap,\nmatch counts, and demographic coverage.\nUse when: \"how does my data compare to your marketplace\", \"compare my\ndata to [partner]\", \"how much overlap do I have with [supplier]\",\n\"run a match report\", \"match my customers against 3P data\", \"see\nwhat enrichment is available for my dataset\", or any open-ended\nquestion about marketplace overlap.\n(narrative-identity)",
+      "plugin": "narrative-identity",
+      "path": "plugins/narrative-identity/skills/generate-match-report/SKILL.md",
+      "compatibility": {
+        "requires": {
+          "tools": [
+            "Read"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_datasets_search",
+            "narrative_datasets_describe",
+            "narrative_dataset_get_column_stats",
+            "narrative_dataset_set_column_stats_config",
+            "narrative_dataset_recalculate_statistics",
+            "narrative_dataset_request_sample",
+            "narrative_jobs_describe",
+            "narrative_jobs_search",
+            "narrative_nql_validate",
+            "narrative_workflows_create",
+            "narrative_workflow_runs_list"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get_companies",
+            "narrative_context_search_companies",
+            "narrative_context_set_company",
+            "narrative_attributes_describe",
+            "narrative_attributes_search",
+            "narrative_nql_run",
+            "narrative_workflows_trigger"
           ]
         }
       }
