@@ -23,19 +23,3 @@ for a reply before continuing. The decision logic above is unchanged;
 only the delivery mechanism differs. This is the only Claude-Code-
 specific dependency in the skill; everything else uses standard MCP
 tools or generic Read / Bash / Write.
-
-Concretely, present each prompt's options as a numbered list:
-
-```
-**Pick one — reply with 1, 2, or 3:**
-1. <option A> (recommended)
-2. <option B>
-3. <option C>
-```
-
-For multi-select prompts (id-type subsetting, enrichment attribute
-groups), default selections are still pre-ticked. Ask the user to
-reply with the numbers to *uncheck* — keeps the prose short.
-
-Mandatory steps (pre-flight validation, schema-fidelity rule, dry-run
-gate) do not change.
