@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.4.0
+version: 0.4.1
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -194,25 +194,7 @@ Drafting heuristics specific to this skill:
 
 ### 5. Validate — mandatory, with retry
 
-```
-narrative_nql_validate(
-  nql: '<your full query>',
-  data_plane_id: '<plane captured in step 3>'
-)
-```
-
-Pass `data_plane_id` (full rationale in step 8's async snippet).
-
-If validation fails:
-
-1. Read the error message and pointer.
-2. Fix using the cheat sheet in the syntax-essentials section above.
-3. Re-validate. Repeat up to 3 times.
-4. If it still fails after 3 attempts, stop and surface the latest
-   error to the user verbatim. Suggest the most likely root cause
-   (usually a schema mismatch or an unsupported function) and ask
-   whether to consult `narrative-knowledge-base` or hand the query
-   back for manual editing.
+{{SNIPPET:validate-nql}}
 
 Do **not** display or execute an unvalidated query.
 

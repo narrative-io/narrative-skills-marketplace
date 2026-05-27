@@ -1,0 +1,322 @@
+document:
+  dsl: '1.0.0'
+  namespace: match-reports
+  name: <RUN_SLUG_KEBAB>
+  version: '1.0.0'
+do:
+  - step_1_customer_edges:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>_STEP1_CUSTOMER_EDGES"
+          DISPLAY_NAME = '<RUN_SLUG_UPPER>_STEP1_CUSTOMER_EDGES'
+          DESCRIPTION = 'Step 1/5 of <RUN_SLUG_UPPER>: customer flat edges (single rosetta-stone scan).'
+          EXPIRE = 'P1D'
+          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow', '_nio_interactive' )
+          WRITE_MODE = 'overwrite'
+          AS
+          WITH customer_edges AS (
+            SELECT
+              z._rosetta_stone.graph_edge['source_id']      AS CUSTOMER_PERSON_ID,
+              z._rosetta_stone.graph_edge['target_id']      AS ID,
+              z._rosetta_stone.graph_edge['target_id_type'] AS ID_TYPE
+            FROM company_data.<CUSTOMER_DATASET_NAME> AS z
+            WHERE z._rosetta_stone.graph_edge['target_id']      IS NOT NULL
+              AND z._rosetta_stone.graph_edge['target_id_type'] IS NOT NULL
+          )
+          SELECT CUSTOMER_PERSON_ID, ID, ID_TYPE FROM customer_edges
+      export:
+        as: '$context + { step1DatasetId: .datasetId }'
+  - step_2_supplier_edges:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>_STEP2_SUPPLIER_EDGES"
+          DISPLAY_NAME = '<RUN_SLUG_UPPER>_STEP2_SUPPLIER_EDGES'
+          DESCRIPTION = 'Step 2/5 of <RUN_SLUG_UPPER>: supplier distinct flat edges, filtered to customer ID types.'
+          EXPIRE = 'P1D'
+          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow', '_nio_interactive' )
+          WRITE_MODE = 'overwrite'
+          AS
+          WITH supplier_edges AS (
+            SELECT DISTINCT
+              x._rosetta_stone.graph_edge['source_id']      AS SUPPLIER_PERSON_ID,
+              x._rosetta_stone.graph_edge['target_id']      AS ID,
+              x._rosetta_stone.graph_edge['target_id_type'] AS ID_TYPE
+            FROM <SUPPLIER_AR_TABLE> AS x
+            WHERE x._rosetta_stone.graph_edge['source_id']      IS NOT NULL
+              AND x._rosetta_stone.graph_edge['target_id']      IS NOT NULL
+              AND x._rosetta_stone.graph_edge['target_id_type'] IN (<SELECTED_ID_TYPES_QUOTED>)
+          )
+          SELECT SUPPLIER_PERSON_ID, ID, ID_TYPE FROM supplier_edges
+      export:
+        as: '$context + { step2DatasetId: .datasetId }'
+  - step_3_match_edges:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>_STEP3_MATCH_EDGES"
+          DISPLAY_NAME = '<RUN_SLUG_UPPER>_STEP3_MATCH_EDGES'
+          DESCRIPTION = 'Step 3/5 of <RUN_SLUG_UPPER>: inner join of customer × supplier flat edges.'
+          EXPIRE = 'P1D'
+          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow', '_nio_interactive' )
+          WRITE_MODE = 'overwrite'
+          AS
+          WITH match_edges AS (
+            SELECT
+              s.SUPPLIER_PERSON_ID,
+              c.CUSTOMER_PERSON_ID,
+              s.ID,
+              s.ID_TYPE AS JOINED_TYPE
+            FROM company_data.<RUN_SLUG_LOWER>_step2_supplier_edges AS s
+            INNER JOIN company_data.<RUN_SLUG_LOWER>_step1_customer_edges AS c
+              ON  s.ID      = c.ID
+              AND s.ID_TYPE = c.ID_TYPE
+          )
+          SELECT SUPPLIER_PERSON_ID, CUSTOMER_PERSON_ID, ID, JOINED_TYPE FROM match_edges
+      export:
+        as: '$context + { step3DatasetId: .datasetId }'
+  - step_4_match_enriched:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>_STEP4_MATCH_ENRICHED"
+          DISPLAY_NAME = '<RUN_SLUG_UPPER>_STEP4_MATCH_ENRICHED'
+          DESCRIPTION = 'Step 4/5 of <RUN_SLUG_UPPER>: LEFT JOIN match edges × enrichment, builds ATTRIBUTES array.'
+          EXPIRE = 'P1D'
+          TAGS = ( '_nio_materialized_view', '_nio_ci_match_report_workflow', '_nio_interactive' )
+          WRITE_MODE = 'overwrite'
+          AS
+          WITH match_enriched AS (
+            SELECT
+              m.SUPPLIER_PERSON_ID,
+              m.CUSTOMER_PERSON_ID,
+              m.JOINED_TYPE,
+              ARRAY(
+                <ATTRIBUTE_STRUCTS>
+              ) AS ATTRIBUTES
+            FROM company_data.<RUN_SLUG_LOWER>_step3_match_edges AS m
+            LEFT JOIN <ENRICHMENT_AR_TABLE> AS e
+              ON CAST(m.SUPPLIER_PERSON_ID AS STRING) = CAST(e.<ENRICHMENT_JOIN_PATH> AS STRING)
+          )
+          SELECT SUPPLIER_PERSON_ID, CUSTOMER_PERSON_ID, JOINED_TYPE, ATTRIBUTES FROM match_enriched
+      export:
+        as: '$context + { step4DatasetId: .datasetId }'
+  - step_5_match_report:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE OR REPLACE MATERIALIZED VIEW "<RUN_SLUG_UPPER>"
+          DISPLAY_NAME = '<REPORT_DISPLAY_NAME>'
+          DESCRIPTION = '<REPORT_DESCRIPTION>'
+          TAGS = ( '_nio_ci_match_report' )
+          WRITE_MODE = 'overwrite'
+          EXTENDED_STATS = 'none'
+          AS
+          WITH
+            customer_inventory AS (
+              SELECT
+                ID_TYPE,
+                APPROX_COUNT_DISTINCT(ID)                 AS CUSTOMER_ID_COUNT,
+                APPROX_COUNT_DISTINCT(CUSTOMER_PERSON_ID) AS CUSTOMER_PERSON_COUNT
+              FROM company_data.<RUN_SLUG_LOWER>_step1_customer_edges
+              GROUP BY ID_TYPE
+            ),
+            customer_baseline_counts AS (
+              SELECT
+                APPROX_COUNT_DISTINCT(ID)                 AS total_ids,
+                APPROX_COUNT_DISTINCT(CUSTOMER_PERSON_ID) AS total_persons
+              FROM company_data.<RUN_SLUG_LOWER>_step1_customer_edges
+            ),
+            customer_type_counts AS (
+              SELECT
+                ID_TYPE                                   AS JOINED_TYPE,
+                APPROX_COUNT_DISTINCT(ID)                 AS CUSTOMER_ID_COUNT,
+                APPROX_COUNT_DISTINCT(CUSTOMER_PERSON_ID) AS CUSTOMER_PERSON_COUNT
+              FROM company_data.<RUN_SLUG_LOWER>_step1_customer_edges
+              GROUP BY ID_TYPE
+            ),
+            match_id_type_counts AS (
+              SELECT
+                JOINED_TYPE,
+                APPROX_COUNT_DISTINCT(SUPPLIER_PERSON_ID) AS MATCH_PERSON_COUNT,
+                APPROX_COUNT_DISTINCT(ID)                 AS MATCH_ID_COUNT
+              FROM company_data.<RUN_SLUG_LOWER>_step3_match_edges
+              GROUP BY JOINED_TYPE
+            ),
+            match_totals AS (
+              SELECT
+                APPROX_COUNT_DISTINCT(SUPPLIER_PERSON_ID) AS MATCH_SUPPLIER_PERSON_COUNT,
+                APPROX_COUNT_DISTINCT(CUSTOMER_PERSON_ID) AS MATCH_CUSTOMER_PERSON_COUNT,
+                APPROX_COUNT_DISTINCT(CONCAT(JOINED_TYPE, ':', CAST(ID AS STRING))) AS MATCH_ID_COUNT
+              FROM company_data.<RUN_SLUG_LOWER>_step3_match_edges
+            ),
+            supplier_matched_edges AS (
+              SELECT s.SUPPLIER_PERSON_ID, s.ID, s.ID_TYPE
+              FROM company_data.<RUN_SLUG_LOWER>_step2_supplier_edges AS s
+              WHERE EXISTS (
+                SELECT 1 FROM company_data.<RUN_SLUG_LOWER>_step3_match_edges AS m
+                WHERE m.SUPPLIER_PERSON_ID = s.SUPPLIER_PERSON_ID
+              )
+            ),
+            supplier_matched_type_counts AS (
+              SELECT
+                ID_TYPE                                   AS JOINED_TYPE,
+                APPROX_COUNT_DISTINCT(ID)                 AS SUPPLIER_ID_COUNT,
+                APPROX_COUNT_DISTINCT(SUPPLIER_PERSON_ID) AS SUPPLIER_PERSON_COUNT
+              FROM supplier_matched_edges
+              GROUP BY ID_TYPE
+            ),
+            customer_inventory_agg AS (
+              SELECT
+                'customer_inventory' AS ATTRIBUTE_TYPE,
+                ARRAY_AGG(NAMED_STRUCT('bucket', ID_TYPE, 'freq', CUSTOMER_ID_COUNT, 'persons', CUSTOMER_PERSON_COUNT)) AS BUCKETS
+              FROM customer_inventory
+            ),
+            customer_baseline_agg AS (
+              SELECT
+                'customer_baseline' AS ATTRIBUTE_TYPE,
+                ARRAY(NAMED_STRUCT('bucket', 'total', 'freq', total_ids, 'persons', total_persons)) AS BUCKETS
+              FROM customer_baseline_counts
+            ),
+            customer_type_agg AS (
+              SELECT
+                'customer_identifiers_by_type' AS ATTRIBUTE_TYPE,
+                ARRAY_AGG(NAMED_STRUCT('bucket', JOINED_TYPE, 'freq', CUSTOMER_ID_COUNT, 'persons', CUSTOMER_PERSON_COUNT)) AS BUCKETS
+              FROM customer_type_counts
+            ),
+            match_totals_agg AS (
+              SELECT
+                'match_totals' AS ATTRIBUTE_TYPE,
+                ARRAY(NAMED_STRUCT('bucket', 'total', 'freq', MATCH_ID_COUNT, 'persons', MATCH_CUSTOMER_PERSON_COUNT)) AS BUCKETS
+              FROM match_totals
+            ),
+            match_id_type_agg AS (
+              SELECT
+                'match_identifiers_by_type' AS ATTRIBUTE_TYPE,
+                ARRAY_AGG(NAMED_STRUCT('bucket', JOINED_TYPE, 'freq', MATCH_ID_COUNT, 'persons', MATCH_PERSON_COUNT)) AS BUCKETS
+              FROM match_id_type_counts
+            ),
+            supplier_matched_type_agg AS (
+              SELECT
+                'supplier_identifiers_by_type' AS ATTRIBUTE_TYPE,
+                ARRAY_AGG(NAMED_STRUCT('bucket', JOINED_TYPE, 'freq', SUPPLIER_ID_COUNT, 'persons', SUPPLIER_PERSON_COUNT)) AS BUCKETS
+              FROM supplier_matched_type_counts
+            ),
+            kpi_metrics AS (
+              SELECT
+                cb.total_ids                          AS customer_total_ids,
+                cb.total_persons                      AS customer_persons,
+                tm.MATCH_ID_COUNT                     AS match_id_count,
+                tm.MATCH_CUSTOMER_PERSON_COUNT        AS match_person_count,
+                tm.MATCH_SUPPLIER_PERSON_COUNT        AS match_supplier_person_count,
+                sc.supplier_total_ids
+              FROM customer_baseline_counts AS cb
+              CROSS JOIN match_totals AS tm
+              CROSS JOIN (SELECT APPROX_COUNT_DISTINCT(ID) AS supplier_total_ids FROM supplier_matched_edges) AS sc
+            ),
+            kpi_agg AS (
+              SELECT 'kpi_match_rate' AS ATTRIBUTE_TYPE,
+                ARRAY(NAMED_STRUCT('bucket', 'match_rate', 'freq', ROUND(match_id_count / NULLIF(customer_total_ids, 0) * 100, 1), 'persons', match_person_count)) AS BUCKETS
+              FROM kpi_metrics
+              UNION ALL
+              SELECT 'kpi_match_rate_persons',
+                ARRAY(NAMED_STRUCT('bucket', 'match_rate_persons', 'freq', ROUND(match_person_count / NULLIF(customer_persons, 0) * 100, 1), 'persons', match_person_count))
+              FROM kpi_metrics
+              UNION ALL
+              SELECT 'kpi_id_enrichment',
+                ARRAY(NAMED_STRUCT('bucket', 'enrichment_x', 'freq', ROUND(supplier_total_ids / NULLIF(match_id_count, 0), 1), 'persons', supplier_total_ids))
+              FROM kpi_metrics
+              UNION ALL
+              SELECT 'kpi_ids_per_person',
+                ARRAY(NAMED_STRUCT('bucket', 'ids_per_person', 'freq', ROUND(supplier_total_ids / NULLIF(match_person_count, 0), 1), 'persons', match_person_count))
+              FROM kpi_metrics
+              UNION ALL
+              SELECT 'kpi_dedup_rate',
+                ARRAY(NAMED_STRUCT('bucket', 'dedup_rate', 'freq', ROUND((customer_total_ids - customer_persons) / NULLIF(customer_total_ids, 0) * 100, 1), 'persons', customer_persons))
+              FROM kpi_metrics
+            ),
+            match_attribute_unnest AS (
+              SELECT
+                m.SUPPLIER_PERSON_ID,
+                m.CUSTOMER_PERSON_ID,
+                a.attribute                AS ATTRIBUTE_TYPE,
+                COALESCE(a.val, '(null)')  AS ATTRIBUTE_VALUE
+              FROM company_data.<RUN_SLUG_LOWER>_step4_match_enriched AS m
+              CROSS JOIN UNNEST(m.ATTRIBUTES) AS a (attribute, val)
+            ),
+            match_attribute_counts AS (
+              SELECT
+                ATTRIBUTE_TYPE,
+                ATTRIBUTE_VALUE,
+                APPROX_COUNT_DISTINCT(SUPPLIER_PERSON_ID) AS SUPPLIER_PERSON_COUNT,
+                APPROX_COUNT_DISTINCT(CUSTOMER_PERSON_ID) AS CUSTOMER_PERSON_COUNT
+              FROM match_attribute_unnest
+              GROUP BY ATTRIBUTE_TYPE, ATTRIBUTE_VALUE
+            ),
+            match_attribute_ranked AS (
+              SELECT
+                ATTRIBUTE_TYPE,
+                ATTRIBUTE_VALUE,
+                SUPPLIER_PERSON_COUNT,
+                CUSTOMER_PERSON_COUNT,
+                ROW_NUMBER() OVER (
+                  PARTITION BY ATTRIBUTE_TYPE
+                  ORDER BY SUPPLIER_PERSON_COUNT DESC, ATTRIBUTE_VALUE
+                ) AS rn
+              FROM match_attribute_counts
+            ),
+            match_attribute_top10 AS (
+              SELECT
+                ATTRIBUTE_TYPE,
+                CASE WHEN rn <= 10 THEN ATTRIBUTE_VALUE ELSE 'Other' END AS BUCKET,
+                SUPPLIER_PERSON_COUNT,
+                CUSTOMER_PERSON_COUNT
+              FROM match_attribute_ranked
+            ),
+            match_attribute_freq AS (
+              SELECT
+                ATTRIBUTE_TYPE,
+                BUCKET,
+                SUM(SUPPLIER_PERSON_COUNT) AS SUPPLIER_FREQ,
+                SUM(CUSTOMER_PERSON_COUNT) AS CUSTOMER_FREQ
+              FROM match_attribute_top10
+              GROUP BY ATTRIBUTE_TYPE, BUCKET
+            ),
+            match_attribute_results AS (
+              SELECT
+                ATTRIBUTE_TYPE,
+                ARRAY_AGG(NAMED_STRUCT('bucket', BUCKET, 'freq', CUSTOMER_FREQ, 'persons', CUSTOMER_FREQ)) AS BUCKETS
+              FROM match_attribute_freq
+              GROUP BY ATTRIBUTE_TYPE
+            ),
+            match_attribute_type_totals AS (
+              SELECT
+                ATTRIBUTE_TYPE,
+                APPROX_COUNT_DISTINCT(CUSTOMER_PERSON_ID) AS CUSTOMER_PERSON_COUNT
+              FROM match_attribute_unnest
+              GROUP BY ATTRIBUTE_TYPE
+            ),
+            match_attribute_coverage AS (
+              SELECT
+                'match_attribute_coverage' AS ATTRIBUTE_TYPE,
+                ARRAY_AGG(NAMED_STRUCT('bucket', ATTRIBUTE_TYPE, 'freq', CUSTOMER_PERSON_COUNT, 'persons', CUSTOMER_PERSON_COUNT)) AS BUCKETS
+              FROM match_attribute_type_totals
+            )
+          SELECT ATTRIBUTE_TYPE, BUCKETS FROM customer_inventory_agg
+          UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM customer_baseline_agg
+          UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM match_totals_agg
+          UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM match_id_type_agg
+          UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM supplier_matched_type_agg
+          UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM customer_type_agg
+          UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM kpi_agg
+          UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM match_attribute_results
+          UNION ALL SELECT ATTRIBUTE_TYPE, BUCKETS FROM match_attribute_coverage
+      export:
+        as: '$context + { finalDatasetId: .datasetId }'
+  - step_6_sample_final:
+      call: CreateDatasetSample
+      with:
+        datasetName: <RUN_SLUG_UPPER>
+      export:
+        as: '$context + { finalSampleRowCount: .rowCount }'
