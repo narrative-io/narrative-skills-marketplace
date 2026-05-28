@@ -6,7 +6,10 @@ made with `trigger_immediately=true`). Poll the run until terminal:
 narrative_workflow_runs_list(workflow_id=workflowId)
 ```
 
-Terminal states are `completed`, `failed`, and `terminated`.
+Terminal states are `completed`, `failed`, and `terminated`; any other
+status means keep polling.
+
+{{SNIPPET:async-poll-cadence}}
 
 The run-list endpoint returns only run-level fields (`status`,
 `start_time`, `close_time`) — no per-step job IDs and no failure

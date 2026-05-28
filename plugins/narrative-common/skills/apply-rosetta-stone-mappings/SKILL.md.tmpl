@@ -1,6 +1,6 @@
 ---
 name: apply-rosetta-stone-mappings
-version: 0.3.1
+version: 0.3.2
 description: |
   Apply a set of Rosetta Stone attribute mappings to a Narrative
   dataset by wrapping them in a one-shot workflow that calls the
@@ -370,17 +370,12 @@ blindly.
 
 ### Phase 9. Poll the run — opt-in (default on)
 
-If `trigger_immediately: true` was set, poll the run with a bounded
-loop:
+If `trigger_immediately: true` was set, poll the run by calling
+`narrative_workflow_runs_list(workflow_id: '<workflow_id>')` and
+reading the first entry's `state`. Stop on
+`state in ('completed', 'failed', 'cancelled')`.
 
-- Wait ~5 seconds between polls.
-- Call
-  `narrative_workflow_runs_list(workflow_id: '<workflow_id>')`
-  and read the first entry's `state`.
-- Stop on `state in ('completed', 'failed', 'cancelled')`.
-- Cap the loop at 12 iterations (~1 minute). If the run is still
-  `running` at the cap, stop polling and tell the user to check
-  back with `narrative_workflow_runs_list(workflow_id: '<id>')`.
+{{SNIPPET:async-poll-cadence}}
 
 When the run reaches a terminal state, read the task output. For
 `CreateRosettaStoneMappingsIfNotExist`, the output includes:

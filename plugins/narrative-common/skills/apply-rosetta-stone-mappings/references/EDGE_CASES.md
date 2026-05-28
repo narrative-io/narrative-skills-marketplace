@@ -113,12 +113,14 @@ counts that imply partial progress.
 
 ## Run polling timeout (Phase 9)
 
-The poll loop is capped at ~12 iterations × ~5 seconds = ~60
-seconds. Most mapping runs complete in under 10 seconds, but a
-busy plane or a large `mappings[]` array can push past the cap.
+Follow the shared poll cadence (see the `async-poll-cadence`
+snippet inlined in Phase 9): prefer a non-blocking watcher, and
+abandon the loop only when the run is *stuck* in an early state,
+not merely slow. A busy plane or a large `mappings[]` array can
+push a run well past a minute — that's slow, not stuck.
 
-If the cap is hit, the run is *still running*, not stuck. Tell
-the user the workflow exists at `workflow_id` and they can check
+If you stop watching while the run is still progressing, tell the
+user the workflow exists at `workflow_id` and they can check
 back with:
 
 ```
