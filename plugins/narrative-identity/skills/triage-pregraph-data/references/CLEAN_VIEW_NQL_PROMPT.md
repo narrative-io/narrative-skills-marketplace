@@ -25,6 +25,10 @@ value, so the direct call keeps the path short.
     K2: <predicate from Phase 6 finding 2, phrased to keep good rows>
     ...
   Suggested view name: `<source>_graph_clean_<yyyymmdd>`.
+  DISPLAY_NAME: a human-readable label, e.g.
+  `<Source human name> — Graph-Clean Source`.
+  DESCRIPTION: one sentence — graph-ready clean view of <source> with
+  <N> filters applied to remove <the failure modes found in triage>.
   EXPIRE policy: short (e.g., 'P7D') — the caller can promote to a
   scheduled refresh if needed.
   Validate only. Do NOT run. Return the validated NQL verbatim.

@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.4.1
+version: 0.5.0
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -270,10 +270,17 @@ viable wrapper (no schedule, short `EXPIRE`) for one-off analytical
 queries; promote to a real refresh schedule only when the view is
 intended to persist.
 
+{{SNIPPET:mv-display-name-and-description}}
+
+Derive the `DISPLAY_NAME` and `DESCRIPTION` from the question you framed
+in step 2 and the plain-English explanation from step 6.
+
 ```
 narrative_nql_run(
   query: '
     CREATE MATERIALIZED VIEW "wn_<short_slug>_<yyyymmddhhmm>"
+    DISPLAY_NAME = ''<Human-Readable Title — Not The Unique Name>''
+    DESCRIPTION = ''<One+ sentence: what it computes, from which dataset(s), with which filters/caveats.>''
     EXPIRE = ''P1D''
     AS
       <the same validated SELECT>

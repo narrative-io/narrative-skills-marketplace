@@ -9,6 +9,7 @@ rule, follow the link to [`NQL_GOTCHAS.md`](NQL_GOTCHAS.md) or the KB.
 | Error symptom | Likely cause | Fix |
 | --- | --- | --- |
 | "syntax error at or near 'type'" | Unquoted reserved word | Quote as `"type"` |
+| "syntax error at or near '!='" / "'!'" | Used `!=` for not-equals | Replace with `<>` — NQL only accepts the standard SQL inequality operator |
 | "column not found" | Wrong identifier name / casing | Re-check schema via `narrative_datasets_describe` |
 | "function does not exist" | Wrong function name (e.g., `LCASE`) | Use the supported function list in the syntax-essentials snippet |
 | "No match found for function signature `date_parse`/`parse_datetime`" | Function not exposed | Use `to_timestamp(text, format)` or `CAST(... AS timestamp)` |
