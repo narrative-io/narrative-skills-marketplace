@@ -498,6 +498,22 @@ Snippet lookup order:
 Snippets are plain markdown — no frontmatter. They can themselves
 contain `{{...}}` placeholders (resolved transitively, up to 5 passes).
 
+> **Placeholders only resolve in files the renderer processes — i.e.
+> `.tmpl` files.** `bun run gen:skill-docs` discovers `*.tmpl` files
+> only. A `{{SNIPPET:...}}` (or any `{{...}}`) in a plain `.md` that is
+> never rendered ships **verbatim** to the consumer. Two consequences:
+>
+> 1. **Snippet files must stay `.md`, not `.tmpl`.** The lookup above
+>    resolves `<name>.md`; a snippet renamed to `.tmpl` would never be
+>    found. Snippets are inlined *into* `.tmpl` files, so any
+>    `{{SNIPPET:...}}` nested inside a snippet still resolves — but only
+>    via the parent `.tmpl`'s transitive render passes, never on its own.
+> 2. **A reference doc that needs a placeholder must be a `.tmpl`.** If
+>    you want `{{SNIPPET:...}}` in a reference, name it
+>    `references/FOO.md.tmpl` (it renders to `references/FOO.md`). A
+>    placeholder dropped into a hand-maintained `references/FOO.md` is a
+>    silent bug — it is shipped as literal `{{SNIPPET:...}}` text.
+
 #### Opting a template out of rendering
 
 Some files carry a `.tmpl` extension to signal *runtime* macro

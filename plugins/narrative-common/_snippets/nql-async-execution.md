@@ -32,18 +32,13 @@ wrong plane wastes a job slot and produces a misleading "dataset not
 found" error.
 
 Poll with `narrative_jobs_describe(job_ids: ["<uuid>"])` until `state`
-is terminal. Use a short, bounded backoff — most queries finish in a
-few seconds; very few should need more than 60s of polling.
+is terminal.
 
-Suggested polling cadence: 1s, 2s, 3s, 5s, 5s, 5s, 10s, 10s, 10s, 15s,
-15s, … cap at ~15s between polls. **Give-up rule: 15 minutes per
-state, with the timer reset whenever the job's `state` field
-transitions** (e.g. `pending` → `running`, `running` → `processing`).
-Only abandon polling if the same state has persisted for 15 minutes
-without progress. Cold compute pools can sit in `pending` for several
-minutes before promoting; a flat 5-minute total cap kills jobs that
-haven't actually started. When you do give up, surface the
-`job_id` and partial state to the user so they can check on it later.
+{{SNIPPET:async-poll-cadence}}
+
+For NQL jobs the early/startup states are `queued` / `pending` (where
+the stuck-job give-up rule applies) and the active states are
+`running` / `processing`.
 
 Terminal states:
 
