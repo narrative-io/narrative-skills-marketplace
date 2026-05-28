@@ -128,6 +128,22 @@ Resolver names are UPPERCASE_WITH_UNDERSCORES. Unknown resolvers fail
 the render. Snippets that themselves contain `{{...}}` are resolved
 transitively (up to 5 passes).
 
+> **Placeholders only resolve through `.tmpl` rendering.** `bun run
+> gen:skill-docs` only discovers and renders `*.tmpl` files. A
+> `{{SNIPPET:...}}` (or any `{{...}}`) sitting in a plain `.md` that the
+> renderer never processes is shipped **verbatim** — it will not
+> resolve. So a placeholder is only effective when it lives in a `.tmpl`
+> file **or** inside a snippet that gets inlined into one.
+>
+> Snippet source files are the one deliberate exception, and they must
+> stay `.md`: the resolver looks them up as `<name>.md`, so renaming a
+> snippet to `.tmpl` makes it un-findable. A snippet may nest
+> `{{SNIPPET:...}}` — those resolve only because the snippet is inlined
+> into a `.tmpl` SKILL/reference, where the renderer's transitive passes
+> pick them up. Never put a `{{...}}` placeholder in a hand-maintained
+> `.md` reference (e.g. `references/FOO.md`); make it `references/FOO.md.tmpl`
+> instead.
+
 ### Built-in resolvers
 
 | Placeholder | What it does |
