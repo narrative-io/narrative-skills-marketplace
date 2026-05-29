@@ -26,7 +26,7 @@
   "skills": [
     {
       "name": "apply-rosetta-stone-mappings",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "description": "Apply a set of Rosetta Stone attribute mappings to a Narrative\ndataset by wrapping them in a one-shot workflow that calls the\n`CreateRosettaStoneMappingsIfNotExist` task. Consumes the structured\noutput of `/generate-rosetta-stone-mappings`, normalizes the\ngenerator's snake_case to the workflow task's camelCase, re-validates\nevery expression against the dataset's current schema, gates on\nuser approval, submits via `narrative_workflows_create`, polls the\ntriggered run, and reports per-mapping created / conflict / failed.\nUse when: \"apply these mappings to dataset N\", \"create the\nRosetta Stone mappings I just generated\", \"push the mappings I\nsaved earlier to <dataset>\", \"productionize this mapping list\",\n\"submit the suggested_mappings array\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/apply-rosetta-stone-mappings/SKILL.md",
@@ -59,7 +59,7 @@
     },
     {
       "name": "create-workflow",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "description": "Author and submit a Narrative workflow from a natural-language\nintent. Picks the closest example from `assets/examples/`, adapts\nit to the user's case, walks the YAML against the spec, resolves\nthe data plane, and submits via `narrative_workflows_create` only\nafter the user has approved the rendered spec.\nUse when: \"create a workflow that does X\", \"schedule a daily\nrefresh of dataset Y\", \"wrap this NQL as a workflow\", \"build a\npipeline that creates view A then refreshes view B\", \"submit this\nworkflow YAML\", \"productionize this query as a recurring job\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/create-workflow/SKILL.md",
@@ -101,7 +101,7 @@
     },
     {
       "name": "design-analysis",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "description": "Translate a fuzzy analytical question into a rigorous investigation\nplan. Interrogates the ask, grounds the plan in the available data\ndictionary, applies analytical best practices, and produces a\nstructured brief of query specifications for a downstream\nquery-writing skill. Plans, does not write SQL.\nUse when: \"why did X drop\", \"is there a relationship between A and B\",\n\"who are our highest-value customers\", \"what's driving the change\nin Y\", \"investigate this trend\", \"design an analysis for\", \"scope\nthis analytical question\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/design-analysis/SKILL.md",
@@ -126,7 +126,7 @@
     },
     {
       "name": "find-attribute",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "description": "Find the canonical Rosetta Stone attribute that best matches a\nfuzzy description, semantic phrase, or required schema shape.\nSearches the catalog with pagination, describes the shortlist in\none batched call, ranks candidates by name + shape match, and\nreturns the canonical attribute ID plus close alternatives.\nUse when: \"find the X attribute\", \"what's the graph-edge attribute\nID\", \"look up the email Rosetta Stone attribute\", \"search the\nattribute catalog for Y\", \"which attribute has SOURCE_ID +\nTARGET_ID + IS_DIRECTED\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/find-attribute/SKILL.md",
@@ -149,7 +149,7 @@
     },
     {
       "name": "generate-rosetta-stone-mappings",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "description": "Generate, evaluate, and improve Rosetta Stone attribute mappings for\na Narrative dataset.\nUse when: \"map this dataset to Rosetta Stone\", \"suggest normalized\nattributes for dataset N\", \"evaluate the mappings on dataset N\", \"why\nis this mapping low confidence\", \"fix this expression\", \"improve this\nNQL mapping expression\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md",
@@ -189,7 +189,7 @@
     },
     {
       "name": "write-nql",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/write-nql/SKILL.md",
@@ -225,7 +225,7 @@
     },
     {
       "name": "generate-identity-graph",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "description": "Interactively build a Narrative identity graph workflow from one or\nmore first-party datasets and (optionally) third-party data sources.\nConfirms each input dataset is mapped to the Rosetta Stone graph\nedge attribute (mapping it via /generate-rosetta-stone-mappings if\nnot), then composes and submits a workflow that unions every edge\nsource and labels connected components.\nUse when: \"build an identity graph\", \"generate an identity graph\",\n\"create an identity graph\", \"stitch these datasets into a graph\",\n\"make a graph workflow\", \"label connected components on these\ndatasets\", \"I want a person graph / household graph / device graph\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-identity-graph/SKILL.md",
@@ -261,7 +261,7 @@
     },
     {
       "name": "generate-match-report",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "description": "Compare your data to a partner's data in the marketplace. Given a\ndataset you already own with person/edge data, this skill walks you\nthrough picking a partner data source to match against, choosing which\nidentifier types to match on, optionally selecting which enrichment\nattributes to attach, and then submits the report — returning overlap,\nmatch counts, and demographic coverage.\nUse when: \"how does my data compare to your marketplace\", \"compare my\ndata to [partner]\", \"how much overlap do I have with [supplier]\",\n\"run a match report\", \"match my customers against 3P data\", \"see\nwhat enrichment is available for my dataset\", or any open-ended\nquestion about marketplace overlap.\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-match-report/SKILL.md",
@@ -309,7 +309,7 @@
     },
     {
       "name": "triage-pregraph-data",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "description": "Audit a dataset or access rule before it joins an identity-graph\nbuild (access rules behave like datasets in NQL and are used\ninterchangeably here). Enumerates failure modes (hub identifiers,\nhigh-degree nodes, behaviorally suspicious values, over-connected\nidentifiers, source-specific quirks), tests hypotheses in parallel,\nquantifies damage by rows / edges / entities, proposes minimal\nfilters ranked by severity, and — when issues are found — returns\na validated `CREATE MATERIALIZED VIEW` NQL the caller can run to\nproduce a graph-ready clean source. If the data passes, says so\nplainly and recommends the source unchanged. Plans, reports, and\nauthors the clean-view NQL; does not execute it.\nUse when: \"audit this dataset before the graph build\", \"audit this\naccess rule before the graph build\", \"find bad edges in <source>\",\n\"check identity data quality\", \"recommend filters for the graph\nbuild\", \"find hub identifiers in <source>\", \"quantify damage from\n<identifier_type>\", \"pre-graph DQ\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/triage-pregraph-data/SKILL.md",

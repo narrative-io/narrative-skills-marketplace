@@ -1,6 +1,6 @@
 ---
 name: generate-rosetta-stone-mappings
-version: 0.4.0
+version: 0.4.1
 description: |
   Generate, evaluate, and improve Rosetta Stone attribute mappings for
   a Narrative dataset.
@@ -9,6 +9,7 @@ description: |
   is this mapping low confidence", "fix this expression", "improve this
   NQL mapping expression".
   (narrative-common)
+license: MIT
 compatibility:
   requires:
     mcp-servers:

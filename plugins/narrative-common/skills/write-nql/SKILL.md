@@ -1,6 +1,6 @@
 ---
 name: write-nql
-version: 0.5.0
+version: 0.5.1
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -11,6 +11,7 @@ description: |
   "validate this NQL", "run NQL against dataset <id>", "how many rows
   match Y", "show me the top N records from <dataset>".
   (narrative-common)
+license: MIT
 compatibility:
   requires:
     mcp-servers:

@@ -1,6 +1,6 @@
 ---
 name: triage-pregraph-data
-version: 0.5.0
+version: 0.5.1
 description: |
   Audit a dataset or access rule before it joins an identity-graph
   build (access rules behave like datasets in NQL and are used
@@ -19,6 +19,7 @@ description: |
   build", "find hub identifiers in <source>", "quantify damage from
   <identifier_type>", "pre-graph DQ".
   (narrative-identity)
+license: MIT
 compatibility:
   recommends:
     tools:

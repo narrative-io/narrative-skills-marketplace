@@ -1,6 +1,6 @@
 ---
 name: generate-match-report
-version: 0.5.1
+version: 0.5.2
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -14,6 +14,7 @@ description: |
   what enrichment is available for my dataset", or any open-ended
   question about marketplace overlap.
   (narrative-identity)
+license: MIT
 compatibility:
   requires:
     tools:

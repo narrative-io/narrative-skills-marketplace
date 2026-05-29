@@ -1,6 +1,6 @@
 ---
 name: design-analysis
-version: 0.3.0
+version: 0.3.1
 description: |
   Translate a fuzzy analytical question into a rigorous investigation
   plan. Interrogates the ask, grounds the plan in the available data
@@ -12,6 +12,7 @@ description: |
   in Y", "investigate this trend", "design an analysis for", "scope
   this analytical question".
   (narrative-common)
+license: MIT
 compatibility:
   recommends:
     tools:

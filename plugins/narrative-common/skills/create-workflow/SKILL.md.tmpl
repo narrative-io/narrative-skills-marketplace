@@ -1,6 +1,6 @@
 ---
 name: create-workflow
-version: 0.6.0
+version: 0.6.1
 description: |
   Author and submit a Narrative workflow from a natural-language
   intent. Picks the closest example from `assets/examples/`, adapts
@@ -12,6 +12,7 @@ description: |
   pipeline that creates view A then refreshes view B", "submit this
   workflow YAML", "productionize this query as a recurring job".
   (narrative-common)
+license: MIT
 compatibility:
   requires:
     tools:

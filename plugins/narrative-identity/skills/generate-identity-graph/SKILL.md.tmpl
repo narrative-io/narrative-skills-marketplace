@@ -1,6 +1,6 @@
 ---
 name: generate-identity-graph
-version: 0.4.0
+version: 0.4.1
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -13,6 +13,7 @@ description: |
   "make a graph workflow", "label connected components on these
   datasets", "I want a person graph / household graph / device graph".
   (narrative-identity)
+license: MIT
 compatibility:
   requires:
     tools:

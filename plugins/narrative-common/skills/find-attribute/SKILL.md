@@ -1,6 +1,6 @@
 ---
 name: find-attribute
-version: 0.3.0
+version: 0.3.1
 description: |
   Find the canonical Rosetta Stone attribute that best matches a
   fuzzy description, semantic phrase, or required schema shape.
@@ -12,6 +12,7 @@ description: |
   attribute catalog for Y", "which attribute has SOURCE_ID +
   TARGET_ID + IS_DIRECTED".
   (narrative-common)
+license: MIT
 compatibility:
   requires:
     mcp-servers:
