@@ -24,7 +24,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.5.4
+  version: 0.6.0
   args:
     - name: "--dataset"
       value: "<id>"
@@ -87,7 +87,6 @@ metadata:
         - narrative_datasets_describe
         - narrative_access_rules_search
         - narrative_access_rules_describe
-        - narrative_dataset_get_column_stats
         - narrative_nql_validate
 ---
 
@@ -256,20 +255,35 @@ clear from the user's prompt or session context, ask **one**
 
 Record the choice; every Phase 6 filter recommendation references it.
 
-Resolve the source and read its schema (plus sample + stats when
-available). For a dataset, run `narrative_datasets_search` then
-`narrative_datasets_describe` with `include: ["metadata", "schema",
-"sample", "stats"]`. If the source is an access rule, see
+Resolve the source. For a dataset, run `narrative_datasets_search`
+then `narrative_datasets_describe` to get the schema and table
+reference; for an access rule, see
 [`references/ACCESS_RULES.md`](references/ACCESS_RULES.md) for tool
-substitutions and the sample/stats workaround. If neither
-`--dataset` nor `--access-rule` was passed and the source type is
-ambiguous, ask **one** `AskUserQuestion` to disambiguate before
-searching.
+substitutions. If neither `--dataset` nor `--access-rule` was passed
+and the source type is ambiguous, ask **one** `AskUserQuestion` to
+disambiguate before searching.
 
-Once you have schema and (where applicable) sample / stats, record the
-**fully qualified NQL reference** for the source — `company_data.<table>`
-for a dataset or `<owning_company_slug>.<rule_name>` for an access
-rule. Every downstream phase uses this reference as `<source>`.
+Then delegate the **base profile** — row count, per-column coverage
+(null/fill rate, cardinality), inferred column shapes, and quality
+flags — to `/profile-dataset` rather than reading and interpreting
+stats inline:
+
+> `/profile-dataset --dataset <id> --json`  (or `--access-rule <id>`)
+
+Use its `row_count` as the population baseline and the per-column
+profile as identifier-column evidence for Phase 3. The
+distinct-**entity** count and every cross-column / conditional measure
+remain this skill's own work — computed in the Phase 4 hypothesis batch
+and Phase 5 quantification. `/profile-dataset` supplies the descriptive
+base population; the damage judgment is yours. If `/profile-dataset` is
+unavailable, fall back to reading `describe(include: ["…","stats",
+"sample"])` inline (see
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)).
+
+Record the **fully qualified NQL reference** for the source —
+`company_data.<table>` for a dataset or `<owning_company_slug>.<rule_name>`
+for an access rule. Every downstream phase uses this reference as
+`<source>`.
 
 End this phase with a two-line summary you show the user before
 running any hypothesis query:
@@ -536,5 +550,6 @@ not schedule it, and does not trigger the graph build.
 - `plugins/narrative-common/skills/design-analysis/` — Phase 4 hypothesis-testing handoff; orchestrates the parallel `/write-nql` batch.
 - `plugins/narrative-common/skills/write-nql/` — Phase 8 direct call (validate-only); reached transitively via `/design-analysis` for Phase 4.
 - `plugins/narrative-common/skills/generate-rosetta-stone-mappings/` — run first if identifier columns aren't yet mapped.
+- `plugins/narrative-common/skills/profile-dataset/` — Phase 2 delegates the base profile (row count, per-column coverage, quality flags) here instead of reading stats inline.
 
 {{SNIPPET:agent-feedback}}

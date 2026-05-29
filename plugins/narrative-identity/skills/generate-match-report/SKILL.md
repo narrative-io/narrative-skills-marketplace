@@ -20,7 +20,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.5.4
+  version: 0.6.0
   args:
     - name: "--dataset"
       value: "<id>"
@@ -48,9 +48,6 @@ metadata:
         - narrative_context_get
         - narrative_datasets_search
         - narrative_datasets_describe
-        - narrative_dataset_get_column_stats
-        - narrative_dataset_set_column_stats_config
-        - narrative_dataset_recalculate_statistics
         - narrative_dataset_request_sample
         - narrative_jobs_describe
         - narrative_jobs_search
@@ -281,40 +278,23 @@ that contract end-to-end.
 ### Phase 3. Compute customer identifier-type coverage
 
 Match reports filter on the `target_id_type` values your dataset
-actually emits. Read the column-stats histogram for
-`_rosetta_stone.graph_edge.target_id_type`:
+actually emits. Delegate the histogram read — including the
+configure → recalculate → re-read recovery when it's missing or stale —
+to `/profile-dataset` instead of driving the stats tools here:
 
-```
-narrative_dataset_get_column_stats(dataset_id=CUSTOMER_DATASET_ID)
-```
+> `/profile-dataset --dataset CUSTOMER_DATASET_ID --focus _rosetta_stone.graph_edge.target_id_type --histograms --allow-recalc --json`
 
-If the histogram is missing or stale, configure it:
+`--allow-recalc` pre-approves the profiler's (otherwise gated) stats
+recalculation so it can recover a missing/stale histogram without a
+second prompt. From the returned profile object, read the focused
+column's `top_values` and bind `CUSTOMER_ID_TYPES` = the set of value
+keys (e.g. `{normalized_email, e164_phone_number}`).
 
-```
-narrative_dataset_set_column_stats_config(
-  dataset_id=CUSTOMER_DATASET_ID,
-  configuration={
-    "rosetta_stone": {
-      "fields": [{
-        "attribute_name": "graph_edge",
-        "properties": [{
-          "path": "target_id_type",
-          "enabled_stats": ["histogram", "value_count", "approx_count_distinct"],
-          "stat_options": { "histogram": { "max_bins": 100, "overflow": "truncate" } }
-        }]
-      }]
-    }
-  }
-)
-```
-
-Trigger a stats recalculation via
-`narrative_dataset_recalculate_statistics(dataset_id=CUSTOMER_DATASET_ID)`.
-Poll the returned job with `narrative_jobs_describe` until it
-completes, then re-fetch column stats and read the histogram.
-
-Bind `CUSTOMER_ID_TYPES` = set of histogram keys (e.g.
-`{normalized_email, e164_phone_number}`).
+**Input:** `CUSTOMER_DATASET_ID`. **Output:** the id-type distribution
+in the focused column's `top_values`. If `/profile-dataset` is
+unavailable, see
+[`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) for
+the inline column-stats-config recovery this step used to carry.
 
 This step is informational — no question to the user. Just note:
 
@@ -738,9 +718,11 @@ new company context.
 - **Zero-overlap partner.** Surface a blocker; do not submit an empty
   comparison. Offer to switch partners or route to `/generate-rosetta-stone-mappings`.
 - **Missing column-stats histogram on `graph_edge.target_id_type`.**
-  Call `narrative_dataset_set_column_stats_config` then
-  `narrative_dataset_recalculate_statistics`; poll for completion
-  before reading id-types. Don't proceed without ground truth.
+  Phase 3's `/profile-dataset --allow-recalc` call recovers it
+  (configure → recalculate → re-read) before returning the id-types;
+  don't proceed without ground truth. If `/profile-dataset` is absent,
+  run the recovery inline per
+  [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 - **AskUserQuestion 4-option cap.** Bucket large enrichment attribute
   lists into 4 named groups; offer a follow-up drill-down per group.
 - **Pre-flight NQL validation fails.** STOP. Surface the validator's
@@ -761,6 +743,9 @@ new company context.
 
 ## Harness fallbacks
 
+- **No `/profile-dataset`.** Run Phase 3's id-type histogram recovery
+  inline (configure → recalculate → re-read). See
+  [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 - **No `narrative_nql_validate`.** Skip Phase 6 pre-flight; do not
   substitute `narrative_nql_run`. See
   [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
@@ -795,7 +780,8 @@ tools or generic Read / Bash / Write.
 - Sibling skills: `/create-workflow` (for more information on
   creating workflows in general), `/generate-identity-graph` (build
   the graph), `/generate-rosetta-stone-mappings` (author a Rosetta
-  Stone mapping).
+  Stone mapping), `/profile-dataset` (Phase 3 delegates the id-type
+  histogram read here).
 
 ---
 

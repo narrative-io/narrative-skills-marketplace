@@ -42,9 +42,9 @@ What to extract from the response:
 If the dataset is small or unfamiliar, the broad include above gives
 you everything in one round trip. For very wide schemas, split:
 describe once with `include: ["metadata", "schema", "mappings"]` to
-scope which columns matter, then pull `sample` and `stats` as needed
-(see [`SAMPLE_AND_STATS.md`](SAMPLE_AND_STATS.md) for the sub-API
-calls).
+scope which columns matter, then delegate per-column coverage & quality
+to `/profile-dataset` with a `--focus` list (step 3) rather than pulling
+and interpreting `sample` / `stats` here.
 
 **Stop and confirm with the user if**: the dataset has 50+ columns and
 the user gave no scoping hint. Ask which columns or which Rosetta

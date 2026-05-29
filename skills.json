@@ -311,7 +311,7 @@
     },
     {
       "name": "generate-rosetta-stone-mappings",
-      "version": "0.4.3",
+      "version": "0.5.0",
       "description": "Generate, evaluate, and improve Rosetta Stone attribute mappings for\na Narrative dataset.\nUse when: \"map this dataset to Rosetta Stone\", \"suggest normalized\nattributes for dataset N\", \"evaluate the mappings on dataset N\", \"why\nis this mapping low confidence\", \"fix this expression\", \"improve this\nNQL mapping expression\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md",
@@ -327,9 +327,6 @@
             "narrative_context_set_company",
             "narrative_datasets_search",
             "narrative_datasets_describe",
-            "narrative_dataset_request_sample",
-            "narrative_dataset_get_column_stats",
-            "narrative_dataset_recalculate_statistics",
             "narrative_attributes_describe",
             "narrative_nql_validate",
             "narrative_nql_run",
@@ -354,6 +351,90 @@
           "name": "<free-text>",
           "required": false,
           "description": "Natural-language intent naming the source dataset and what to map (e.g., \"map dataset 12345 to Rosetta Stone\", \"evaluate the mappings on dataset N\"). This skill takes no flags; it resolves the dataset and gathers context interactively. With no arguments, it asks which dataset to map."
+        }
+      ]
+    },
+    {
+      "name": "profile-dataset",
+      "version": "0.1.0",
+      "description": "Produce a coverage & quality profile of a Narrative dataset (or access\nrule): row count, per-column null/fill rate, cardinality, ranges,\ntop-values, inferred column shape, and quality flags. Reads bundled\nstats + sample first, recovers missing/stale stats by configuring and\nrecalculating them, and escalates to a cheap `/write-nql` query only\nfor a measure no stat can provide. Descriptive, not prescriptive.\nUse when: \"profile dataset N\", \"what does dataset N look like\",\n\"coverage and quality of <dataset>\", \"what id types does N emit\",\n\"null rates / cardinality for <dataset>\", \"is this dataset's stats\nfresh\".\n(narrative-common)",
+      "plugin": "narrative-common",
+      "path": "plugins/narrative-common/skills/profile-dataset/SKILL.md",
+      "compatibility": "Requires the narrative-mcp MCP server (no MCP → cannot profile). Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md), the `/write-nql` sibling skill for the custom-measure escalation, and the narrative-knowledge-base MCP server. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
+      "requirements": {
+        "requires": {
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_datasets_describe",
+            "narrative_dataset_get_column_stats",
+            "narrative_dataset_set_column_stats_config",
+            "narrative_dataset_recalculate_statistics",
+            "narrative_dataset_request_sample",
+            "narrative_jobs_describe"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-knowledge-base"
+          ],
+          "mcp-tools": [
+            "narrative_context_search_companies",
+            "narrative_context_set_company",
+            "narrative_access_rules_describe",
+            "narrative_nql_validate",
+            "narrative_nql_run"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "--dataset",
+          "value": "<id>",
+          "required": false,
+          "description": "Profile a dataset by numeric id. Mutually exclusive with --access-rule. If neither is passed, the skill asks for the id and source type (it does not search)."
+        },
+        {
+          "name": "--access-rule",
+          "value": "<id>",
+          "required": false,
+          "description": "Profile an access rule by id. Access rules behave like datasets in NQL, but their describe returns no bundled stats or sample — see references/ACCESS_RULES.md. Mutually exclusive with --dataset."
+        },
+        {
+          "name": "--focus",
+          "value": "<col,col,...>",
+          "required": false,
+          "description": "Restrict the profile to these columns (e.g. \"_rosetta_stone.graph_edge.target_id_type\"). Default: all columns."
+        },
+        {
+          "name": "--histograms",
+          "required": false,
+          "description": "Include value-distribution histograms. Off by default (they can blow the response cap on wide columns); opt in when the caller needs a distribution."
+        },
+        {
+          "name": "--allow-recalc",
+          "required": false,
+          "description": "Pre-approve the tier-2 stats configure + recalculate recovery step, skipping its confirmation gate. For automation / skill callers."
+        },
+        {
+          "name": "--allow-nql",
+          "required": false,
+          "description": "Pre-approve the tier-3 custom-NQL escalation, skipping its confirmation gate. For automation / skill callers."
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "description": "Emit only the structured profile object, skipping the prose render. Use when the caller is another skill or automation."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "A note about what the caller needs profiled (e.g., \"id-type distribution\", \"fill rate on the email columns\"). Steers column focus and which custom measures, if any, matter."
         }
       ]
     },
@@ -463,7 +544,7 @@
     },
     {
       "name": "generate-match-report",
-      "version": "0.5.4",
+      "version": "0.6.0",
       "description": "Compare your data to a partner's data in the marketplace. Given a\ndataset you already own with person/edge data, this skill walks you\nthrough picking a partner data source to match against, choosing which\nidentifier types to match on, optionally selecting which enrichment\nattributes to attach, and then submits the report — returning overlap,\nmatch counts, and demographic coverage.\nUse when: \"how does my data compare to your marketplace\", \"compare my\ndata to [partner]\", \"how much overlap do I have with [supplier]\",\n\"run a match report\", \"match my customers against 3P data\", \"see\nwhat enrichment is available for my dataset\", or any open-ended\nquestion about marketplace overlap.\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-match-report/SKILL.md",
@@ -480,9 +561,6 @@
             "narrative_context_get",
             "narrative_datasets_search",
             "narrative_datasets_describe",
-            "narrative_dataset_get_column_stats",
-            "narrative_dataset_set_column_stats_config",
-            "narrative_dataset_recalculate_statistics",
             "narrative_dataset_request_sample",
             "narrative_jobs_describe",
             "narrative_jobs_search",
@@ -536,7 +614,7 @@
     },
     {
       "name": "triage-pregraph-data",
-      "version": "0.5.4",
+      "version": "0.6.0",
       "description": "Audit a dataset or access rule before it joins an identity-graph\nbuild (access rules behave like datasets in NQL here). Enumerates\nfailure modes (hub identifiers, high-degree nodes, suspicious\nvalues, over-connected identifiers), tests hypotheses in parallel,\nquantifies damage by rows / edges / entities, and proposes minimal\nfilters ranked by severity. When issues are found, returns a\nvalidated `CREATE MATERIALIZED VIEW` NQL the caller can run to\nproduce a graph-ready clean source; if the data passes, says so and\nrecommends it unchanged. Plans and authors the clean-view NQL; does\nnot execute it.\nUse when: \"audit this dataset before the graph build\", \"find bad\nedges in <source>\", \"check identity data quality\", \"recommend\nfilters for the graph build\", \"quantify damage from\n<identifier_type>\", \"pre-graph DQ\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/triage-pregraph-data/SKILL.md",
@@ -557,7 +635,6 @@
             "narrative_datasets_describe",
             "narrative_access_rules_search",
             "narrative_access_rules_describe",
-            "narrative_dataset_get_column_stats",
             "narrative_nql_validate"
           ]
         }

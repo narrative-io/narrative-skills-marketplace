@@ -32,6 +32,17 @@ in the report and reduce confidence accordingly.
   parallel-execution pattern in that brief — serial execution
   multiplies wall-clock time and erodes the audit's value.
 
+## `/profile-dataset` unavailable (Phase 2)
+
+- Phase 2 normally delegates the base profile (row count, per-column
+  coverage, quality flags) to `/profile-dataset`. If that skill isn't
+  installed, read it inline: `narrative_datasets_describe(dataset_ids:
+  [<id>], include: ["metadata", "schema", "sample", "stats"])` for a
+  dataset, or the access-rule substitutions in
+  [`ACCESS_RULES.md`](ACCESS_RULES.md). Read `row_count` and the
+  per-column null/cardinality stats off that response and continue. The
+  audit logic is unchanged — only the source of the base profile differs.
+
 ## `/write-nql` unavailable for Phase 8
 
 - Ship the audit findings (Phases 1–7) without the validated NQL
