@@ -20,7 +20,11 @@ compatibility: >-
   server. Portable to any agentskills.io-compliant harness via the
   documented fallbacks.
 metadata:
-  version: 0.4.2
+  version: 0.4.3
+  # Strictly interactive — takes no command-line arguments. Every
+  # load-bearing decision is elicited via AskUserQuestion; there is no
+  # --auto / --yes / --non-interactive mode (see "Interaction mode").
+  args: []
   narrative:
     requires:
       tools:

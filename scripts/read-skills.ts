@@ -25,6 +25,20 @@ export interface SkillCompatibility {
   recommends?: CompatibilityRequirements;
 }
 
+/** One documented slash-command argument, from the namespaced metadata.args. */
+export interface SkillArg {
+  /** Flag or placeholder, e.g. `--dataset` or `<free-text tail>`. */
+  name: string;
+  /** Value placeholder for flags that take one, e.g. `<id|name>`. */
+  value?: string;
+  /** Whether the argument must be supplied (vs. prompted or optional). */
+  required?: boolean;
+  /** Default applied when the argument is omitted, if any. */
+  default?: unknown;
+  /** What the argument does and how to use it. */
+  description?: string;
+}
+
 export interface SkillFrontmatter {
   name?: string;
   description?: string;
@@ -40,6 +54,8 @@ export interface SkillFrontmatter {
   metadata?: {
     version?: string;
     narrative?: SkillCompatibility;
+    /** Documented slash-command arguments (local extension; see §11). */
+    args?: SkillArg[];
     [key: string]: unknown;
   };
 }
@@ -52,6 +68,12 @@ export function skillVersion(fm: SkillFrontmatter): string {
 /** Structured requirements, homed under the namespaced `metadata.narrative`. */
 export function skillRequirements(fm: SkillFrontmatter): SkillCompatibility | undefined {
   return fm.metadata?.narrative;
+}
+
+/** Documented slash-command arguments, homed under `metadata.args`. */
+export function skillArgs(fm: SkillFrontmatter): SkillArg[] | undefined {
+  const args = fm.metadata?.args;
+  return Array.isArray(args) ? args : undefined;
 }
 
 export interface SkillRecord {

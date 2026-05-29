@@ -15,7 +15,16 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.4.2
+  version: 0.4.3
+  args:
+    - name: "<free-text>"
+      required: false
+      description: >-
+        Natural-language intent naming the source dataset and what to map
+        (e.g., "map dataset 12345 to Rosetta Stone", "evaluate the mappings
+        on dataset N"). This skill takes no flags; it resolves the dataset
+        and gathers context interactively. With no arguments, it asks which
+        dataset to map.
   narrative:
     requires:
       mcp-servers:
