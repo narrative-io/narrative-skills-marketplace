@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Enforce that any modified `plugins/**\/SKILL.md.tmpl` has its
- * frontmatter `version:` strictly bumped (semver MAJOR.MINOR.PATCH).
+ * frontmatter `metadata.version` strictly bumped (semver MAJOR.MINOR.PATCH).
  *
  * Runs in two contexts:
  *   - Local pre-commit (via lefthook), passed staged file paths.
@@ -127,12 +127,14 @@ for (const relPath of candidates) {
 
   const currentVersion = extractVersion(currentContent);
   if (!currentVersion) {
-    errors.push(`${relPath}: missing frontmatter "version:" field`);
+    errors.push(`${relPath}: missing frontmatter "metadata.version" field`);
     continue;
   }
   const currentSemver = parseSemver(currentVersion);
   if (!currentSemver) {
-    errors.push(`${relPath}: version "${currentVersion}" is not MAJOR.MINOR.PATCH (e.g. 0.2.0)`);
+    errors.push(
+      `${relPath}: metadata.version "${currentVersion}" is not MAJOR.MINOR.PATCH (e.g. 0.2.0)`,
+    );
     continue;
   }
 

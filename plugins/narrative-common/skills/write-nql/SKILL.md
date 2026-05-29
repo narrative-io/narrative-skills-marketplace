@@ -1,6 +1,5 @@
 ---
 name: write-nql
-version: 0.5.0
 description: |
   Write, validate, and (optionally) execute an NQL query against a
   Narrative dataset. Drafts the query from the user's question, runs
@@ -11,27 +10,35 @@ description: |
   "validate this NQL", "run NQL against dataset <id>", "how many rows
   match Y", "show me the top N records from <dataset>".
   (narrative-common)
-compatibility:
-  requires:
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get
-      - narrative_context_search_companies
-      - narrative_context_set_company
-      - narrative_datasets_search
-      - narrative_datasets_describe
-      - narrative_nql_validate
-      - narrative_nql_run
-      - narrative_jobs_describe
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-knowledge-base
-    mcp-tools:
-      - search_narrative_i_o_knowledge_base
-      - query_docs_filesystem_narrative_i_o_knowledge_base
+license: MIT
+compatibility: >-
+  Requires the narrative-mcp MCP server. Recommends AskUserQuestion (a
+  Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md)
+  and the narrative-knowledge-base MCP server. Portable to any
+  agentskills.io-compliant harness via the documented fallbacks.
+metadata:
+  version: 0.5.2
+  narrative:
+    requires:
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_datasets_search
+        - narrative_datasets_describe
+        - narrative_nql_validate
+        - narrative_nql_run
+        - narrative_jobs_describe
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-knowledge-base
+      mcp-tools:
+        - search_narrative_i_o_knowledge_base
+        - query_docs_filesystem_narrative_i_o_knowledge_base
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->

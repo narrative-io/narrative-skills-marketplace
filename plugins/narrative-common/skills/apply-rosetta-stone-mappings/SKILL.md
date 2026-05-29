@@ -1,6 +1,5 @@
 ---
 name: apply-rosetta-stone-mappings
-version: 0.3.2
 description: |
   Apply a set of Rosetta Stone attribute mappings to a Narrative
   dataset by wrapping them in a one-shot workflow that calls the
@@ -15,25 +14,33 @@ description: |
   saved earlier to <dataset>", "productionize this mapping list",
   "submit the suggested_mappings array".
   (narrative-common)
-compatibility:
-  requires:
-    tools:
-      - Read
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get
-      - narrative_context_search_companies
-      - narrative_context_set_company
-      - narrative_datasets_describe
-      - narrative_data_planes_list
-      - narrative_nql_validate
-      - narrative_workflows_create
-      - narrative_workflow_runs_list
-      - narrative_workflows_describe
-  recommends:
-    tools:
-      - AskUserQuestion
+license: MIT
+compatibility: >-
+  Requires the narrative-mcp MCP server and local file Read. Recommends
+  AskUserQuestion — a Claude Code primitive with a prose fallback in
+  references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
+  harness via the documented fallbacks.
+metadata:
+  version: 0.3.4
+  narrative:
+    requires:
+      tools:
+        - Read
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_datasets_describe
+        - narrative_data_planes_list
+        - narrative_nql_validate
+        - narrative_workflows_create
+        - narrative_workflow_runs_list
+        - narrative_workflows_describe
+    recommends:
+      tools:
+        - AskUserQuestion
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->

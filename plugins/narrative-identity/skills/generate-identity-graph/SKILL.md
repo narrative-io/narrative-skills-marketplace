@@ -1,6 +1,5 @@
 ---
 name: generate-identity-graph
-version: 0.4.0
 description: |
   Interactively build a Narrative identity graph workflow from one or
   more first-party datasets and (optionally) third-party data sources.
@@ -13,26 +12,35 @@ description: |
   "make a graph workflow", "label connected components on these
   datasets", "I want a person graph / household graph / device graph".
   (narrative-identity)
-compatibility:
-  requires:
-    tools:
-      - Read
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get
-      - narrative_context_search_companies
-      - narrative_context_set_company
-      - narrative_datasets_search
-      - narrative_datasets_describe
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-knowledge-base
-    mcp-tools:
-      - search_narrative_i_o_knowledge_base
-      - query_docs_filesystem_narrative_i_o_knowledge_base
+license: MIT
+compatibility: >-
+  Requires the narrative-mcp MCP server and local file Read. Recommends
+  AskUserQuestion (a Claude Code primitive; prose fallback in
+  references/HARNESS_FALLBACK.md) and the narrative-knowledge-base MCP
+  server. Portable to any agentskills.io-compliant harness via the
+  documented fallbacks.
+metadata:
+  version: 0.4.2
+  narrative:
+    requires:
+      tools:
+        - Read
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_datasets_search
+        - narrative_datasets_describe
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-knowledge-base
+      mcp-tools:
+        - search_narrative_i_o_knowledge_base
+        - query_docs_filesystem_narrative_i_o_knowledge_base
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->

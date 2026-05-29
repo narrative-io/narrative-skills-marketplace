@@ -1,6 +1,5 @@
 ---
 name: design-analysis
-version: 0.3.0
 description: |
   Translate a fuzzy analytical question into a rigorous investigation
   plan. Interrogates the ask, grounds the plan in the available data
@@ -12,19 +11,28 @@ description: |
   in Y", "investigate this trend", "design an analysis for", "scope
   this analytical question".
   (narrative-common)
-compatibility:
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get
-      - narrative_context_search_companies
-      - narrative_context_set_company
-      - narrative_datasets_search
-      - narrative_datasets_describe
-      - narrative_dataset_get_column_stats
+license: MIT
+compatibility: >-
+  No hard requirements — degrades to a prose planning skill when MCP is
+  absent. Recommends the narrative-mcp MCP server and AskUserQuestion (a
+  Claude Code primitive; prose fallback in
+  references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
+  harness.
+metadata:
+  version: 0.3.2
+  narrative:
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_datasets_search
+        - narrative_datasets_describe
+        - narrative_dataset_get_column_stats
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->

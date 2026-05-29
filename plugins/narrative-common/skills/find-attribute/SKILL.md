@@ -1,6 +1,5 @@
 ---
 name: find-attribute
-version: 0.3.0
 description: |
   Find the canonical Rosetta Stone attribute that best matches a
   fuzzy description, semantic phrase, or required schema shape.
@@ -12,16 +11,24 @@ description: |
   attribute catalog for Y", "which attribute has SOURCE_ID +
   TARGET_ID + IS_DIRECTED".
   (narrative-common)
-compatibility:
-  requires:
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_attributes_search
-      - narrative_attributes_describe
-  recommends:
-    tools:
-      - AskUserQuestion
+license: MIT
+compatibility: >-
+  Requires the narrative-mcp MCP server. Recommends AskUserQuestion — a
+  Claude Code primitive with a prose fallback in
+  references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
+  harness via the documented fallbacks.
+metadata:
+  version: 0.3.2
+  narrative:
+    requires:
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_attributes_search
+        - narrative_attributes_describe
+    recommends:
+      tools:
+        - AskUserQuestion
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->

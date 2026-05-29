@@ -1,40 +1,46 @@
 ---
 name: triage-pregraph-data
-version: 0.5.0
 description: |
   Audit a dataset or access rule before it joins an identity-graph
-  build (access rules behave like datasets in NQL and are used
-  interchangeably here). Enumerates failure modes (hub identifiers,
-  high-degree nodes, behaviorally suspicious values, over-connected
-  identifiers, source-specific quirks), tests hypotheses in parallel,
-  quantifies damage by rows / edges / entities, proposes minimal
-  filters ranked by severity, and — when issues are found — returns
-  a validated `CREATE MATERIALIZED VIEW` NQL the caller can run to
-  produce a graph-ready clean source. If the data passes, says so
-  plainly and recommends the source unchanged. Plans, reports, and
-  authors the clean-view NQL; does not execute it.
-  Use when: "audit this dataset before the graph build", "audit this
-  access rule before the graph build", "find bad edges in <source>",
-  "check identity data quality", "recommend filters for the graph
-  build", "find hub identifiers in <source>", "quantify damage from
+  build (access rules behave like datasets in NQL here). Enumerates
+  failure modes (hub identifiers, high-degree nodes, suspicious
+  values, over-connected identifiers), tests hypotheses in parallel,
+  quantifies damage by rows / edges / entities, and proposes minimal
+  filters ranked by severity. When issues are found, returns a
+  validated `CREATE MATERIALIZED VIEW` NQL the caller can run to
+  produce a graph-ready clean source; if the data passes, says so and
+  recommends it unchanged. Plans and authors the clean-view NQL; does
+  not execute it.
+  Use when: "audit this dataset before the graph build", "find bad
+  edges in <source>", "check identity data quality", "recommend
+  filters for the graph build", "quantify damage from
   <identifier_type>", "pre-graph DQ".
   (narrative-identity)
-compatibility:
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get
-      - narrative_context_search_companies
-      - narrative_context_set_company
-      - narrative_datasets_search
-      - narrative_datasets_describe
-      - narrative_access_rules_search
-      - narrative_access_rules_describe
-      - narrative_dataset_get_column_stats
-      - narrative_nql_validate
+license: MIT
+compatibility: >-
+  No hard requirements — degrades to a prose audit/planning skill when MCP
+  is absent. Recommends the narrative-mcp MCP server and AskUserQuestion
+  (a Claude Code primitive; prose fallback in
+  references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
+  harness.
+metadata:
+  version: 0.5.3
+  narrative:
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_datasets_search
+        - narrative_datasets_describe
+        - narrative_access_rules_search
+        - narrative_access_rules_describe
+        - narrative_dataset_get_column_stats
+        - narrative_nql_validate
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->

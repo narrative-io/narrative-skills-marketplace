@@ -11,6 +11,17 @@ subdirectories, progressive disclosure). Everything below is either a
 restatement of that spec, an opinion we've layered on top of it, or a
 local extension. Where we diverge, this file is the source of truth.
 
+One caveat on "where we diverge": divergence is free in the **body**
+(it's just instructions) and inside **`metadata`** (the spec's
+designated extension point), but it is *not* free in the
+**spec-defined frontmatter fields** — those are the surface other
+harnesses and the official [`skills-ref`](https://github.com/agentskills/agentskills/tree/main/skills-ref)
+validator read. Keep that surface conforming and push local structure
+into `metadata`; see [§11 Cross-harness portability](#11-cross-harness-portability).
+When the spec and this guide disagree on a *spec field*, fetch the
+[current spec](https://agentskills.io/specification) — it may have
+moved since this was written.
+
 ---
 
 ## Contents
@@ -25,9 +36,10 @@ local extension. Where we diverge, this file is the source of truth.
 8. [DRY via the template system](#8-dry-via-the-template-system)
 9. [Naming conventions](#9-naming-conventions)
 10. [Declaring requirements explicitly](#10-declaring-requirements-explicitly)
-11. [Common authoring failures](#11-common-authoring-failures)
-12. [Validation, formatting, shipping](#12-validation-formatting-shipping)
-13. [Worked examples](#13-worked-examples)
+11. [Cross-harness portability](#11-cross-harness-portability)
+12. [Common authoring failures](#12-common-authoring-failures)
+13. [Validation, formatting, shipping](#13-validation-formatting-shipping)
+14. [Worked examples](#14-worked-examples)
 
 ---
 
@@ -64,31 +76,61 @@ buckets: spec-required, spec-optional, and local-extensions.
 
 | Field           | Source             | Required | Notes |
 |-----------------|--------------------|----------|-------|
-| `name`          | spec               | yes      | Matches the slash command and the skill directory name. `^[a-z0-9]+(-[a-z0-9]+)*$`, ≤ 64 chars. |
+| `name`          | spec               | yes      | Matches the slash command and the skill directory name. `^[a-z0-9]+(-[a-z0-9]+)*$`, ≤ 64 chars. (Spec also forbids leading/trailing and consecutive hyphens, and requires the name to match the parent directory — our regex already enforces the first two.) |
 | `description`   | spec               | yes      | ≤ 1024 chars. See [§3](#3-writing-the-description). |
 | `license`       | spec               | no       | Usually omitted (inherits the repo's MIT). |
-| `metadata`      | spec               | no       | Free-form. We rarely use it. |
-| `allowed-tools` | spec (experimental)| no       | Use when the harness needs explicit allowlists. MCP tools declared by the plugin do not need to be listed here. |
-| `version`       | local              | yes      | SemVer for the skill. Bump on any user-visible change. |
-| `compatibility` | local extension    | yes¹     | Structured form (see [§10](#10-declaring-requirements-explicitly)). The spec defines this as a free-text string ≤ 500 chars; we use a structured object instead. |
+| `metadata`      | spec               | no       | The spec's **designated extension point** (a string→string map). Prefer it for anything non-spec — the spec's own example houses `version` here. See the portability note below and [§11](#11-cross-harness-portability). |
+| `allowed-tools` | spec (experimental)| no       | Space-separated string of pre-approved tools, e.g. `Bash(git:*) Read`. Use when the harness needs explicit allowlists. MCP tools declared by the plugin do not need to be listed here. |
+| `version`       | local → `metadata.version` | yes      | SemVer for the skill. Bump on any user-visible change. Homed under `metadata.version` (where the spec's own example puts it); not a top-level field. |
+| `compatibility` | spec + `metadata.narrative` | yes¹     | A spec-conforming free-text **string** ≤ 500 chars. The structured `requires`/`recommends` object lives under `metadata.narrative` (see [§10](#10-declaring-requirements-explicitly)). |
 
 ¹ Required for any skill that calls a non-default tool or MCP server.
 Pure-prose skills (no MCP, no `Bash`, no `Write`) may omit it.
+
+> **Portability of the frontmatter surface.** `name`, `description`,
+> `license`, `compatibility`, `metadata`, and `allowed-tools` are the
+> only fields the spec defines, and they're what every other harness
+> and `skills-ref validate` parse. Our two local additions sit in
+> tension with that surface:
+>
+> - **`version`** is not a spec field. The spec's own example puts it
+>   under `metadata` (`metadata: { version: "1.0" }`). A top-level
+>   `version` is silently ignored elsewhere — harmless, but
+>   `metadata.version` is the conforming home.
+> - **`compatibility`** is overloaded. The spec field is a *string*;
+>   our structured object fails `skills-ref validate` and is
+>   mis-parsed by other harnesses. The portable pattern: keep a short
+>   conforming `compatibility` **string** at top level (e.g.
+>   `Requires narrative-mcp and Bash; designed for Claude Code`) and
+>   move the structured `requires`/`recommends` object under a
+>   namespaced `metadata` key our tooling reads. One artifact, valid
+>   everywhere, no loss of structure.
+>
+> **This is now the implemented shape** — every skill ships a
+> spec-conforming `compatibility` string with the structured object
+> under `metadata.narrative`, and `version` under `metadata.version`.
+> `check:spec` enforces it. The principle and the full defect list
+> live in [§11](#11-cross-harness-portability).
 
 ### Minimal example
 
 ```yaml
 ---
 name: write-thing
-version: 0.1.0
 description: |
   One- or two-sentence summary of what the skill does.
   Use when: "<trigger phrase 1>", "<trigger phrase 2>".
   (<plugin>)
-compatibility:
-  requires:
-    tools:
-      - AskUserQuestion
+license: MIT
+compatibility: >-
+  Recommends AskUserQuestion (a Claude Code primitive; prose fallback
+  documented in references/HARNESS_FALLBACK.md).
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      tools:
+        - AskUserQuestion
 ---
 ```
 
@@ -199,7 +241,7 @@ A good persona names three things, in this order:
 - **Aspirational tone the rest of the skill doesn't sustain.** If
   the persona promises "rigorous evidence-based reasoning" but the
   procedure has no evidence-gathering step, you've written a
-  contradiction (see [§11 Persona consistency](#11-common-authoring-failures)).
+  contradiction (see [§12 Persona consistency](#12-common-authoring-failures)).
 
 ### Format
 
@@ -234,8 +276,9 @@ the procedure's mandatory steps. No biography.
 ## 5. Writing the body
 
 The body after the frontmatter is loaded once the skill is activated.
-Recommended ceiling: **~500 lines / under 5,000 tokens**. Push detail
-past that into `references/`.
+Recommended ceiling: **~500 lines / under 5,000 tokens** (this matches
+the spec's own recommendation). Push detail past that into
+`references/`.
 
 ### Required structure
 
@@ -267,6 +310,8 @@ Every skill body should have these sections, in this order:
    silently skip a mandatory step. If the skill ships a
    `references/HARNESS_FALLBACK.md`, keep the body to the one-line
    per-server summary + a link to the reference; never duplicate.
+   This section is also load-bearing for portability — see
+   [§11](#11-cross-harness-portability).
 9. **`## Further reading`** (optional) — pointers to `references/`,
    sibling skills, or external docs.
 
@@ -330,8 +375,8 @@ the body explicitly points to them. Structure content accordingly.
 
 | Tier | What lives here | Loaded |
 |------|-----------------|--------|
-| 1 — frontmatter | `name`, `description`, `compatibility` | Always, for every skill |
-| 2 — body | Phased procedure, common cases, gotchas | When this skill is activated |
+| 1 — frontmatter | `name`, `description` (~100 tokens total) | Always, for every skill |
+| 2 — body | Phased procedure, common cases, gotchas (< 5k tokens) | When this skill is activated |
 | 3 — references / scripts / assets | Deep syntax tables, error catalogs, prompt fragments, code, datasets | Only when the body references them |
 
 ### Push material to tier 3 when
@@ -392,7 +437,8 @@ For timestamp parsing edge cases, see
 
 Keep references one level deep from `SKILL.md` — `references/foo.md`,
 not `references/nql/timestamps/foo.md`. Deep nesting fragments the
-agent's mental model of where to look.
+agent's mental model of where to look. (The spec says the same: keep
+file references one level deep, avoid deeply nested reference chains.)
 
 ### Pairing body sections with references
 
@@ -459,6 +505,15 @@ expensive workflows.
 4. **Document the boundary in `## When to use`.** "Use `/X` for cold
    outreach; this skill is warm-only" is one line and saves the
    routing agent a guess.
+
+> **Composition is a portability seam.** Slash-command handoff is a
+> harness convenience, not part of the spec. A skill that *requires* a
+> sibling to be invocable by slash command won't compose on a harness
+> that doesn't expose that mechanism. For skills you publish as
+> harness-agnostic, state the dependency as a data contract the user
+> (or another skill) can satisfy by hand, and treat the slash-command
+> chain as the Claude-Code-flavored convenience layer on top. See
+> [§11](#11-cross-harness-portability).
 
 ---
 
@@ -568,7 +623,9 @@ verifies this in CI.
 ## 9. Naming conventions
 
 The slash command, the skill `name` field, and the skill directory all
-agree: lowercase, hyphen-separated, **verb-noun**.
+agree: lowercase, hyphen-separated, **verb-noun**. (The spec
+independently requires `name` to match the parent directory, so this
+convention also keeps us spec-conforming.)
 
 | Verb     | When to use |
 |----------|-------------|
@@ -593,26 +650,35 @@ Single-word names are fine when the verb is unambiguous (`/commit`,
 
 ## 10. Declaring requirements explicitly
 
-The spec's free-text `compatibility` field is too loose for our needs.
-We use a structured object:
+The spec's free-text `compatibility` field is too loose for our needs,
+so we keep a structured object for our own tooling — but it lives under
+the namespaced `metadata.narrative` key, **not** in the spec's
+`compatibility` field (which stays a conforming free-text string). The
+shape below is what `check:spec` enforces.
 
 ```yaml
-compatibility:
-  requires:
-    tools:
-      - Bash
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_datasets_search
-      - narrative_datasets_describe
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-knowledge-base
-    mcp-tools:
-      - search_narrative_i_o_knowledge_base
+compatibility: >-
+  Requires the narrative-mcp MCP server and Bash. Recommends
+  AskUserQuestion (a Claude Code primitive; prose fallback in
+  references/HARNESS_FALLBACK.md) and the narrative-knowledge-base
+  MCP server.
+metadata:
+  narrative:
+    requires:
+      tools:
+        - Bash
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_datasets_search
+        - narrative_datasets_describe
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-knowledge-base
+      mcp-tools:
+        - search_narrative_i_o_knowledge_base
 ```
 
 > **Note:** `AskUserQuestion` is a Claude Code primitive. List it under
@@ -645,9 +711,110 @@ Be specific. "Requires Bash" is less useful than "Requires Bash, Read,
 AskUserQuestion." The list doubles as a hint to the agent about what
 the skill is going to do.
 
+> **Portability note — where the structured object belongs.** The
+> agentskills.io `compatibility` field is a **free-text string ≤ 500
+> chars** (it's meant for "Requires git, docker, jq, and internet
+> access" — prose, not data). `skills-ref validate` and other harnesses
+> expect a string here; a structured object is a conformance break.
+> For a skill you intend to publish harness-agnostic, split it:
+>
+> ```yaml
+> # Spec-conforming surface every harness reads:
+> compatibility: Requires narrative-mcp and Bash; AskUserQuestion recommended; designed for Claude Code (or similar)
+>
+> # Machine-readable detail our tooling + harness read:
+> metadata:
+>   version: 0.1.0
+>   narrative:                        # the structured requires/recommends object
+>     requires: ...
+>     recommends: ...
+> ```
+>
+> `metadata` is the spec's designated extension point. (Its values are
+> nominally strings; if you want strict string-map conformance,
+> serialize the object to a JSON string under the namespaced key — in
+> practice most harnesses tolerate a nested object there.) This keeps
+> the skill valid on every harness while losing none of the structure
+> our tooling and harness rely on. This is the repo's implemented
+> shape — `check:spec` enforces the `compatibility` string and the
+> `metadata.narrative` object; see
+> [§11](#11-cross-harness-portability) for the rationale.
+
 ---
 
-## 11. Common authoring failures
+## 11. Cross-harness portability
+
+Every skill in this repo is meant to run not just in our harness but on
+any agentskills.io-compliant agent — Claude Code, Codex, Cursor,
+Windsurf, Gemini CLI, Copilot, Goose, OpenClaw, and the rest of the
+~30 adopters. Portability is a property of the **shared surface**: the
+frontmatter other harnesses parse, the directory layout they expect,
+and the instructions they execute. The governing rule:
+
+> Keep the spec surface harness-neutral. Anything harness-, product-,
+> or Narrative-specific lives under `metadata` (namespaced) plus a
+> documented fallback — never baked into a spec field, an assumed
+> path, or an assumed tool name.
+
+This is the [§10](#10-declaring-requirements-explicitly)
+`AskUserQuestion` rule, generalized to the whole skill.
+
+### The conformance surface
+
+Three things other harnesses read directly. They must match the spec
+exactly, because `skills-ref validate` is effectively run against your
+skills the moment someone installs them elsewhere:
+
+- **Spec-defined frontmatter** (`name`, `description`, `license`,
+  `compatibility`, `metadata`, `allowed-tools`) at the spec's types and
+  limits. A structured object in `compatibility`, or a local field at
+  the top level (`version`), is a conformance break — dropped or
+  rejected elsewhere. Local structure goes under namespaced `metadata`
+  (see [§2](#2-frontmatter), [§10](#10-declaring-requirements-explicitly)).
+- **Directory layout** — `SKILL.md` at root; `scripts/` / `references/`
+  / `assets/`; references one level deep. Don't invent top-level
+  directories other harnesses won't look in.
+- **Relative file references** from the skill root. Never absolute
+  paths.
+
+### Portability defects to audit for
+
+Self-review every skill against these before shipping — they're also
+exactly what our portability audit flags:
+
+| Defect | Why it breaks | Fix |
+|--------|---------------|-----|
+| Hardcoded harness paths (`.claude/`, `~/.claude/skills/`, `~/.openclaw/`) in the body or scripts | Wrong or absent on other harnesses | Use relative paths; let the harness place the skill |
+| Absolute / machine-specific paths (`/home/<user>/…`, `/Users/…`) | Non-portable across machines and agents | Relative paths, or a working dir documented in the body |
+| Harness-specific tool assumptions in the body ("use the Bash tool", a specific invocation syntax) | Tool names and invocation differ per harness | Describe the *capability* ("read the file", "run `scripts/x.py`"); declare the tool in `compatibility`/`metadata`; document a fallback |
+| Non-spec frontmatter on the conformance surface (`version`, structured `compatibility`) | Ignored or rejected by other harnesses and `skills-ref` | Move under namespaced `metadata`; emit a conforming `compatibility` *string* if requirements exist |
+| Undeclared runtime / OS / env assumptions (a script needs `python3`, `jq`, bash, an env var) | Fails silently on a host that lacks them | State it in the `compatibility` string and in the script's header; gate where the harness supports it |
+| Implicit network / credential dependencies | Breaks in sandboxes or offline harnesses | Call it out explicitly; degrade via `## Harness fallbacks` |
+| A Claude Code primitive under `requires` (e.g. `AskUserQuestion`) | Makes the skill Claude-Code-only | List under `recommends` with a prose fallback ([§10](#10-declaring-requirements-explicitly)) |
+| Slash-command composition treated as mandatory | Other harnesses may not expose slash invocation | State the dependency as a data contract; keep the slash chain as a convenience ([§7](#7-composing-skills)) |
+
+### Two homes for "Narrative-flavored" skills
+
+A skill can be published two ways, and the only difference is whether
+non-spec material has leaked onto the conformance surface:
+
+- **Portable (default).** Spec-clean frontmatter, harness-neutral body,
+  every non-default capability declared and given a fallback. Runs
+  unmodified anywhere. This is what we publish to the marketplace as
+  harness-agnostic.
+- **Narrative-enhanced.** The same spec-clean base, *plus*
+  `metadata.narrative.*` keys our harness reads for extra behavior
+  (structured requirements, marketplace fields, composition hints).
+  Other harnesses ignore the namespace and still run the base skill.
+  Same artifact, degrades gracefully.
+
+Authoring for portability first and layering enhancement under
+`metadata` is what lets one skill serve both — and it's the property
+the marketplace's "harness-agnostic" badge will check for.
+
+---
+
+## 12. Common authoring failures
 
 Treat this list as a self-review checklist before opening a PR. The
 categories mirror the analyzers in
@@ -732,6 +899,31 @@ For every branch in the procedure, the failure path is defined.
   `## Harness fallbacks` (or an explicit "this skill cannot run
   without X").
 
+### Bundled-script safety
+
+Scripts in `scripts/` ship to whoever installs the skill and run on
+their machine, often with the agent's privileges. Independent scans
+have found a large share of public skills carry a security flaw, so
+treat every bundled script as audited code, not a convenience. This is
+both a security checklist and (because undeclared dependencies don't
+travel) a portability one — see [§11](#11-cross-harness-portability).
+
+- **No remote-pipe execution.** No `curl … | bash`, `wget … | sh`, or
+  `eval` of fetched content. Pin and vendor what you need, or document
+  the dependency and let the user install it.
+- **No secrets in the tree.** No tokens, keys, or credentials in
+  scripts, assets, or examples. Read them from the environment and
+  declare the env var in the `compatibility` string.
+- **No unscoped destructive operations.** `rm -rf`, force-pushes, mass
+  deletes — guard them, scope them to a known path, or require
+  confirmation.
+- **Portable execution.** A correct shebang; no bash-only constructs in
+  a `#!/bin/sh` script; no OS-specific utilities assumed without
+  declaring them. The spec asks scripts to be self-contained or to
+  clearly document their dependencies and to fail with helpful errors.
+- **Explicit egress.** Any network call or credential touch should be
+  visible in the body, not buried in a script.
+
 ### Snippet composition conflicts
 
 The `{{SNIPPET:...}}` system means the rendered `SKILL.md` is a
@@ -777,7 +969,7 @@ feedback the skill writes for its caller.
 
 ---
 
-## 12. Validation, formatting, shipping
+## 13. Validation, formatting, shipping
 
 The same checks CI runs locally:
 
@@ -785,6 +977,8 @@ The same checks CI runs locally:
 bun run gen:skill-docs       # Render every *.tmpl in place (SKILL + references + assets).
 bun run check:skill-docs     # Fail if any rendered file is stale vs. its .tmpl.
 bun run check:manifests      # Validate marketplace.json, plugin.json, SKILL.md frontmatter.
+skills-ref validate <skill>  # Spec conformance (agentskills.io). The canonical check other
+                             #   harnesses run; complements check:manifests. Wire into `bun run ci`.
 bun run check                # Biome — format + lint.
 bun run typecheck            # tsc --noEmit, strict mode.
 bun run knip                 # Unused files / deps / exports.
@@ -792,13 +986,24 @@ bun run test                 # bun test — colocated unit tests (scripts/*.test
 bun run ci                   # Everything above, in order.
 ```
 
+`check:manifests` validates *our* conventions (name / description / dir
+agreement, the 1024-char description cap, our structured
+`compatibility`); `skills-ref validate` validates the *spec* surface
+other harnesses depend on. Both matter — the first keeps the repo
+internally consistent, the second keeps skills portable. Until
+`skills-ref` is wired into `bun run ci`, run it by hand on any skill
+you publish as harness-agnostic.
+
 Before opening a PR for a new or modified skill:
 
 1. **`bun run gen:skill-docs`** — regenerate. The rendered file must
    land in the commit alongside the template.
 2. **`bun run check:manifests`** — confirms name / description / dir
    agreement and the 1024-char description cap.
-3. **`bun run ci`** — full gauntlet. Mirrors GitHub Actions.
+3. **`skills-ref validate`** on the touched skill — confirms the
+   spec-conformance surface for anything you intend to publish
+   cross-harness.
+4. **`bun run ci`** — full gauntlet. Mirrors GitHub Actions.
 
 The `.github/ISSUE_TEMPLATE/new-skill.yml` form captures the
 information needed to start a skill from scratch; if you're scaffolding
@@ -807,7 +1012,7 @@ filesystem.
 
 ---
 
-## 13. Worked examples
+## 14. Worked examples
 
 For a complete skill that exercises most of the patterns above, read:
 
