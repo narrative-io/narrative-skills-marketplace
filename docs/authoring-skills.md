@@ -83,7 +83,7 @@ buckets: spec-required, spec-optional, and local-extensions.
 | `allowed-tools` | spec (experimental)| no       | Space-separated string of pre-approved tools, e.g. `Bash(git:*) Read`. Use when the harness needs explicit allowlists. MCP tools declared by the plugin do not need to be listed here. |
 | `version`       | local → `metadata.version` | yes      | SemVer for the skill. Bump on any user-visible change. Homed under `metadata.version` (where the spec's own example puts it); not a top-level field. |
 | `compatibility` | spec + `metadata.narrative` | yes¹     | A spec-conforming free-text **string** ≤ 500 chars. The structured `requires`/`recommends` object lives under `metadata.narrative` (see [§10](#10-declaring-requirements-explicitly)). |
-| `args`          | local → `metadata.args`    | no       | Structured list of the slash command's arguments, mirroring the `## Arguments` body table. Lives under `metadata.args` (a sibling of `version`/`narrative`, **not** under `metadata.narrative`, which only accepts `requires`/`recommends`). Surfaced in `skills.json`. See [Documenting arguments](#documenting-arguments-in-metadata). |
+| `args`          | local → `metadata.narrative.args` | no       | Structured list of the slash command's arguments, mirroring the `## Arguments` body table. Lives under `metadata.narrative.args` — a Narrative-namespaced sibling of `requires`/`recommends`. Surfaced in `skills.json`. See [Documenting arguments](#documenting-arguments-in-metadata). |
 
 ¹ Required for any skill that calls a non-default tool or MCP server.
 Pure-prose skills (no MCP, no `Bash`, no `Write`) may omit it.
@@ -143,16 +143,18 @@ similar-sounding skills (e.g. `narrative-content:write-blog` vs
 ### Documenting arguments in metadata
 
 If the skill's body has a `## Arguments` table, mirror it as a
-structured `metadata.args` list. The body table is the human-readable
-source of truth; `metadata.args` is the machine-readable form that
-`gen-skills-index.ts` lifts into `skills.json` so a routing agent (or
-any external consumer) can enumerate a skill's arguments without
-parsing the body.
+structured `metadata.narrative.args` list. The body table is the
+human-readable source of truth; `metadata.narrative.args` is the
+machine-readable form that `gen-skills-index.ts` lifts into `skills.json`
+so a routing agent (or any external consumer) can enumerate a skill's
+arguments without parsing the body.
 
-It lives at `metadata.args` — a **sibling** of `metadata.version` and
-`metadata.narrative`. Do **not** nest it under `metadata.narrative`:
-that key is typed as `requires`/`recommends`, and `check:spec` warns on
-any other sub-key there.
+It lives at `metadata.narrative.args` — a Narrative-namespaced
+**sibling** of `requires`/`recommends`. Argument documentation is a
+local extension, so it's homed under the `metadata.narrative` namespace
+(alongside the structured requirements) rather than on the spec-clean
+surface. `version`, by contrast, stays at `metadata.version` — the
+location the spec's own example uses, so other harnesses still find it.
 
 Each entry carries:
 
@@ -172,20 +174,20 @@ Each entry carries:
 ```yaml
 metadata:
   version: 0.4.0
-  args:
-    - name: "--dataset"
-      value: "<id|name>"
-      required: false
-      description: >-
-        The target dataset's numeric ID or datasetName. If omitted, the
-        skill asks.
-    - name: "--dry-run"
-      required: false
-      description: "Render the spec but do NOT submit. Implies --show-spec."
-    - name: "<free-text tail>"
-      required: false
-      description: "The user's intent / question."
   narrative:
+    args:
+      - name: "--dataset"
+        value: "<id|name>"
+        required: false
+        description: >-
+          The target dataset's numeric ID or datasetName. If omitted, the
+          skill asks.
+      - name: "--dry-run"
+        required: false
+        description: "Render the spec but do NOT submit. Implies --show-spec."
+      - name: "<free-text tail>"
+        required: false
+        description: "The user's intent / question."
     requires: { ... }
 ```
 

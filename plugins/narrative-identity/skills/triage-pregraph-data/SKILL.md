@@ -24,56 +24,56 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.6.0
-  args:
-    - name: "--dataset"
-      value: "<id>"
-      required: false
-      description: >-
-        Pre-bind the source as a dataset. Skips discovery. Mutually
-        exclusive with --access-rule.
-    - name: "--access-rule"
-      value: "<id>"
-      required: false
-      description: >-
-        Pre-bind the source as an access rule. Skips discovery. The audit
-        runs identically — access rules behave like datasets in NQL.
-        Mutually exclusive with --dataset.
-    - name: "--entity-type"
-      value: "person|household|device|business|account"
-      required: false
-      description: >-
-        Anchors what "plausible" looks like for the entity being
-        identified. Required if not derivable from context.
-    - name: "--graph-context"
-      value: "standalone|combined"
-      required: false
-      default: combined
-      description: >-
-        Whether this source will be UNIONed with other sources in the
-        downstream graph build (combined, the common case) or used on its
-        own (standalone). Affects filter recommendations in Phase 6. If not
-        passed and not derivable, the skill asks once in Phase 2.
-    - name: "--identifier-cols"
-      value: "<col,col,...>"
-      required: false
-      description: >-
-        Pre-declare which columns hold identifiers. Skips identifier-column
-        discovery.
-    - name: "--no-parallel"
-      required: false
-      description: >-
-        Execute hypothesis queries serially (debugging or harness-limited).
-    - name: "--no-schema"
-      required: false
-      description: >-
-        Work from a user-pasted schema only; skip every narrative-mcp call.
-    - name: "<free-text tail>"
-      required: false
-      description: >-
-        Additional context about the source system. With no arguments, the
-        skill walks the user through interactively.
+  version: 0.6.1
   narrative:
+    args:
+      - name: "--dataset"
+        value: "<id>"
+        required: false
+        description: >-
+          Pre-bind the source as a dataset. Skips discovery. Mutually
+          exclusive with --access-rule.
+      - name: "--access-rule"
+        value: "<id>"
+        required: false
+        description: >-
+          Pre-bind the source as an access rule. Skips discovery. The audit
+          runs identically — access rules behave like datasets in NQL.
+          Mutually exclusive with --dataset.
+      - name: "--entity-type"
+        value: "person|household|device|business|account"
+        required: false
+        description: >-
+          Anchors what "plausible" looks like for the entity being
+          identified. Required if not derivable from context.
+      - name: "--graph-context"
+        value: "standalone|combined"
+        required: false
+        default: combined
+        description: >-
+          Whether this source will be UNIONed with other sources in the
+          downstream graph build (combined, the common case) or used on its
+          own (standalone). Affects filter recommendations in Phase 6. If not
+          passed and not derivable, the skill asks once in Phase 2.
+      - name: "--identifier-cols"
+        value: "<col,col,...>"
+        required: false
+        description: >-
+          Pre-declare which columns hold identifiers. Skips identifier-column
+          discovery.
+      - name: "--no-parallel"
+        required: false
+        description: >-
+          Execute hypothesis queries serially (debugging or harness-limited).
+      - name: "--no-schema"
+        required: false
+        description: >-
+          Work from a user-pasted schema only; skip every narrative-mcp call.
+      - name: "<free-text tail>"
+        required: false
+        description: >-
+          Additional context about the source system. With no arguments, the
+          skill walks the user through interactively.
     recommends:
       tools:
         - AskUserQuestion

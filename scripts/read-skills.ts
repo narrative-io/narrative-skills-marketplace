@@ -25,7 +25,18 @@ export interface SkillCompatibility {
   recommends?: CompatibilityRequirements;
 }
 
-/** One documented slash-command argument, from the namespaced metadata.args. */
+/**
+ * The `metadata.narrative` namespace: the structured requirements
+ * (`requires`/`recommends`) plus local extensions homed alongside them
+ * — currently the documented slash-command `args`. See
+ * docs/authoring-skills.md §11.
+ */
+export interface NarrativeMetadata extends SkillCompatibility {
+  /** Documented slash-command arguments (local extension). */
+  args?: SkillArg[];
+}
+
+/** One documented slash-command argument, from `metadata.narrative.args`. */
 export interface SkillArg {
   /** Flag or placeholder, e.g. `--dataset` or `<free-text tail>`. */
   name: string;
@@ -48,14 +59,13 @@ export interface SkillFrontmatter {
   'allowed-tools'?: string[];
   /**
    * The spec's designated extension point. `version` lives here (per the
-   * spec's own example), and the structured requirements live under the
-   * namespaced `narrative` key. See docs/authoring-skills.md §11.
+   * spec's own example); everything Narrative-specific — the structured
+   * requirements and the documented `args` — lives under the namespaced
+   * `narrative` key. See docs/authoring-skills.md §11.
    */
   metadata?: {
     version?: string;
-    narrative?: SkillCompatibility;
-    /** Documented slash-command arguments (local extension; see §11). */
-    args?: SkillArg[];
+    narrative?: NarrativeMetadata;
     [key: string]: unknown;
   };
 }
@@ -65,14 +75,33 @@ export function skillVersion(fm: SkillFrontmatter): string {
   return String(fm.metadata?.version ?? '').trim();
 }
 
-/** Structured requirements, homed under the namespaced `metadata.narrative`. */
+/**
+ * Structured requirements, homed under the namespaced `metadata.narrative`.
+ * Returns only `requires`/`recommends`; the sibling `args` extension is
+ * surfaced separately via `skillArgs`.
+ */
 export function skillRequirements(fm: SkillFrontmatter): SkillCompatibility | undefined {
-  return fm.metadata?.narrative;
+  const narrative = fm.metadata?.narrative;
+  if (!narrative) {
+    return undefined;
+  }
+  const { requires, recommends } = narrative;
+  if (requires === undefined && recommends === undefined) {
+    return undefined;
+  }
+  const out: SkillCompatibility = {};
+  if (requires !== undefined) {
+    out.requires = requires;
+  }
+  if (recommends !== undefined) {
+    out.recommends = recommends;
+  }
+  return out;
 }
 
-/** Documented slash-command arguments, homed under `metadata.args`. */
+/** Documented slash-command arguments, homed under `metadata.narrative.args`. */
 export function skillArgs(fm: SkillFrontmatter): SkillArg[] | undefined {
-  const args = fm.metadata?.args;
+  const args = fm.metadata?.narrative?.args;
   return Array.isArray(args) ? args : undefined;
 }
 

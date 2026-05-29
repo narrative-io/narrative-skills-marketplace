@@ -13,7 +13,8 @@
  *   - `metadata.version` is present and parses as MAJOR.MINOR.PATCH.
  *   - SKILL.md filename uses the canonical uppercase form.
  *   - Frontmatter is valid YAML and starts at line 1.
- *   - `metadata.narrative`, if present, uses only the documented sub-keys.
+ *   - `metadata.narrative`, if present, uses only the documented sub-keys
+ *     (`requires`, `recommends`, `args`).
  *
  * Local-extension rules (warnings, not failures):
  *   - The structured requirements object lives under the namespaced
@@ -52,6 +53,12 @@ function warn(file: string, msg: string): void {
 
 function checkCompatibility(skillMd: string, compat: SkillCompatibility): void {
   for (const [bucket, contents] of Object.entries(compat)) {
+    // `args` is a documented sibling of requires/recommends under the
+    // narrative namespace, not a compatibility bucket — validated by
+    // checkNarrative, skipped here.
+    if (bucket === 'args') {
+      continue;
+    }
     if (!KNOWN_COMPAT_BUCKETS.has(bucket)) {
       warn(
         skillMd,
@@ -153,6 +160,9 @@ for (const skill of listSkills(ROOT)) {
   const narrative = data.metadata?.narrative;
   if (narrative && typeof narrative === 'object') {
     checkCompatibility(skill.skillMdPath, narrative);
+    if (narrative.args != null && !Array.isArray(narrative.args)) {
+      fail(skill.skillMdPath, 'metadata.narrative.args must be a list');
+    }
   }
 }
 

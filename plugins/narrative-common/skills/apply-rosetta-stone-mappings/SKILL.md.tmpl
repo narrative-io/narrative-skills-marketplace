@@ -21,60 +21,60 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.3.5
-  args:
-    - name: "--dataset"
-      value: "<id|name>"
-      required: false
-      description: >-
-        The target dataset's numeric ID or its datasetName (alphanumerics
-        + underscores). Required before submission; if omitted, the skill
-        asks.
-    - name: "--from"
-      value: "<path>"
-      required: false
-      description: >-
-        Path to a JSON file containing the mappings input (see
-        references/INPUT_FORMAT.md). Mutually exclusive with --mappings.
-    - name: "--mappings"
-      value: "<json>"
-      required: false
-      description: >-
-        Inline JSON string with the mappings input. Useful when invoked
-        programmatically from /generate-rosetta-stone-mappings.
-    - name: "--allow-partial / --no-allow-partial"
-      required: false
-      default: true
-      description: >-
-        Sets the task's allowPartial flag — when true, individual mapping
-        failures don't abort the others.
-    - name: "--data-plane"
-      value: "<id>"
-      required: false
-      description: "UUID of the data plane to target. Skips data-plane resolution."
-    - name: "--dry-run"
-      required: false
-      description: >-
-        Render the full spec, re-validation results, and the create-call
-        parameters; do NOT submit. Implies --show-spec.
-    - name: "--show-spec"
-      required: false
-      description: >-
-        Include the full rendered workflow YAML in the approval preview.
-        Off by default — most users only need the plain-English summary.
-    - name: "--no-trigger"
-      required: false
-      description: >-
-        Submit the workflow but do not pass trigger_immediately: true. The
-        user must trigger it manually later (rare).
-    - name: "--no-revalidate"
-      required: false
-      description: >-
-        Skip Phase 5 NQL re-validation. Intended for same-conversation
-        hand-off from /generate-rosetta-stone-mappings. Do NOT pass when
-        the input is from a file, a paste, or a prior conversation — the
-        schema may have drifted.
+  version: 0.3.6
   narrative:
+    args:
+      - name: "--dataset"
+        value: "<id|name>"
+        required: false
+        description: >-
+          The target dataset's numeric ID or its datasetName (alphanumerics
+          + underscores). Required before submission; if omitted, the skill
+          asks.
+      - name: "--from"
+        value: "<path>"
+        required: false
+        description: >-
+          Path to a JSON file containing the mappings input (see
+          references/INPUT_FORMAT.md). Mutually exclusive with --mappings.
+      - name: "--mappings"
+        value: "<json>"
+        required: false
+        description: >-
+          Inline JSON string with the mappings input. Useful when invoked
+          programmatically from /generate-rosetta-stone-mappings.
+      - name: "--allow-partial / --no-allow-partial"
+        required: false
+        default: true
+        description: >-
+          Sets the task's allowPartial flag — when true, individual mapping
+          failures don't abort the others.
+      - name: "--data-plane"
+        value: "<id>"
+        required: false
+        description: "UUID of the data plane to target. Skips data-plane resolution."
+      - name: "--dry-run"
+        required: false
+        description: >-
+          Render the full spec, re-validation results, and the create-call
+          parameters; do NOT submit. Implies --show-spec.
+      - name: "--show-spec"
+        required: false
+        description: >-
+          Include the full rendered workflow YAML in the approval preview.
+          Off by default — most users only need the plain-English summary.
+      - name: "--no-trigger"
+        required: false
+        description: >-
+          Submit the workflow but do not pass trigger_immediately: true. The
+          user must trigger it manually later (rare).
+      - name: "--no-revalidate"
+        required: false
+        description: >-
+          Skip Phase 5 NQL re-validation. Intended for same-conversation
+          hand-off from /generate-rosetta-stone-mappings. Do NOT pass when
+          the input is from a file, a paste, or a prior conversation — the
+          schema may have drifted.
     requires:
       tools:
         - Read
