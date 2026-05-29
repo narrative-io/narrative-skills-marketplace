@@ -19,7 +19,28 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.3.2
+  version: 0.3.3
+  args:
+    - name: "--dataset"
+      value: "<id>"
+      required: false
+      description: >-
+        Pre-bind one or more datasets (comma-separated). Skips dataset
+        discovery.
+    - name: "--no-schema"
+      required: false
+      description: >-
+        Work from a user-pasted schema only. Skip every narrative-mcp call.
+    - name: "--brief-only"
+      required: false
+      description: >-
+        Skip interrogation prompts when the user has already framed the
+        question precisely. Use sparingly.
+    - name: "<free-text tail>"
+      required: false
+      description: >-
+        The user's analytical question. With no arguments, the skill walks
+        the user through interrogation interactively.
   narrative:
     recommends:
       tools:

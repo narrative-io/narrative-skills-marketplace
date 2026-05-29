@@ -20,7 +20,9 @@ import {
   listPlugins,
   listSkills,
   readPluginManifest,
+  type SkillArg,
   type SkillCompatibility,
+  skillArgs,
   skillRequirements,
   skillVersion,
 } from './read-skills';
@@ -48,6 +50,8 @@ interface IndexedSkill {
   compatibility?: string;
   /** Structured requirements, from the namespaced metadata.narrative. */
   requirements?: SkillCompatibility;
+  /** Documented slash-command arguments, from metadata.args. */
+  args?: SkillArg[];
 }
 
 interface SkillsIndex {
@@ -87,6 +91,10 @@ const skills: IndexedSkill[] = listSkills(ROOT).map((s) => {
   const requirements = skillRequirements(fm);
   if (requirements) {
     entry.requirements = requirements;
+  }
+  const args = skillArgs(fm);
+  if (args) {
+    entry.args = args;
   }
   return entry;
 });

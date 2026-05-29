@@ -26,7 +26,7 @@
   "skills": [
     {
       "name": "apply-rosetta-stone-mappings",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "description": "Apply a set of Rosetta Stone attribute mappings to a Narrative\ndataset by wrapping them in a one-shot workflow that calls the\n`CreateRosettaStoneMappingsIfNotExist` task. Consumes the structured\noutput of `/generate-rosetta-stone-mappings`, normalizes the\ngenerator's snake_case to the workflow task's camelCase, re-validates\nevery expression against the dataset's current schema, gates on\nuser approval, submits via `narrative_workflows_create`, polls the\ntriggered run, and reports per-mapping created / conflict / failed.\nUse when: \"apply these mappings to dataset N\", \"create the\nRosetta Stone mappings I just generated\", \"push the mappings I\nsaved earlier to <dataset>\", \"productionize this mapping list\",\n\"submit the suggested_mappings array\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/apply-rosetta-stone-mappings/SKILL.md",
@@ -56,11 +56,63 @@
             "AskUserQuestion"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "--dataset",
+          "value": "<id|name>",
+          "required": false,
+          "description": "The target dataset's numeric ID or its datasetName (alphanumerics + underscores). Required before submission; if omitted, the skill asks."
+        },
+        {
+          "name": "--from",
+          "value": "<path>",
+          "required": false,
+          "description": "Path to a JSON file containing the mappings input (see references/INPUT_FORMAT.md). Mutually exclusive with --mappings."
+        },
+        {
+          "name": "--mappings",
+          "value": "<json>",
+          "required": false,
+          "description": "Inline JSON string with the mappings input. Useful when invoked programmatically from /generate-rosetta-stone-mappings."
+        },
+        {
+          "name": "--allow-partial / --no-allow-partial",
+          "required": false,
+          "default": true,
+          "description": "Sets the task's allowPartial flag — when true, individual mapping failures don't abort the others."
+        },
+        {
+          "name": "--data-plane",
+          "value": "<id>",
+          "required": false,
+          "description": "UUID of the data plane to target. Skips data-plane resolution."
+        },
+        {
+          "name": "--dry-run",
+          "required": false,
+          "description": "Render the full spec, re-validation results, and the create-call parameters; do NOT submit. Implies --show-spec."
+        },
+        {
+          "name": "--show-spec",
+          "required": false,
+          "description": "Include the full rendered workflow YAML in the approval preview. Off by default — most users only need the plain-English summary."
+        },
+        {
+          "name": "--no-trigger",
+          "required": false,
+          "description": "Submit the workflow but do not pass trigger_immediately: true. The user must trigger it manually later (rare)."
+        },
+        {
+          "name": "--no-revalidate",
+          "required": false,
+          "description": "Skip Phase 5 NQL re-validation. Intended for same-conversation hand-off from /generate-rosetta-stone-mappings. Do NOT pass when the input is from a file, a paste, or a prior conversation — the schema may have drifted."
+        }
+      ]
     },
     {
       "name": "create-workflow",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "description": "Author and submit a Narrative workflow from a natural-language\nintent. Picks the closest example from `assets/examples/`, adapts\nit to the user's case, walks the YAML against the spec, resolves\nthe data plane, and submits via `narrative_workflows_create` only\nafter the user has approved the rendered spec.\nUse when: \"create a workflow that does X\", \"schedule a daily\nrefresh of dataset Y\", \"wrap this NQL as a workflow\", \"build a\npipeline that creates view A then refreshes view B\", \"submit this\nworkflow YAML\", \"productionize this query as a recurring job\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/create-workflow/SKILL.md",
@@ -99,11 +151,56 @@
             "narrative_nql_validate"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "--spec",
+          "value": "<path>",
+          "required": false,
+          "description": "Path to a YAML file containing the workflow specification. Skip the drafting phase and use this verbatim."
+        },
+        {
+          "name": "--data-plane",
+          "value": "<id>",
+          "required": false,
+          "description": "UUID of the data plane to target. Skips data-plane resolution."
+        },
+        {
+          "name": "--trigger",
+          "required": false,
+          "description": "Pass trigger_immediately: true on create — fires one run as soon as the workflow is registered."
+        },
+        {
+          "name": "--schedule",
+          "required": false,
+          "description": "Pass schedule_immediately: true on create — activates the schedule: cron. Requires the spec to contain a schedule: block."
+        },
+        {
+          "name": "--tags",
+          "value": "<a,b,c>",
+          "required": false,
+          "description": "Comma-separated tags to attach to the workflow."
+        },
+        {
+          "name": "--dry-run",
+          "required": false,
+          "description": "Render and display the full spec, the chosen data plane, and the create-call parameters — but do NOT call narrative_workflows_create. Implies --show-spec."
+        },
+        {
+          "name": "--show-spec",
+          "required": false,
+          "description": "Include the full rendered YAML in the approval preview. Off by default — most users only need the plain-English summary."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "The user's intent (e.g., /create-workflow daily refresh of active_users at midnight UTC). With no arguments and no tail, the skill asks via AskUserQuestion."
+        }
+      ]
     },
     {
       "name": "design-analysis",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "description": "Translate a fuzzy analytical question into a rigorous investigation\nplan. Interrogates the ask, grounds the plan in the available data\ndictionary, applies analytical best practices, and produces a\nstructured brief of query specifications for a downstream\nquery-writing skill. Plans, does not write SQL.\nUse when: \"why did X drop\", \"is there a relationship between A and B\",\n\"who are our highest-value customers\", \"what's driving the change\nin Y\", \"investigate this trend\", \"design an analysis for\", \"scope\nthis analytical question\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/design-analysis/SKILL.md",
@@ -125,11 +222,34 @@
             "narrative_dataset_get_column_stats"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "--dataset",
+          "value": "<id>",
+          "required": false,
+          "description": "Pre-bind one or more datasets (comma-separated). Skips dataset discovery."
+        },
+        {
+          "name": "--no-schema",
+          "required": false,
+          "description": "Work from a user-pasted schema only. Skip every narrative-mcp call."
+        },
+        {
+          "name": "--brief-only",
+          "required": false,
+          "description": "Skip interrogation prompts when the user has already framed the question precisely. Use sparingly."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "The user's analytical question. With no arguments, the skill walks the user through interrogation interactively."
+        }
+      ]
     },
     {
       "name": "find-attribute",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "description": "Find the canonical Rosetta Stone attribute that best matches a\nfuzzy description, semantic phrase, or required schema shape.\nSearches the catalog with pagination, describes the shortlist in\none batched call, ranks candidates by name + shape match, and\nreturns the canonical attribute ID plus close alternatives.\nUse when: \"find the X attribute\", \"what's the graph-edge attribute\nID\", \"look up the email Rosetta Stone attribute\", \"search the\nattribute catalog for Y\", \"which attribute has SOURCE_ID +\nTARGET_ID + IS_DIRECTED\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/find-attribute/SKILL.md",
@@ -149,11 +269,49 @@
             "AskUserQuestion"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "--phrase",
+          "value": "<text>",
+          "required": false,
+          "description": "The fuzzy description to search for. Same as the free-text tail; if both are given, the flag wins."
+        },
+        {
+          "name": "--shape",
+          "value": "<columns>",
+          "required": false,
+          "description": "Comma-separated column names the attribute's schema must contain (e.g., SOURCE_ID,TARGET_ID,IS_DIRECTED). Casing is ignored; matching is by name."
+        },
+        {
+          "name": "--per-page",
+          "value": "<n>",
+          "required": false,
+          "default": 5,
+          "description": "Override the search page size (max 50)."
+        },
+        {
+          "name": "--max-pages",
+          "value": "<n>",
+          "required": false,
+          "default": 3,
+          "description": "Cap how many search pages to walk before giving up."
+        },
+        {
+          "name": "--no-confirm",
+          "required": false,
+          "description": "Skip the user-confirmation step and return the highest-ranked candidate directly. Use when called from another skill that handles confirmation itself."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "Treated as the phrase if --phrase is not given (e.g., /find-attribute graph edge). With no arguments and no tail, the skill asks via AskUserQuestion."
+        }
+      ]
     },
     {
       "name": "generate-rosetta-stone-mappings",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "description": "Generate, evaluate, and improve Rosetta Stone attribute mappings for\na Narrative dataset.\nUse when: \"map this dataset to Rosetta Stone\", \"suggest normalized\nattributes for dataset N\", \"evaluate the mappings on dataset N\", \"why\nis this mapping low confidence\", \"fix this expression\", \"improve this\nNQL mapping expression\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md",
@@ -190,11 +348,18 @@
             "query_docs_filesystem_narrative_i_o_knowledge_base"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "<free-text>",
+          "required": false,
+          "description": "Natural-language intent naming the source dataset and what to map (e.g., \"map dataset 12345 to Rosetta Stone\", \"evaluate the mappings on dataset N\"). This skill takes no flags; it resolves the dataset and gathers context interactively. With no arguments, it asks which dataset to map."
+        }
+      ]
     },
     {
       "name": "write-nql",
-      "version": "0.5.2",
+      "version": "0.5.3",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/write-nql/SKILL.md",
@@ -227,11 +392,40 @@
             "query_docs_filesystem_narrative_i_o_knowledge_base"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "--run",
+          "required": false,
+          "description": "Skip the end-of-flow confirmation and execute the query immediately after validation succeeds."
+        },
+        {
+          "name": "--dataset",
+          "value": "<id>",
+          "required": false,
+          "description": "Pre-bind the target dataset. Skips the dataset-search step."
+        },
+        {
+          "name": "--limit",
+          "value": "<n>",
+          "required": false,
+          "description": "Override the default LIMIT (default 100 for raw selects, no limit for aggregations)."
+        },
+        {
+          "name": "--no-explain",
+          "required": false,
+          "description": "Skip the plain-English explanation. Use only when the caller is another skill or automation."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "Treated as the user's question (e.g., /write-nql --dataset 12345 how many distinct users last 30 days). With no arguments, the skill walks the user through the flow interactively."
+        }
+      ]
     },
     {
       "name": "generate-identity-graph",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "description": "Interactively build a Narrative identity graph workflow from one or\nmore first-party datasets and (optionally) third-party data sources.\nConfirms each input dataset is mapped to the Rosetta Stone graph\nedge attribute (mapping it via /generate-rosetta-stone-mappings if\nnot), then composes and submits a workflow that unions every edge\nsource and labels connected components.\nUse when: \"build an identity graph\", \"generate an identity graph\",\n\"create an identity graph\", \"stitch these datasets into a graph\",\n\"make a graph workflow\", \"label connected components on these\ndatasets\", \"I want a person graph / household graph / device graph\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-identity-graph/SKILL.md",
@@ -264,11 +458,12 @@
             "query_docs_filesystem_narrative_i_o_knowledge_base"
           ]
         }
-      }
+      },
+      "args": []
     },
     {
       "name": "generate-match-report",
-      "version": "0.5.3",
+      "version": "0.5.4",
       "description": "Compare your data to a partner's data in the marketplace. Given a\ndataset you already own with person/edge data, this skill walks you\nthrough picking a partner data source to match against, choosing which\nidentifier types to match on, optionally selecting which enrichment\nattributes to attach, and then submits the report — returning overlap,\nmatch counts, and demographic coverage.\nUse when: \"how does my data compare to your marketplace\", \"compare my\ndata to [partner]\", \"how much overlap do I have with [supplier]\",\n\"run a match report\", \"match my customers against 3P data\", \"see\nwhat enrichment is available for my dataset\", or any open-ended\nquestion about marketplace overlap.\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-match-report/SKILL.md",
@@ -313,11 +508,35 @@
             "narrative_workflows_trigger"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "--dataset",
+          "value": "<id>",
+          "required": false,
+          "description": "Pre-bind the customer's dataset; skip the customer prompt."
+        },
+        {
+          "name": "--supplier-ar",
+          "value": "<id>",
+          "required": false,
+          "description": "Pre-bind the partner access rule; skip the partner prompt."
+        },
+        {
+          "name": "--no-enrichment",
+          "required": false,
+          "description": "Identity-only run; omit step 4 and the attribute-related step-5 CTEs."
+        },
+        {
+          "name": "--dry-run",
+          "required": false,
+          "description": "Render the YAML and show it without submitting."
+        }
+      ]
     },
     {
       "name": "triage-pregraph-data",
-      "version": "0.5.3",
+      "version": "0.5.4",
       "description": "Audit a dataset or access rule before it joins an identity-graph\nbuild (access rules behave like datasets in NQL here). Enumerates\nfailure modes (hub identifiers, high-degree nodes, suspicious\nvalues, over-connected identifiers), tests hypotheses in parallel,\nquantifies damage by rows / edges / entities, and proposes minimal\nfilters ranked by severity. When issues are found, returns a\nvalidated `CREATE MATERIALIZED VIEW` NQL the caller can run to\nproduce a graph-ready clean source; if the data passes, says so and\nrecommends it unchanged. Plans and authors the clean-view NQL; does\nnot execute it.\nUse when: \"audit this dataset before the graph build\", \"find bad\nedges in <source>\", \"check identity data quality\", \"recommend\nfilters for the graph build\", \"quantify damage from\n<identifier_type>\", \"pre-graph DQ\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/triage-pregraph-data/SKILL.md",
@@ -342,7 +561,55 @@
             "narrative_nql_validate"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "--dataset",
+          "value": "<id>",
+          "required": false,
+          "description": "Pre-bind the source as a dataset. Skips discovery. Mutually exclusive with --access-rule."
+        },
+        {
+          "name": "--access-rule",
+          "value": "<id>",
+          "required": false,
+          "description": "Pre-bind the source as an access rule. Skips discovery. The audit runs identically — access rules behave like datasets in NQL. Mutually exclusive with --dataset."
+        },
+        {
+          "name": "--entity-type",
+          "value": "person|household|device|business|account",
+          "required": false,
+          "description": "Anchors what \"plausible\" looks like for the entity being identified. Required if not derivable from context."
+        },
+        {
+          "name": "--graph-context",
+          "value": "standalone|combined",
+          "required": false,
+          "default": "combined",
+          "description": "Whether this source will be UNIONed with other sources in the downstream graph build (combined, the common case) or used on its own (standalone). Affects filter recommendations in Phase 6. If not passed and not derivable, the skill asks once in Phase 2."
+        },
+        {
+          "name": "--identifier-cols",
+          "value": "<col,col,...>",
+          "required": false,
+          "description": "Pre-declare which columns hold identifiers. Skips identifier-column discovery."
+        },
+        {
+          "name": "--no-parallel",
+          "required": false,
+          "description": "Execute hypothesis queries serially (debugging or harness-limited)."
+        },
+        {
+          "name": "--no-schema",
+          "required": false,
+          "description": "Work from a user-pasted schema only; skip every narrative-mcp call."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "Additional context about the source system. With no arguments, the skill walks the user through interactively."
+        }
+      ]
     }
   ]
 }

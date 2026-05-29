@@ -17,7 +17,34 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.2
+  version: 0.5.3
+  args:
+    - name: "--run"
+      required: false
+      description: >-
+        Skip the end-of-flow confirmation and execute the query
+        immediately after validation succeeds.
+    - name: "--dataset"
+      value: "<id>"
+      required: false
+      description: "Pre-bind the target dataset. Skips the dataset-search step."
+    - name: "--limit"
+      value: "<n>"
+      required: false
+      description: >-
+        Override the default LIMIT (default 100 for raw selects, no limit
+        for aggregations).
+    - name: "--no-explain"
+      required: false
+      description: >-
+        Skip the plain-English explanation. Use only when the caller is
+        another skill or automation.
+    - name: "<free-text tail>"
+      required: false
+      description: >-
+        Treated as the user's question (e.g., /write-nql --dataset 12345
+        how many distinct users last 30 days). With no arguments, the skill
+        walks the user through the flow interactively.
   narrative:
     requires:
       mcp-servers:

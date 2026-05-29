@@ -83,6 +83,7 @@ buckets: spec-required, spec-optional, and local-extensions.
 | `allowed-tools` | spec (experimental)| no       | Space-separated string of pre-approved tools, e.g. `Bash(git:*) Read`. Use when the harness needs explicit allowlists. MCP tools declared by the plugin do not need to be listed here. |
 | `version`       | local → `metadata.version` | yes      | SemVer for the skill. Bump on any user-visible change. Homed under `metadata.version` (where the spec's own example puts it); not a top-level field. |
 | `compatibility` | spec + `metadata.narrative` | yes¹     | A spec-conforming free-text **string** ≤ 500 chars. The structured `requires`/`recommends` object lives under `metadata.narrative` (see [§10](#10-declaring-requirements-explicitly)). |
+| `args`          | local → `metadata.args`    | no       | Structured list of the slash command's arguments, mirroring the `## Arguments` body table. Lives under `metadata.args` (a sibling of `version`/`narrative`, **not** under `metadata.narrative`, which only accepts `requires`/`recommends`). Surfaced in `skills.json`. See [Documenting arguments](#documenting-arguments-in-metadata). |
 
 ¹ Required for any skill that calls a non-default tool or MCP server.
 Pure-prose skills (no MCP, no `Bash`, no `Write`) may omit it.
@@ -138,6 +139,59 @@ The trailing `(<plugin>)` tag in the description is a convention — it
 helps a routing agent disambiguate when several plugins ship
 similar-sounding skills (e.g. `narrative-content:write-blog` vs
 `narrative-marketing:write-blog`).
+
+### Documenting arguments in metadata
+
+If the skill's body has a `## Arguments` table, mirror it as a
+structured `metadata.args` list. The body table is the human-readable
+source of truth; `metadata.args` is the machine-readable form that
+`gen-skills-index.ts` lifts into `skills.json` so a routing agent (or
+any external consumer) can enumerate a skill's arguments without
+parsing the body.
+
+It lives at `metadata.args` — a **sibling** of `metadata.version` and
+`metadata.narrative`. Do **not** nest it under `metadata.narrative`:
+that key is typed as `requires`/`recommends`, and `check:spec` warns on
+any other sub-key there.
+
+Each entry carries:
+
+- `name` — the flag or placeholder, e.g. `--dataset` or
+  `<free-text tail>`.
+- `value` — *(optional)* the value placeholder for flags that take one,
+  e.g. `<id|name>`. Omit for boolean flags.
+- `required` — *(optional, default `false`)* whether the argument must
+  be supplied. Most skills prompt for missing values, so this is
+  usually `false`.
+- `default` — *(optional)* the value applied when the argument is
+  omitted, when there is a meaningful one (e.g. `5`, `combined`,
+  `true`).
+- `description` — what the argument does and how to use it. Keep it in
+  sync with the body table's wording.
+
+```yaml
+metadata:
+  version: 0.4.0
+  args:
+    - name: "--dataset"
+      value: "<id|name>"
+      required: false
+      description: >-
+        The target dataset's numeric ID or datasetName. If omitted, the
+        skill asks.
+    - name: "--dry-run"
+      required: false
+      description: "Render the spec but do NOT submit. Implies --show-spec."
+    - name: "<free-text tail>"
+      required: false
+      description: "The user's intent / question."
+  narrative:
+    requires: { ... }
+```
+
+A skill that takes no arguments at all (a strictly-interactive skill)
+sets `args: []` with a comment explaining why, rather than omitting the
+key — the empty array documents the absence as intentional.
 
 ---
 
