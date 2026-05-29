@@ -81,8 +81,8 @@ buckets: spec-required, spec-optional, and local-extensions.
 | `license`       | spec               | no       | Usually omitted (inherits the repo's MIT). |
 | `metadata`      | spec               | no       | The spec's **designated extension point** (a string→string map). Prefer it for anything non-spec — the spec's own example houses `version` here. See the portability note below and [§11](#11-cross-harness-portability). |
 | `allowed-tools` | spec (experimental)| no       | Space-separated string of pre-approved tools, e.g. `Bash(git:*) Read`. Use when the harness needs explicit allowlists. MCP tools declared by the plugin do not need to be listed here. |
-| `version`       | local              | yes      | SemVer for the skill. Bump on any user-visible change. **Not a spec field** — see portability note. |
-| `compatibility` | local extension    | yes¹     | Structured form (see [§10](#10-declaring-requirements-explicitly)). ⚠️ The spec defines this as a **free-text string ≤ 500 chars**; our structured object does **not** conform. See portability note. |
+| `version`       | local → `metadata.version` | yes      | SemVer for the skill. Bump on any user-visible change. Homed under `metadata.version` (where the spec's own example puts it); not a top-level field. |
+| `compatibility` | spec + `metadata.narrative` | yes¹     | A spec-conforming free-text **string** ≤ 500 chars. The structured `requires`/`recommends` object lives under `metadata.narrative` (see [§10](#10-declaring-requirements-explicitly)). |
 
 ¹ Required for any skill that calls a non-default tool or MCP server.
 Pure-prose skills (no MCP, no `Bash`, no `Write`) may omit it.
@@ -106,25 +106,31 @@ Pure-prose skills (no MCP, no `Bash`, no `Write`) may omit it.
 >   namespaced `metadata` key our tooling reads. One artifact, valid
 >   everywhere, no loss of structure.
 >
-> The renderer and `check:manifests` depend on the current shape
-> today, so treat this as the **recommended migration**, not a silent
-> rule. The principle and the full defect list live in
-> [§11](#11-cross-harness-portability).
+> **This is now the implemented shape** — every skill ships a
+> spec-conforming `compatibility` string with the structured object
+> under `metadata.narrative`, and `version` under `metadata.version`.
+> `check:spec` enforces it. The principle and the full defect list
+> live in [§11](#11-cross-harness-portability).
 
 ### Minimal example
 
 ```yaml
 ---
 name: write-thing
-version: 0.1.0
 description: |
   One- or two-sentence summary of what the skill does.
   Use when: "<trigger phrase 1>", "<trigger phrase 2>".
   (<plugin>)
-compatibility:
-  requires:
-    tools:
-      - AskUserQuestion
+license: MIT
+compatibility: >-
+  Recommends AskUserQuestion (a Claude Code primitive; prose fallback
+  documented in references/HARNESS_FALLBACK.md).
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      tools:
+        - AskUserQuestion
 ---
 ```
 
@@ -645,28 +651,34 @@ Single-word names are fine when the verb is unambiguous (`/commit`,
 ## 10. Declaring requirements explicitly
 
 The spec's free-text `compatibility` field is too loose for our needs,
-so we keep a structured object for our own tooling. **Read the
-portability note at the end of this section before copying the
-shape** — the structured object should not live in the spec's
-`compatibility` field for skills we publish as harness-agnostic.
+so we keep a structured object for our own tooling — but it lives under
+the namespaced `metadata.narrative` key, **not** in the spec's
+`compatibility` field (which stays a conforming free-text string). The
+shape below is what `check:spec` enforces.
 
 ```yaml
-compatibility:
-  requires:
-    tools:
-      - Bash
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_datasets_search
-      - narrative_datasets_describe
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-knowledge-base
-    mcp-tools:
-      - search_narrative_i_o_knowledge_base
+compatibility: >-
+  Requires the narrative-mcp MCP server and Bash. Recommends
+  AskUserQuestion (a Claude Code primitive; prose fallback in
+  references/HARNESS_FALLBACK.md) and the narrative-knowledge-base
+  MCP server.
+metadata:
+  narrative:
+    requires:
+      tools:
+        - Bash
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_datasets_search
+        - narrative_datasets_describe
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-knowledge-base
+      mcp-tools:
+        - search_narrative_i_o_knowledge_base
 ```
 
 > **Note:** `AskUserQuestion` is a Claude Code primitive. List it under
@@ -712,7 +724,10 @@ the skill is going to do.
 >
 > # Machine-readable detail our tooling + harness read:
 > metadata:
->   narrative.io/requires: ...        # the structured requires/recommends object
+>   version: 0.1.0
+>   narrative:                        # the structured requires/recommends object
+>     requires: ...
+>     recommends: ...
 > ```
 >
 > `metadata` is the spec's designated extension point. (Its values are
@@ -720,10 +735,10 @@ the skill is going to do.
 > serialize the object to a JSON string under the namespaced key — in
 > practice most harnesses tolerate a nested object there.) This keeps
 > the skill valid on every harness while losing none of the structure
-> our `check:manifests` and harness rely on. Until the renderer and
-> manifest checks are migrated to this shape, the structured-in-
-> `compatibility` form above is the current repo reality — see
-> [§11](#11-cross-harness-portability) for the migration rationale.
+> our tooling and harness rely on. This is the repo's implemented
+> shape — `check:spec` enforces the `compatibility` string and the
+> `metadata.narrative` object; see
+> [§11](#11-cross-harness-portability) for the rationale.
 
 ---
 
