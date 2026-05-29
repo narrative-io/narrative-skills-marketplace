@@ -50,7 +50,7 @@ interface IndexedSkill {
   compatibility?: string;
   /** Structured requirements, from the namespaced metadata.narrative. */
   requirements?: SkillCompatibility;
-  /** Documented slash-command arguments, from metadata.args. */
+  /** Documented slash-command arguments, from metadata.narrative.args. */
   args?: SkillArg[];
 }
 

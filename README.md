@@ -59,6 +59,33 @@ repo (or read from `raw.githubusercontent.com`) without running Bun.
 > [AGENTS.md](AGENTS.md#skill-design-principles) — "interactive, not
 > reference," "drafts, not actions," "evidence over assumptions," etc.
 
+## Quick install (any agent)
+
+The fastest path — no clone, no Bun. The [`skills`](https://skills.sh)
+CLI reads the skills straight from this repo and installs them into your
+agent's skills directory:
+
+```bash
+npx skills add narrative-io/narrative-skills-marketplace
+```
+
+It discovers all the skills (it walks the `plugins/<plugin>/skills/`
+layout for you), auto-detects the agent it's running under, and installs
+into the current project by default. Useful flags:
+
+```bash
+npx skills add narrative-io/narrative-skills-marketplace --list        # preview skills, install nothing
+npx skills add narrative-io/narrative-skills-marketplace -g            # install globally (user-level)
+npx skills add narrative-io/narrative-skills-marketplace -a claude-code cursor   # target specific agents
+npx skills add narrative-io/narrative-skills-marketplace --all         # all skills, all detected agents, no prompts
+```
+
+This installs the rendered `SKILL.md` files only. Skills that call the
+`narrative-mcp` server still need that MCP server registered separately
+(see [`mcp/`](mcp/) and [Install on other harnesses](#install-on-other-harnesses)).
+For the full Claude Code marketplace experience (plugin grouping +
+bundled MCP config), use `bash setup` below.
+
 ## Install on Claude Code
 
 ```bash
@@ -94,6 +121,7 @@ nesting), `dist/mcp/*.mcp.json`, and `dist/skills.json`. Then:
 
 | Harness | How to install |
 |---------|----------------|
+| Any [`skills`](https://skills.sh)-aware agent | `npx skills add narrative-io/narrative-skills-marketplace` — see [Quick install](#quick-install-any-agent). No clone or Bun required. |
 | [Claude Code](https://claude.com/claude-code) | Use the default `bash setup` (registers the marketplace). |
 | [Claude.ai web Skills](https://claude.ai/settings/capabilities) | Zip each `dist/skills/<skill>/` directory and upload it under Settings → Capabilities → Skills. |
 | Claude Desktop (Mac) | `cp -R dist/skills/* "$HOME/Library/Application Support/Claude/skills/"`, then merge [`mcp/all.mcp.json`](mcp/all.mcp.json) into `claude_desktop_config.json`. |

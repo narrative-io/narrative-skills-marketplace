@@ -18,44 +18,44 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.3.3
-  args:
-    - name: "--phrase"
-      value: "<text>"
-      required: false
-      description: >-
-        The fuzzy description to search for. Same as the free-text tail;
-        if both are given, the flag wins.
-    - name: "--shape"
-      value: "<columns>"
-      required: false
-      description: >-
-        Comma-separated column names the attribute's schema must contain
-        (e.g., SOURCE_ID,TARGET_ID,IS_DIRECTED). Casing is ignored;
-        matching is by name.
-    - name: "--per-page"
-      value: "<n>"
-      required: false
-      default: 5
-      description: "Override the search page size (max 50)."
-    - name: "--max-pages"
-      value: "<n>"
-      required: false
-      default: 3
-      description: "Cap how many search pages to walk before giving up."
-    - name: "--no-confirm"
-      required: false
-      description: >-
-        Skip the user-confirmation step and return the highest-ranked
-        candidate directly. Use when called from another skill that
-        handles confirmation itself.
-    - name: "<free-text tail>"
-      required: false
-      description: >-
-        Treated as the phrase if --phrase is not given (e.g.,
-        /find-attribute graph edge). With no arguments and no tail, the
-        skill asks via AskUserQuestion.
+  version: 0.3.4
   narrative:
+    args:
+      - name: "--phrase"
+        value: "<text>"
+        required: false
+        description: >-
+          The fuzzy description to search for. Same as the free-text tail;
+          if both are given, the flag wins.
+      - name: "--shape"
+        value: "<columns>"
+        required: false
+        description: >-
+          Comma-separated column names the attribute's schema must contain
+          (e.g., SOURCE_ID,TARGET_ID,IS_DIRECTED). Casing is ignored;
+          matching is by name.
+      - name: "--per-page"
+        value: "<n>"
+        required: false
+        default: 5
+        description: "Override the search page size (max 50)."
+      - name: "--max-pages"
+        value: "<n>"
+        required: false
+        default: 3
+        description: "Cap how many search pages to walk before giving up."
+      - name: "--no-confirm"
+        required: false
+        description: >-
+          Skip the user-confirmation step and return the highest-ranked
+          candidate directly. Use when called from another skill that
+          handles confirmation itself.
+      - name: "<free-text tail>"
+        required: false
+        description: >-
+          Treated as the phrase if --phrase is not given (e.g.,
+          /find-attribute graph edge). With no arguments and no tail, the
+          skill asks via AskUserQuestion.
     requires:
       mcp-servers:
         - narrative-mcp

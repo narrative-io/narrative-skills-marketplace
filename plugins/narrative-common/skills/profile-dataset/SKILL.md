@@ -21,57 +21,57 @@ compatibility: >-
   Portable to any agentskills.io-compliant harness via the documented
   fallbacks.
 metadata:
-  version: 0.1.0
-  args:
-    - name: "--dataset"
-      value: "<id>"
-      required: false
-      description: >-
-        Profile a dataset by numeric id. Mutually exclusive with
-        --access-rule. If neither is passed, the skill asks for the id
-        and source type (it does not search).
-    - name: "--access-rule"
-      value: "<id>"
-      required: false
-      description: >-
-        Profile an access rule by id. Access rules behave like datasets
-        in NQL, but their describe returns no bundled stats or sample —
-        see references/ACCESS_RULES.md. Mutually exclusive with --dataset.
-    - name: "--focus"
-      value: "<col,col,...>"
-      required: false
-      description: >-
-        Restrict the profile to these columns (e.g.
-        "_rosetta_stone.graph_edge.target_id_type"). Default: all columns.
-    - name: "--histograms"
-      required: false
-      description: >-
-        Include value-distribution histograms. Off by default (they can
-        blow the response cap on wide columns); opt in when the caller
-        needs a distribution.
-    - name: "--allow-recalc"
-      required: false
-      description: >-
-        Pre-approve the tier-2 stats configure + recalculate recovery
-        step, skipping its confirmation gate. For automation / skill
-        callers.
-    - name: "--allow-nql"
-      required: false
-      description: >-
-        Pre-approve the tier-3 custom-NQL escalation, skipping its
-        confirmation gate. For automation / skill callers.
-    - name: "--json"
-      required: false
-      description: >-
-        Emit only the structured profile object, skipping the prose
-        render. Use when the caller is another skill or automation.
-    - name: "<free-text tail>"
-      required: false
-      description: >-
-        A note about what the caller needs profiled (e.g., "id-type
-        distribution", "fill rate on the email columns"). Steers column
-        focus and which custom measures, if any, matter.
+  version: 0.1.1
   narrative:
+    args:
+      - name: "--dataset"
+        value: "<id>"
+        required: false
+        description: >-
+          Profile a dataset by numeric id. Mutually exclusive with
+          --access-rule. If neither is passed, the skill asks for the id
+          and source type (it does not search).
+      - name: "--access-rule"
+        value: "<id>"
+        required: false
+        description: >-
+          Profile an access rule by id. Access rules behave like datasets
+          in NQL, but their describe returns no bundled stats or sample —
+          see references/ACCESS_RULES.md. Mutually exclusive with --dataset.
+      - name: "--focus"
+        value: "<col,col,...>"
+        required: false
+        description: >-
+          Restrict the profile to these columns (e.g.
+          "_rosetta_stone.graph_edge.target_id_type"). Default: all columns.
+      - name: "--histograms"
+        required: false
+        description: >-
+          Include value-distribution histograms. Off by default (they can
+          blow the response cap on wide columns); opt in when the caller
+          needs a distribution.
+      - name: "--allow-recalc"
+        required: false
+        description: >-
+          Pre-approve the tier-2 stats configure + recalculate recovery
+          step, skipping its confirmation gate. For automation / skill
+          callers.
+      - name: "--allow-nql"
+        required: false
+        description: >-
+          Pre-approve the tier-3 custom-NQL escalation, skipping its
+          confirmation gate. For automation / skill callers.
+      - name: "--json"
+        required: false
+        description: >-
+          Emit only the structured profile object, skipping the prose
+          render. Use when the caller is another skill or automation.
+      - name: "<free-text tail>"
+        required: false
+        description: >-
+          A note about what the caller needs profiled (e.g., "id-type
+          distribution", "fill rate on the email columns"). Steers column
+          focus and which custom measures, if any, matter.
     requires:
       mcp-servers:
         - narrative-mcp

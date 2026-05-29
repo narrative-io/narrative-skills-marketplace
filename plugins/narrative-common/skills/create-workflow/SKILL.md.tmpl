@@ -19,50 +19,50 @@ compatibility: >-
   server. Portable to any agentskills.io-compliant harness via the
   documented fallbacks.
 metadata:
-  version: 0.6.3
-  args:
-    - name: "--spec"
-      value: "<path>"
-      required: false
-      description: >-
-        Path to a YAML file containing the workflow specification. Skip
-        the drafting phase and use this verbatim.
-    - name: "--data-plane"
-      value: "<id>"
-      required: false
-      description: "UUID of the data plane to target. Skips data-plane resolution."
-    - name: "--trigger"
-      required: false
-      description: >-
-        Pass trigger_immediately: true on create — fires one run as soon
-        as the workflow is registered.
-    - name: "--schedule"
-      required: false
-      description: >-
-        Pass schedule_immediately: true on create — activates the
-        schedule: cron. Requires the spec to contain a schedule: block.
-    - name: "--tags"
-      value: "<a,b,c>"
-      required: false
-      description: "Comma-separated tags to attach to the workflow."
-    - name: "--dry-run"
-      required: false
-      description: >-
-        Render and display the full spec, the chosen data plane, and the
-        create-call parameters — but do NOT call narrative_workflows_create.
-        Implies --show-spec.
-    - name: "--show-spec"
-      required: false
-      description: >-
-        Include the full rendered YAML in the approval preview. Off by
-        default — most users only need the plain-English summary.
-    - name: "<free-text tail>"
-      required: false
-      description: >-
-        The user's intent (e.g., /create-workflow daily refresh of
-        active_users at midnight UTC). With no arguments and no tail, the
-        skill asks via AskUserQuestion.
+  version: 0.6.4
   narrative:
+    args:
+      - name: "--spec"
+        value: "<path>"
+        required: false
+        description: >-
+          Path to a YAML file containing the workflow specification. Skip
+          the drafting phase and use this verbatim.
+      - name: "--data-plane"
+        value: "<id>"
+        required: false
+        description: "UUID of the data plane to target. Skips data-plane resolution."
+      - name: "--trigger"
+        required: false
+        description: >-
+          Pass trigger_immediately: true on create — fires one run as soon
+          as the workflow is registered.
+      - name: "--schedule"
+        required: false
+        description: >-
+          Pass schedule_immediately: true on create — activates the
+          schedule: cron. Requires the spec to contain a schedule: block.
+      - name: "--tags"
+        value: "<a,b,c>"
+        required: false
+        description: "Comma-separated tags to attach to the workflow."
+      - name: "--dry-run"
+        required: false
+        description: >-
+          Render and display the full spec, the chosen data plane, and the
+          create-call parameters — but do NOT call narrative_workflows_create.
+          Implies --show-spec.
+      - name: "--show-spec"
+        required: false
+        description: >-
+          Include the full rendered YAML in the approval preview. Off by
+          default — most users only need the plain-English summary.
+      - name: "<free-text tail>"
+        required: false
+        description: >-
+          The user's intent (e.g., /create-workflow daily refresh of
+          active_users at midnight UTC). With no arguments and no tail, the
+          skill asks via AskUserQuestion.
     requires:
       tools:
         - Read

@@ -20,25 +20,25 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.6.0
-  args:
-    - name: "--dataset"
-      value: "<id>"
-      required: false
-      description: "Pre-bind the customer's dataset; skip the customer prompt."
-    - name: "--supplier-ar"
-      value: "<id>"
-      required: false
-      description: "Pre-bind the partner access rule; skip the partner prompt."
-    - name: "--no-enrichment"
-      required: false
-      description: >-
-        Identity-only run; omit step 4 and the attribute-related step-5
-        CTEs.
-    - name: "--dry-run"
-      required: false
-      description: "Render the YAML and show it without submitting."
+  version: 0.6.1
   narrative:
+    args:
+      - name: "--dataset"
+        value: "<id>"
+        required: false
+        description: "Pre-bind the customer's dataset; skip the customer prompt."
+      - name: "--supplier-ar"
+        value: "<id>"
+        required: false
+        description: "Pre-bind the partner access rule; skip the partner prompt."
+      - name: "--no-enrichment"
+        required: false
+        description: >-
+          Identity-only run; omit step 4 and the attribute-related step-5
+          CTEs.
+      - name: "--dry-run"
+        required: false
+        description: "Render the YAML and show it without submitting."
     requires:
       tools:
         - Read
