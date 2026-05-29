@@ -14,6 +14,45 @@ available — the workflow runner will catch any syntax errors after
 ~5 minutes instead of up front"). Do not auto-substitute
 `narrative_nql_run` — that allocates compute.
 
+## When `/profile-dataset` is unavailable (Phase 3)
+
+Phase 3 normally delegates the `target_id_type` histogram read to
+`/profile-dataset`. If that skill isn't installed, run the recovery
+inline against the customer dataset. First read the stats:
+
+```
+narrative_dataset_get_column_stats(dataset_id=CUSTOMER_DATASET_ID)
+```
+
+If the histogram for `_rosetta_stone.graph_edge.target_id_type` is
+missing or stale, configure it, recalculate, poll, and re-read:
+
+```
+narrative_dataset_set_column_stats_config(
+  dataset_id=CUSTOMER_DATASET_ID,
+  configuration={
+    "rosetta_stone": {
+      "fields": [{
+        "attribute_name": "graph_edge",
+        "properties": [{
+          "path": "target_id_type",
+          "enabled_stats": ["histogram", "value_count", "approx_count_distinct"],
+          "stat_options": { "histogram": { "max_bins": 100, "overflow": "truncate" } }
+        }]
+      }]
+    }
+  }
+)
+```
+
+Then `narrative_dataset_recalculate_statistics(dataset_id=CUSTOMER_DATASET_ID)`,
+poll the returned job with `narrative_jobs_describe` until it
+completes, re-fetch column stats, and read the histogram keys into
+`CUSTOMER_ID_TYPES`. This requires the `narrative_dataset_get_column_stats`,
+`narrative_dataset_set_column_stats_config`, and
+`narrative_dataset_recalculate_statistics` tools (declared by
+`/profile-dataset`, not by this skill).
+
 ## When `AskUserQuestion` is unavailable
 
 If the harness does not expose `AskUserQuestion` as a named tool

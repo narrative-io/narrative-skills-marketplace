@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.4.3
+  version: 0.5.0
   args:
     - name: "<free-text>"
       required: false
@@ -35,9 +35,6 @@ metadata:
         - narrative_context_set_company
         - narrative_datasets_search
         - narrative_datasets_describe
-        - narrative_dataset_request_sample
-        - narrative_dataset_get_column_stats
-        - narrative_dataset_recalculate_statistics
         - narrative_attributes_describe
         - narrative_nql_validate
         - narrative_nql_run
@@ -143,12 +140,28 @@ schemas (>40 columns) or when the response is truncated, see
 [`references/DATASET_DESCRIBE.md`](references/DATASET_DESCRIBE.md)
 for the split-describe pattern and underscore-prefixed-column rule.
 
-### 3. Pull sample rows and column stats
+### 3. Profile the dataset's coverage & quality
 
-Step 2's describe response includes sample rows and column stats. If
-you need more (richer histograms, a fresh sample, recomputed stats),
-see [`references/SAMPLE_AND_STATS.md`](references/SAMPLE_AND_STATS.md)
-for the sub-API calls.
+Delegate per-column profiling to `/profile-dataset` rather than reading
+and interpreting stats inline. It owns the stats fetch, the
+missing/stale-stats recovery (configure → recalculate → re-read), and
+the null-rate / cardinality / top-value / sample-shape interpretation
+this skill used to carry itself:
+
+> `/profile-dataset --dataset <id-from-step-2> --json`
+
+Consume the returned profile object (see that skill's output contract):
+per-column `null_rate`, `distinct_count` / `approx_distinct`,
+`top_values`, `inferred_shape`, and `flags`. This is the evidence for
+every mapping decision in steps 5–7 — e.g. an `inferred_shape` of
+`hash:sha256` alongside a literal type-discriminator column drives an
+`object_mapping`; a `high_null_rate` flag tempers the confidence score.
+
+**Input:** the dataset id from step 2. **Output:** the structured
+profile object. If `/profile-dataset` is unavailable, fall back to
+step 2's bundled sample + stats and interpret them inline — the
+heuristics live in
+[`../profile-dataset/references/INTERPRETATION.md`](../profile-dataset/references/INTERPRETATION.md).
 
 ### 4. Find candidate Rosetta Stone attributes
 
@@ -404,7 +417,7 @@ Use first person ("I analyzed 12 columns…") and conversational language ("clea
 ## References
 
 - [`references/DATASET_DESCRIBE.md`](references/DATASET_DESCRIBE.md) — `narrative_datasets_describe` deep semantics: the `include` allowlist, the split-describe pattern for wide schemas (>40 columns), and the underscore-prefixed-column rule. Read when step 2's happy-path describe isn't enough.
-- [`references/SAMPLE_AND_STATS.md`](references/SAMPLE_AND_STATS.md) — sub-API calls for fresh samples, histogram-bearing column stats, and stats recalculation. Read when step 2's bundled sample + stats don't suffice.
+- `../profile-dataset/SKILL.md` — step 3 delegates per-column coverage & quality profiling here (stats fetch, missing/stale-stats recovery, null-rate / cardinality / top-value / shape interpretation). Its `references/INTERPRETATION.md` holds the heuristics this skill used to carry inline.
 - [`references/MODES.md`](references/MODES.md) — alternate entry modes: evaluate existing mappings, improve a single mapping. Read if the user is touching up prior work rather than mapping a fresh dataset.
 - [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — reserved-identifier quoting, enum case sensitivity, null handling, object-mapping replace-all semantics, custom-attribute fallback, confidence-vs-validity, token economy, underscore-prefixed columns. Read when an expression won't validate or a mapping feels off.
 - [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — `narrative-mcp` unavailable (paste-driven schema + sample, confidence haircut), `AskUserQuestion` fallback. Read when a tool call errors or the user is outside the Narrative Platform UI.

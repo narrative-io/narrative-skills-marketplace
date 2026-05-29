@@ -122,6 +122,7 @@ Common Narrative workflows backed by the narrative-mcp server — starting with 
 | `/design-analysis` | "why did X drop", "is there a relationship between A and B", "who are our highest-value customers", "what's driving the change in Y", "investigate this trend", "design an analysis for", "scope this analytical question". |
 | `/find-attribute` | "find the X attribute", "what's the graph-edge attribute ID", "look up the email Rosetta Stone attribute", "search the attribute catalog for Y", "which attribute has SOURCE_ID + TARGET_ID + IS_DIRECTED". |
 | `/generate-rosetta-stone-mappings` | "map this dataset to Rosetta Stone", "suggest normalized attributes for dataset N", "evaluate the mappings on dataset N", "why is this mapping low confidence", "fix this expression", "improve this NQL mapping expression". |
+| `/profile-dataset` | "profile dataset N", "what does dataset N look like", "coverage and quality of <dataset>", "what id types does N emit", "null rates / cardinality for <dataset>", "is this dataset's stats fresh". |
 | `/write-nql` | "write an NQL query for X", "query this dataset", "validate this NQL", "run NQL against dataset <id>", "how many rows match Y", "show me the top N records from <dataset>". |
 
 ### `narrative-identity`
