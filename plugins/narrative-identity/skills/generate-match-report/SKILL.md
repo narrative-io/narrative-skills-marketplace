@@ -1,6 +1,6 @@
 ---
 name: generate-match-report
-version: 0.5.0
+version: 0.5.1
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -119,15 +119,14 @@ reimplement here. The `graph_edge` branch is a live check in
 | Missing | Hand off to |
 |---|---|
 | No dataset | Ask the user to register one first |
-| No `graph_edge` mapping | `/create-mapping` (asked in Phase 2.5) |
-| No partner ARs | `/share-enclave-dataset` |
+| No `graph_edge` mapping | `/generate-rosetta-stone-mappings` (asked in Phase 2.5) |
+| No partner ARs | Ask the partner to publish a compatible access rule |
 
 **Do NOT use this skill for:**
 
 - Building the partner-facing graph itself → use `/generate-identity-graph`.
 - Auditing pre-graph data quality → use `/triage-pregraph-data`.
-- Authoring a new Rosetta Stone mapping → use `/create-mapping`.
-- Exposing your own data to a partner → use `/share-enclave-dataset`.
+- Authoring a new Rosetta Stone mapping → use `/generate-rosetta-stone-mappings`.
 
 ---
 
@@ -229,16 +228,16 @@ zero candidates to begin with), ask the user:
 > `graph_edge` mapped yet — that's the identifier-edge structure
 > match reports join on. Without it, there's nothing to compare to
 > the partner.
-> **Recommend:** Route to `/create-mapping` so the dataset gets the
+> **Recommend:** Route to `/generate-rosetta-stone-mappings` so the dataset gets the
 > mapping it needs, then come back here.
 >
 > Options:
-> - **A)** Route me to `/create-mapping` for `<CUSTOMER_DATASET_NAME>` (recommended)
+> - **A)** Route me to `/generate-rosetta-stone-mappings` for `<CUSTOMER_DATASET_NAME>` (recommended)
 > - **B)** Pick a different dataset (return to Phase 2)
 > - **C)** Cancel
 
 - **A** → Hand off cleanly: tell the user to run
-  `/create-mapping --dataset <CUSTOMER_DATASET_ID>` and re-invoke
+  `/generate-rosetta-stone-mappings` for `<CUSTOMER_DATASET_ID>` and re-invoke
   `/generate-match-report` once the mapping lands. Exit with status
   `NEEDS_CONTEXT`.
 - **B** → Loop back to Phase 2's candidate prompt (or free-text
@@ -250,7 +249,7 @@ zero candidates to begin with), ask the user:
   new `CUSTOMER_DATASET_ID`. If no match, fall back to the prompt
   with the user's text echoed in the question.
 
-Do **not** try to author the mapping inline — `/create-mapping` owns
+Do **not** try to author the mapping inline — `/generate-rosetta-stone-mappings` owns
 that contract end-to-end.
 
 ---
@@ -333,7 +332,7 @@ running an empty comparison):
 >
 > Options:
 > - **A)** Pick a different partner
-> - **B)** Stop and route to `create-mapping` to add a compatible
+> - **B)** Stop and route to `/generate-rosetta-stone-mappings` to add a compatible
 >   identifier (e.g., add `sha256_hashed_email` if the partner has it)
 > - **C)** Continue anyway (debugging only)
 
@@ -713,7 +712,7 @@ new company context.
 ## Edge cases and gotchas
 
 - **Zero-overlap partner.** Surface a blocker; do not submit an empty
-  comparison. Offer to switch partners or route to `/create-mapping`.
+  comparison. Offer to switch partners or route to `/generate-rosetta-stone-mappings`.
 - **Missing column-stats histogram on `graph_edge.target_id_type`.**
   Call `narrative_dataset_set_column_stats_config` then
   `narrative_dataset_recalculate_statistics`; poll for completion
@@ -771,8 +770,8 @@ tools or generic Read / Bash / Write.
   `AskUserQuestion` (both Claude-Code-specific).
 - Sibling skills: `/create-workflow` (for more information on
   creating workflows in general), `/generate-identity-graph` (build
-  the graph), `/create-mapping` (author a Rosetta Stone mapping),
-  `/share-enclave-dataset` (expose your data to a partner).
+  the graph), `/generate-rosetta-stone-mappings` (author a Rosetta
+  Stone mapping).
 
 ---
 
