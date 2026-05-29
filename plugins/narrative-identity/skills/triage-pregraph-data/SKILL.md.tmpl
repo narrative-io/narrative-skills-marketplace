@@ -1,6 +1,5 @@
 ---
 name: triage-pregraph-data
-version: 0.5.2
 description: |
   Audit a dataset or access rule before it joins an identity-graph
   build (access rules behave like datasets in NQL here). Enumerates
@@ -18,22 +17,30 @@ description: |
   <identifier_type>", "pre-graph DQ".
   (narrative-identity)
 license: MIT
-compatibility:
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get
-      - narrative_context_search_companies
-      - narrative_context_set_company
-      - narrative_datasets_search
-      - narrative_datasets_describe
-      - narrative_access_rules_search
-      - narrative_access_rules_describe
-      - narrative_dataset_get_column_stats
-      - narrative_nql_validate
+compatibility: >-
+  No hard requirements — degrades to a prose audit/planning skill when MCP
+  is absent. Recommends the narrative-mcp MCP server and AskUserQuestion
+  (a Claude Code primitive; prose fallback in
+  references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
+  harness.
+metadata:
+  version: 0.5.3
+  narrative:
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_datasets_search
+        - narrative_datasets_describe
+        - narrative_access_rules_search
+        - narrative_access_rules_describe
+        - narrative_dataset_get_column_stats
+        - narrative_nql_validate
 ---
 
 # Triage Pre-Graph Data

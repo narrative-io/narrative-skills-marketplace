@@ -1,6 +1,5 @@
 ---
 name: create-workflow
-version: 0.6.1
 description: |
   Author and submit a Narrative workflow from a natural-language
   intent. Picks the closest example from `assets/examples/`, adapts
@@ -13,32 +12,40 @@ description: |
   workflow YAML", "productionize this query as a recurring job".
   (narrative-common)
 license: MIT
-compatibility:
-  requires:
-    tools:
-      - Read
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get
-      - narrative_context_search_companies
-      - narrative_context_set_company
-      - narrative_data_planes_list
-      - narrative_workflows_create
-      - narrative_workflows_describe
-      - narrative_workflows_trigger
-      - narrative_workflow_runs_list
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-knowledge-base
-    mcp-tools:
-      - search_narrative_i_o_knowledge_base
-      - query_docs_filesystem_narrative_i_o_knowledge_base
-      - narrative_datasets_search
-      - narrative_datasets_describe
-      - narrative_nql_validate
+compatibility: >-
+  Requires the narrative-mcp MCP server and local file Read. Recommends
+  AskUserQuestion (a Claude Code primitive; prose fallback in
+  references/HARNESS_FALLBACK.md) and the narrative-knowledge-base MCP
+  server. Portable to any agentskills.io-compliant harness via the
+  documented fallbacks.
+metadata:
+  version: 0.6.2
+  narrative:
+    requires:
+      tools:
+        - Read
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_data_planes_list
+        - narrative_workflows_create
+        - narrative_workflows_describe
+        - narrative_workflows_trigger
+        - narrative_workflow_runs_list
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-knowledge-base
+      mcp-tools:
+        - search_narrative_i_o_knowledge_base
+        - query_docs_filesystem_narrative_i_o_knowledge_base
+        - narrative_datasets_search
+        - narrative_datasets_describe
+        - narrative_nql_validate
 ---
 
 # Create Workflow

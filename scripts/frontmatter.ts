@@ -8,7 +8,7 @@ import matter from 'gray-matter';
 interface SkillFrontmatter {
   name?: unknown;
   description?: unknown;
-  version?: unknown;
+  metadata?: { version?: unknown };
 }
 
 export function extractNameAndDescription(content: string): {
@@ -24,5 +24,5 @@ export function extractNameAndDescription(content: string): {
 
 export function extractVersion(content: string): string {
   const { data } = matter(content) as { data: SkillFrontmatter };
-  return String(data.version ?? '').trim();
+  return String(data.metadata?.version ?? '').trim();
 }

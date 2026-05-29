@@ -1,6 +1,5 @@
 ---
 name: generate-match-report
-version: 0.5.2
 description: |
   Compare your data to a partner's data in the marketplace. Given a
   dataset you already own with person/edge data, this skill walks you
@@ -15,38 +14,45 @@ description: |
   question about marketplace overlap.
   (narrative-identity)
 license: MIT
-compatibility:
-  requires:
-    tools:
-      - Read
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get
-      - narrative_datasets_search
-      - narrative_datasets_describe
-      - narrative_dataset_get_column_stats
-      - narrative_dataset_set_column_stats_config
-      - narrative_dataset_recalculate_statistics
-      - narrative_dataset_request_sample
-      - narrative_jobs_describe
-      - narrative_jobs_search
-      - narrative_nql_validate
-      - narrative_workflows_create
-      - narrative_workflow_runs_list
-  recommends:
-    tools:
-      - AskUserQuestion
-    mcp-servers:
-      - narrative-mcp
-    mcp-tools:
-      - narrative_context_get_companies
-      - narrative_context_search_companies
-      - narrative_context_set_company
-      - narrative_attributes_describe
-      - narrative_attributes_search
-      - narrative_nql_run
-      - narrative_workflows_trigger
+compatibility: >-
+  Requires the narrative-mcp MCP server and local file Read. Recommends
+  AskUserQuestion — a Claude Code primitive with a prose fallback in
+  references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
+  harness via the documented fallbacks.
+metadata:
+  version: 0.5.3
+  narrative:
+    requires:
+      tools:
+        - Read
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_datasets_search
+        - narrative_datasets_describe
+        - narrative_dataset_get_column_stats
+        - narrative_dataset_set_column_stats_config
+        - narrative_dataset_recalculate_statistics
+        - narrative_dataset_request_sample
+        - narrative_jobs_describe
+        - narrative_jobs_search
+        - narrative_nql_validate
+        - narrative_workflows_create
+        - narrative_workflow_runs_list
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get_companies
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_attributes_describe
+        - narrative_attributes_search
+        - narrative_nql_run
+        - narrative_workflows_trigger
 ---
 
 # /generate-match-report — Compare your data to a marketplace partner

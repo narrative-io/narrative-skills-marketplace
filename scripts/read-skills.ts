@@ -27,12 +27,31 @@ export interface SkillCompatibility {
 
 export interface SkillFrontmatter {
   name?: string;
-  version?: string;
   description?: string;
   license?: string;
-  metadata?: Record<string, unknown>;
+  /** Spec-conforming free-text environment summary (≤ 500 chars). */
+  compatibility?: string;
   'allowed-tools'?: string[];
-  compatibility?: SkillCompatibility;
+  /**
+   * The spec's designated extension point. `version` lives here (per the
+   * spec's own example), and the structured requirements live under the
+   * namespaced `narrative` key. See docs/authoring-skills.md §11.
+   */
+  metadata?: {
+    version?: string;
+    narrative?: SkillCompatibility;
+    [key: string]: unknown;
+  };
+}
+
+/** The skill's version, homed under `metadata.version` (spec-conforming). */
+export function skillVersion(fm: SkillFrontmatter): string {
+  return String(fm.metadata?.version ?? '').trim();
+}
+
+/** Structured requirements, homed under the namespaced `metadata.narrative`. */
+export function skillRequirements(fm: SkillFrontmatter): SkillCompatibility | undefined {
+  return fm.metadata?.narrative;
 }
 
 export interface SkillRecord {

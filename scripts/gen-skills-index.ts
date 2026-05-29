@@ -21,6 +21,8 @@ import {
   listSkills,
   readPluginManifest,
   type SkillCompatibility,
+  skillRequirements,
+  skillVersion,
 } from './read-skills';
 
 const ROOT = resolve(import.meta.dir, '..');
@@ -42,7 +44,10 @@ interface IndexedSkill {
   plugin: string;
   /** Repo-relative path to the rendered SKILL.md. */
   path: string;
-  compatibility?: SkillCompatibility;
+  /** Spec-conforming free-text environment summary. */
+  compatibility?: string;
+  /** Structured requirements, from the namespaced metadata.narrative. */
+  requirements?: SkillCompatibility;
 }
 
 interface SkillsIndex {
@@ -70,13 +75,18 @@ const skills: IndexedSkill[] = listSkills(ROOT).map((s) => {
   const fm = s.frontmatter;
   const entry: IndexedSkill = {
     name: fm.name ?? s.dir,
-    version: fm.version ?? '',
+    version: skillVersion(fm),
     description: (fm.description ?? '').trim(),
     plugin: s.plugin,
     path: s.relPath,
   };
-  if (fm.compatibility) {
-    entry.compatibility = fm.compatibility;
+  const compatibility = (fm.compatibility ?? '').trim();
+  if (compatibility) {
+    entry.compatibility = compatibility;
+  }
+  const requirements = skillRequirements(fm);
+  if (requirements) {
+    entry.requirements = requirements;
   }
   return entry;
 });

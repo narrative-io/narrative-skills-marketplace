@@ -8,16 +8,18 @@
  * Spec rules enforced:
  *   - `name` matches ^[a-z0-9]+(-[a-z0-9]+)*$ and is ≤ 64 chars.
  *   - `description` is present and ≤ 1024 chars.
- *   - `version` is present and parses as MAJOR.MINOR.PATCH (semver).
+ *   - `compatibility`, if present, is a free-text string ≤ 500 chars
+ *     (the spec type — a structured object here is a conformance break).
+ *   - `metadata.version` is present and parses as MAJOR.MINOR.PATCH.
  *   - SKILL.md filename uses the canonical uppercase form.
  *   - Frontmatter is valid YAML and starts at line 1.
- *   - `compatibility`, if present, uses only the documented sub-keys.
+ *   - `metadata.narrative`, if present, uses only the documented sub-keys.
  *
  * Local-extension rules (warnings, not failures):
- *   - The structured `compatibility` object is a local extension of the
- *     spec's free-text field. Other harnesses MUST tolerate unknown
- *     frontmatter keys, but this is the canonical place to flag drift
- *     if the spec changes.
+ *   - The structured requirements object lives under the namespaced
+ *     `metadata.narrative` key (the spec's designated extension point),
+ *     keeping the top-level `compatibility` field spec-conforming. Other
+ *     harnesses ignore the namespace and still run the base skill.
  *
  * Exits non-zero on any failure so CI can gate on it.
  */
@@ -31,6 +33,7 @@ const ROOT = resolve(import.meta.dir, '..');
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const NAME_MAX = 64;
 const DESCRIPTION_MAX = 1024;
+const COMPATIBILITY_MAX = 500;
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 
 const KNOWN_COMPAT_BUCKETS = new Set(['requires', 'recommends']);
@@ -116,22 +119,40 @@ for (const skill of listSkills(ROOT)) {
     );
   }
 
-  const version = typeof data.version === 'string' ? data.version : '';
+  const version = typeof data.metadata?.version === 'string' ? data.metadata.version : '';
   if (!version) {
     fail(
       skill.skillMdPath,
-      'frontmatter "version" is required (local convention; bumped on every change)',
+      'frontmatter "metadata.version" is required (local convention; bumped on every change)',
     );
   } else if (!SEMVER_RE.test(version)) {
-    fail(skill.skillMdPath, `version "${version}" is not valid semver (MAJOR.MINOR.PATCH)`);
+    fail(
+      skill.skillMdPath,
+      `metadata.version "${version}" is not valid semver (MAJOR.MINOR.PATCH)`,
+    );
   }
 
   if (!skill.skillMdPath.endsWith('/SKILL.md')) {
     fail(skill.skillMdPath, 'SKILL.md filename must use the canonical uppercase form');
   }
 
-  if (data.compatibility && typeof data.compatibility === 'object') {
-    checkCompatibility(skill.skillMdPath, data.compatibility);
+  if (data.compatibility !== undefined) {
+    if (typeof data.compatibility !== 'string') {
+      fail(
+        skill.skillMdPath,
+        'compatibility must be a free-text string (spec type); move structured requirements to metadata.narrative',
+      );
+    } else if (data.compatibility.length > COMPATIBILITY_MAX) {
+      fail(
+        skill.skillMdPath,
+        `compatibility is ${data.compatibility.length} chars; spec cap is ${COMPATIBILITY_MAX}`,
+      );
+    }
+  }
+
+  const narrative = data.metadata?.narrative;
+  if (narrative && typeof narrative === 'object') {
+    checkCompatibility(skill.skillMdPath, narrative);
   }
 }
 
