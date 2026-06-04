@@ -8,7 +8,7 @@
       "type": "http",
       "url": "https://docs.narrative.io/mcp"
     },
-    "narrative-agent-feedback": {
+    "narrative-agent-gateway": {
       "type": "http",
       "url": "https://narrative.support/mcp"
     }
