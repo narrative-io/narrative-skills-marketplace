@@ -7,7 +7,7 @@
       "version": "0.1.0",
       "description": "Common Narrative workflows backed by the narrative-mcp server — starting with Rosetta Stone attribute mapping generation, evaluation, and improvement.",
       "mcpServers": [
-        "narrative-agent-feedback",
+        "narrative-agent-gateway",
         "narrative-knowledge-base",
         "narrative-mcp"
       ]
@@ -17,7 +17,7 @@
       "version": "0.1.0",
       "description": "Identity-graph workflows backed by the narrative-mcp server — pre-graph data-quality auditing, edge-quality analysis, and graph-build hygiene.",
       "mcpServers": [
-        "narrative-agent-feedback",
+        "narrative-agent-gateway",
         "narrative-knowledge-base",
         "narrative-mcp"
       ]
