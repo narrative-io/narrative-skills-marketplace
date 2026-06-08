@@ -1,0 +1,12 @@
+name: Backup to S3 (daily)
+
+on:
+    workflow_dispatch:
+    schedule:
+      - cron: 0 6 * * *
+
+jobs:
+  s3-backup-daily:
+    uses: narrative-io/common-github/.github/workflows/backup.yml@main
+    # uses: ./.github/workflows/backup.yml
+    secrets: inherit
