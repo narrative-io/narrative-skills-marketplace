@@ -163,6 +163,14 @@ Identity-graph workflows backed by the narrative-mcp server — pre-graph data-q
 | `/generate-match-report` | "how does my data compare to your marketplace", "compare my data to [partner]", "how much overlap do I have with [supplier]", "run a match report", "match my customers against 3P data", "see what enrichment is available for my dataset", or any open-ended question about marketplace overlap. |
 | `/triage-pregraph-data` | "audit this dataset before the graph build", "find bad edges in <source>", "check identity data quality", "recommend filters for the graph build", "quantify damage from <identifier_type>", "pre-graph DQ". |
 
+### `narrative-audience`
+
+Audience-building workflows backed by the narrative-mcp server — turning marketing briefs into filtered, materialized audience datasets and activating them to downstream advertising connectors.
+
+| Skill | Use when |
+|-------|----------|
+| `/create-lookalike` | "create a lookalike audience", "find more users like this segment", "expand my seed audience to 500k similar users", "score the population against my customers", "build a look-alike of dataset X". |
+
 <!-- END PLUGINS -->
 
 ## What's a skill?
