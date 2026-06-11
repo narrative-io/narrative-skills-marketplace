@@ -1,0 +1,217 @@
+# Fully rendered categorical-only example of the look-alike pipeline.
+#
+# Inputs: audience name "Premium Lookalikes" (prefix premium_lookalikes),
+# seed dataset premium_subscribers, population dataset acme_population,
+# join key _rosetta_stone.unique_id.value (alias unique_id_value),
+# categorical features _rosetta_stone.user.country (user_country) and
+# _rosetta_stone.device.type (device_type), output mode size = 100000,
+# seed users excluded, unique_id attribute id 123.
+#
+# A real build also appends the wizard-state tag produced by
+# scripts/lookalike_state_tag.py (a long
+# '_nio_lookalike_serialization=<base64>' string) to the final view's
+# TAGS so Lookalike Studio can reopen the audience for editing; it is
+# omitted here for readability.
+document:
+  dsl: '1.0.0'
+  namespace: narrativeio
+  name: lookalike-premium_lookalikes
+  version: '1.0.0'
+do:
+  - createExpandedIdentities:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_expanded_identities
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            'unique_id_value' AS "id_type",
+            CAST(company_data."acme_population"."_rosetta_stone"."unique_id"."value" AS VARCHAR) AS "id",
+            company_data."acme_population"."_rosetta_stone"."user"."country" AS "user_country",
+            company_data."acme_population"."_rosetta_stone"."device"."type" AS "device_type"
+          FROM company_data."acme_population"
+          WHERE company_data."acme_population"."_rosetta_stone"."unique_id"."value" IS NOT NULL AND CAST(company_data."acme_population"."_rosetta_stone"."unique_id"."value" AS VARCHAR) <> ''
+  - createExpandedSeedIdentities:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_expanded_seed_ids
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            'unique_id_value' AS "id_type",
+            CAST(company_data."premium_subscribers"."_rosetta_stone"."unique_id"."value" AS VARCHAR) AS "id"
+          FROM company_data."premium_subscribers"
+          WHERE company_data."premium_subscribers"."_rosetta_stone"."unique_id"."value" IS NOT NULL AND CAST(company_data."premium_subscribers"."_rosetta_stone"."unique_id"."value" AS VARCHAR) <> ''
+  - createCanonicalCombos:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_canonical_combos
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            "id_type",
+            "id",
+            "user_country",
+            "device_type",
+            CAST(COUNT(1) AS DOUBLE) / SUM(COUNT(1)) OVER (PARTITION BY "id_type", "id") AS "id_weight"
+          FROM company_data."premium_lookalikes_expanded_identities"
+          GROUP BY "id_type", "id", "user_country", "device_type"
+  - createLabeledCombos:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_labeled_combos
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            c."id_type",
+            c."id",
+            c."user_country",
+            c."device_type",
+            c."id_weight",
+            CASE WHEN s."id" IS NOT NULL THEN 1 ELSE 0 END AS "is_seed"
+          FROM company_data."premium_lookalikes_canonical_combos" c
+          LEFT JOIN (SELECT DISTINCT "id_type", "id" FROM company_data."premium_lookalikes_expanded_seed_ids") s
+            ON c."id_type" = s."id_type" AND c."id" = s."id"
+  - createSeedPopCounts:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_seed_pop_counts
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            SUM(CASE WHEN "is_seed" = 1 THEN "id_weight" ELSE 0 END) AS "seed_total",
+            SUM(CASE WHEN "is_seed" = 0 THEN "id_weight" ELSE 0 END) AS "pop_total"
+          FROM company_data."premium_lookalikes_labeled_combos"
+  - createAttDistributions:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_att_distributions
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT "attr_name", "attr_value", "seed_cnt", "pop_cnt"
+          FROM (
+            SELECT
+              'user_country' AS "attr_name",
+              CAST("user_country" AS VARCHAR) AS "attr_value",
+              SUM(CASE WHEN "is_seed" = 1 THEN "id_weight" ELSE 0 END) AS "seed_cnt",
+              SUM(CASE WHEN "is_seed" = 0 THEN "id_weight" ELSE 0 END) AS "pop_cnt"
+            FROM company_data."premium_lookalikes_labeled_combos"
+            WHERE "user_country" IS NOT NULL
+            GROUP BY "user_country"
+            UNION ALL
+            SELECT
+              'device_type' AS "attr_name",
+              CAST("device_type" AS VARCHAR) AS "attr_value",
+              SUM(CASE WHEN "is_seed" = 1 THEN "id_weight" ELSE 0 END) AS "seed_cnt",
+              SUM(CASE WHEN "is_seed" = 0 THEN "id_weight" ELSE 0 END) AS "pop_cnt"
+            FROM company_data."premium_lookalikes_labeled_combos"
+            WHERE "device_type" IS NOT NULL
+            GROUP BY "device_type"
+          )
+  - createAttCardinalities:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_att_cardinalities
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            "attr_name",
+            CAST(COUNT(DISTINCT "attr_value") AS DOUBLE) AS "k"
+          FROM company_data."premium_lookalikes_att_distributions"
+          GROUP BY "attr_name"
+  - createAttWeights:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_att_weights
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            d."attr_name",
+            d."attr_value",
+            GREATEST(LEAST(
+              LN(
+                (d."seed_cnt" + 1.0) / (t."seed_total" + c."k")
+              ) - LN(
+                (d."pop_cnt" + 1.0) / (t."pop_total" + c."k")
+              ),
+              3.0), -3.0) AS "weight"
+          FROM company_data."premium_lookalikes_att_distributions" d
+          CROSS JOIN company_data."premium_lookalikes_seed_pop_counts" t
+          JOIN company_data."premium_lookalikes_att_cardinalities" c
+            ON d."attr_name" = c."attr_name"
+          WHERE d."seed_cnt" + d."pop_cnt" >= 5
+  - createScoredCandidateRows:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_scored_candidate_rows
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            r."id_type",
+            r."id",
+            r."id_weight",
+            COALESCE(w_0."weight", 0) + COALESCE(w_1."weight", 0) AS "categorical_score",
+            CASE WHEN w_0."weight" IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN w_1."weight" IS NOT NULL THEN 1 ELSE 0 END AS "non_null_cnt"
+          FROM company_data."premium_lookalikes_labeled_combos" r
+          LEFT JOIN company_data."premium_lookalikes_att_weights" w_0
+            ON w_0."attr_name" = 'user_country' AND w_0."attr_value" = CAST(r."user_country" AS VARCHAR)
+          LEFT JOIN company_data."premium_lookalikes_att_weights" w_1
+            ON w_1."attr_name" = 'device_type' AND w_1."attr_value" = CAST(r."device_type" AS VARCHAR)
+          WHERE r."is_seed" = 0
+  - createScoredCandidates:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes_scored_candidates
+          DESCRIPTION = 'Intermediate checkpoint of the premium_lookalikes look-alike scoring pipeline.'
+          TAGS = ( '_nio_lookalike_intermediate' )
+          AS
+          SELECT
+            "id_type",
+            "id",
+            SUM("id_weight" * "categorical_score") / NULLIF(SUM("id_weight" * CAST("non_null_cnt" AS DOUBLE)) / NULLIF(SUM("id_weight"), 0), 0) AS "score"
+          FROM company_data."premium_lookalikes_scored_candidate_rows"
+          GROUP BY "id_type", "id"
+  - createFinalOutput:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW premium_lookalikes
+          DISPLAY_NAME = 'Premium Lookalikes'
+          DESCRIPTION = 'Top 100,000 users from acme_population most similar to premium_subscribers, scored on country and device type. Seed users excluded.'
+          TAGS = ( 'q3-campaign', '_nio_audience', '_nio_audience_studio', '_nio_lookalike' )
+          AS
+          SELECT sc."id_type", sc."id", 1.0 / (1.0 + EXP(-sc."score")) AS "score"
+          FROM company_data."premium_lookalikes_scored_candidates" sc
+          WHERE NOT EXISTS (SELECT 1 FROM company_data."premium_lookalikes_expanded_seed_ids" s WHERE s."id_type" = sc."id_type" AND s."id" = sc."id")
+          ORDER BY sc."score" DESC
+          LIMIT 100000
+  - mapOutputIdentity:
+      call: CreateRosettaStoneMappingsIfNotExist
+      with:
+        datasetName: premium_lookalikes
+        mappings:
+          - attributeId: 123
+            mapping:
+              type: object_mapping
+              propertyMappings:
+                - path: value
+                  expression: '"id"'

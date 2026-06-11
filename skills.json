@@ -3,6 +3,16 @@
   "generated_by": "scripts/gen-skills-index.ts",
   "plugins": [
     {
+      "name": "narrative-audience",
+      "version": "0.1.0",
+      "description": "Audience-building workflows backed by the narrative-mcp server — turning marketing briefs into filtered, materialized audience datasets and activating them to downstream advertising connectors.",
+      "mcpServers": [
+        "narrative-agent-gateway",
+        "narrative-knowledge-base",
+        "narrative-mcp"
+      ]
+    },
+    {
       "name": "narrative-common",
       "version": "0.1.0",
       "description": "Common Narrative workflows backed by the narrative-mcp server — starting with Rosetta Stone attribute mapping generation, evaluation, and improvement.",
@@ -24,6 +34,121 @@
     }
   ],
   "skills": [
+    {
+      "name": "create-lookalike",
+      "version": "0.1.0",
+      "description": "Create a look-alike audience from a seed audience and a candidate\npopulation dataset. Classifies Rosetta Stone attributes, generates\nthe same materialized-view scoring pipeline Lookalike Studio emits\n(Naive-Bayes categorical weights + Gaussian continuous similarity),\ngates on approval, submits via `narrative_workflows_create`, and\nmonitors the build to completion.\nUse when: \"create a lookalike audience\", \"find more users like this\nsegment\", \"expand my seed audience to 500k similar users\", \"score\nthe population against my customers\", \"build a look-alike of\ndataset X\".\n(narrative-audience)",
+      "plugin": "narrative-audience",
+      "path": "plugins/narrative-audience/skills/create-lookalike/SKILL.md",
+      "compatibility": "Requires the narrative-mcp MCP server and local file Read. Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md), the narrative-knowledge-base MCP server, and a shell with python3 (3.8+) to run scripts/lookalike_state_tag.py for UI re-edit support. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
+      "requirements": {
+        "requires": {
+          "tools": [
+            "Read"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_datasets_search",
+            "narrative_datasets_describe",
+            "narrative_dataset_get_column_stats",
+            "narrative_attributes_search",
+            "narrative_nql_validate",
+            "narrative_data_planes_list",
+            "narrative_workflows_create",
+            "narrative_workflow_runs_list",
+            "narrative_jobs_search",
+            "narrative_jobs_describe"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion",
+            "Bash",
+            "Write"
+          ],
+          "mcp-servers": [
+            "narrative-knowledge-base"
+          ],
+          "mcp-tools": [
+            "narrative_context_search_companies",
+            "narrative_context_set_company",
+            "search_narrative_i_o_knowledge_base"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "--seed",
+          "value": "<id|name>",
+          "required": false,
+          "description": "The seed audience dataset — the users the output should look like. Numeric ID or datasetName. If omitted, the skill asks."
+        },
+        {
+          "name": "--population",
+          "value": "<id|name>",
+          "required": false,
+          "description": "The candidate population dataset to score and select from. Numeric ID or datasetName. If omitted, the skill asks."
+        },
+        {
+          "name": "--size",
+          "value": "<N>",
+          "required": false,
+          "description": "Output mode \"size\": keep the top N highest-scoring candidates. Mutually exclusive with --min-score."
+        },
+        {
+          "name": "--min-score",
+          "value": "<0..1>",
+          "required": false,
+          "description": "Output mode \"score\": keep every candidate whose similarity probability is at or above this threshold (clamped to 0.001–0.999 and converted to log-odds internally). Mutually exclusive with --size."
+        },
+        {
+          "name": "--include-seed",
+          "required": false,
+          "default": false,
+          "description": "Union the seed members back into the output audience with a perfect score of 1.0. Off by default — the output is look-alikes only."
+        },
+        {
+          "name": "--name",
+          "value": "<audience name>",
+          "required": false,
+          "description": "Unique name for the output audience dataset. Slugified to form the pipeline prefix. Must not collide with an existing dataset."
+        },
+        {
+          "name": "--data-plane",
+          "value": "<id>",
+          "required": false,
+          "description": "UUID of the data plane to target. Skips data-plane resolution."
+        },
+        {
+          "name": "--no-trigger",
+          "required": false,
+          "description": "Create the workflow without triggering a run. Default is trigger_immediately: true — the audience builds right away."
+        },
+        {
+          "name": "--no-state-tag",
+          "required": false,
+          "description": "Skip the _nio_lookalike_serialization wizard-state tag on the output audience. Default is to include it (via scripts/lookalike_state_tag.py) so Lookalike Studio can reopen the audience for editing."
+        },
+        {
+          "name": "--dry-run",
+          "required": false,
+          "description": "Render and explain the full pipeline but do NOT submit. Implies --show-spec."
+        },
+        {
+          "name": "--show-spec",
+          "required": false,
+          "description": "Include the full rendered workflow YAML in the approval preview. Off by default; the plain-English summary is enough for most users."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "The user's intent (e.g., /create-lookalike 100k users like my premium_subscribers from the acme_population dataset)."
+        }
+      ]
+    },
     {
       "name": "apply-rosetta-stone-mappings",
       "version": "0.3.6",
