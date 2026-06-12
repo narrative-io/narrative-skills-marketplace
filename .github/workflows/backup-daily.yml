@@ -7,6 +7,6 @@ on:
 
 jobs:
   s3-backup-daily:
-    uses: narrative-io/common-github/.github/workflows/backup.yml@main
+    uses: narrative-io/common-github/.github/workflows/backup.yml@01fcb322a3e3c245fb2a567efb7fd91065773dc7 # main
     # uses: ./.github/workflows/backup.yml
     secrets: inherit
