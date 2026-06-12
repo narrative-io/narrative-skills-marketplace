@@ -14,6 +14,34 @@ the two views are deliberately redundant.
 
 <!-- RELEASES BELOW -->
 
+## [2026.06.0] - 2026-06-12
+
+### ✨ Features
+
+- **narrative-audience:** add create-lookalike skill (#69) (3ce38f1)
+- **narrative-common:** add profile-dataset skill and adopt it across consumers (#63) (7f600b3)
+- **skills:** document slash-command arguments in skill metadata (#62) (272c542)
+- **narrative-common:** require MV metadata and calibrate async poll cadence (#60) (e758db0)
+- **scripts:** render snippets in any plugins/**/*.tmpl file (#59) (7eccd3e)
+- [SC-58661] add generate-match-report skill (#58) (0a0c2f2)
+- **narrative-common:** hide workflow YAML behind --show-spec by default (#55) (776e9d9)
+- **triage-pregraph-data:** default to combined-graph context (#56) (84cf0da)
+- **rosetta-stone-mappings:** friendlier output, skip-revalidate handoff (#54) (801dcc1)
+
+### 🧹 Maintenance
+
+- **deps:** update github actions (#66) (5e5e9c2)
+- **deps:** update minor and patch updates to ^6.14.2 (#67) (3d770ce)
+- **mcp:** rename narrative-agent-feedback server to narrative-agent-gateway (#65) (ef3c2b2)
+- **skills:** namespace args under narrative; document skills CLI (#64) (40de34e)
+- **skills:** cross-harness portability audit and spec conformance (#61) (5fa7d0a)
+- **deps:** update dependency typescript to ^6.0.3 (#57) (2cd1aa2)
+
+### Other
+
+- Create backup-daily.yml (#70) (4a76e93)
+
+
 ## [2026.05.3] - 2026-05-22
 
 ### ✨ Features
