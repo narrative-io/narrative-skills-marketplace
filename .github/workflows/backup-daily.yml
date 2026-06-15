@@ -7,5 +7,5 @@ on:
 
 jobs:
   s3-backup-daily:
-    uses: narrative-io/common-github/.github/workflows/backup.yml@1db734d3deea22b1226107c87291b0e2e4a9f785
+    uses: narrative-io/common-github/.github/workflows/backup.yml@c8c12dcd280c68e5e406545d12153195ce8e0f03
     secrets: inherit
