@@ -67,6 +67,13 @@ git rev-parse --quiet --verify "refs/tags/$TAG" >/dev/null || {
 echo "==> checking out $TAG"
 git checkout --quiet --force "refs/tags/$TAG"
 
+# The bundle pipeline (the build:portable target) landed in v2026.05.1; older tags can't produce a
+# bundle. Fail fast with a pointer instead of a cryptic "Script not found" after a pointless install.
+if ! grep -q '"build:portable"' package.json; then
+  echo "tag $TAG predates the sandbox-bundle tooling (no build:portable script); use v2026.05.1 or newer" >&2
+  exit 1
+fi
+
 echo "==> building portable skills tree"
 bun install --frozen-lockfile
 bun run build:portable
