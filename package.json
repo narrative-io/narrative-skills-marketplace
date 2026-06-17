@@ -18,6 +18,7 @@
     "gen:readme": "bun run scripts/gen-readme.ts",
     "gen:all": "bun run gen:skill-docs && bun run gen:mcp && bun run gen:skills-index && bun run gen:readme",
     "build:portable": "bun run gen:all && bun run scripts/build-portable.ts",
+    "publish:sandbox-bundle": "bash scripts/publish-sandbox-bundle.sh",
     "check:skill-docs": "bun run scripts/gen-skill-docs.ts --dry-run",
     "check:mcp": "bun run scripts/gen-mcp-config.ts --dry-run",
     "check:skills-index": "bun run scripts/gen-skills-index.ts --dry-run",
