@@ -24,7 +24,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.6.1
+  version: 0.6.2
   narrative:
     args:
       - name: "--dataset"
@@ -74,7 +74,14 @@ metadata:
         description: >-
           Additional context about the source system. With no arguments, the
           skill walks the user through interactively.
+    requires:
+      skills:
+        - narrative-common:profile-dataset
+        - narrative-common:write-nql
+        - narrative-common:design-analysis
     recommends:
+      skills:
+        - narrative-common:generate-rosetta-stone-mappings
       tools:
         - AskUserQuestion
       mcp-servers:

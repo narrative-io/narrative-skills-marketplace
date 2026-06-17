@@ -21,7 +21,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.3.6
+  version: 0.3.7
   narrative:
     args:
       - name: "--dataset"
@@ -91,6 +91,8 @@ metadata:
         - narrative_workflow_runs_list
         - narrative_workflows_describe
     recommends:
+      skills:
+        - narrative-common:generate-rosetta-stone-mappings
       tools:
         - AskUserQuestion
 ---

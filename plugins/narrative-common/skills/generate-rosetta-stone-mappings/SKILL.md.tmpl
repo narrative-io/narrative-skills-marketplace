@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.1
+  version: 0.5.2
   narrative:
     args:
       - name: "<free-text>"
@@ -27,6 +27,9 @@ metadata:
           and gathers context interactively. With no arguments, it asks which
           dataset to map.
     requires:
+      skills:
+        - narrative-common:profile-dataset
+        - narrative-common:find-attribute
       mcp-servers:
         - narrative-mcp
       mcp-tools:
@@ -40,6 +43,8 @@ metadata:
         - narrative_nql_run
         - narrative_jobs_describe
     recommends:
+      skills:
+        - narrative-common:apply-rosetta-stone-mappings
       tools:
         - AskUserQuestion
       mcp-servers:

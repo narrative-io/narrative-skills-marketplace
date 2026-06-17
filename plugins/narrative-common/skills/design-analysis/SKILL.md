@@ -19,7 +19,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.3.4
+  version: 0.3.5
   narrative:
     args:
       - name: "--dataset"
@@ -43,6 +43,8 @@ metadata:
           The user's analytical question. With no arguments, the skill walks
           the user through interrogation interactively.
     recommends:
+      skills:
+        - narrative-common:write-nql
       tools:
         - AskUserQuestion
       mcp-servers:

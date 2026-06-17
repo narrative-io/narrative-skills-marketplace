@@ -20,7 +20,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.6.1
+  version: 0.6.2
   narrative:
     args:
       - name: "--dataset"
@@ -40,6 +40,8 @@ metadata:
         required: false
         description: "Render the YAML and show it without submitting."
     requires:
+      skills:
+        - narrative-common:profile-dataset
       tools:
         - Read
       mcp-servers:
@@ -55,6 +57,8 @@ metadata:
         - narrative_workflows_create
         - narrative_workflow_runs_list
     recommends:
+      skills:
+        - narrative-common:generate-rosetta-stone-mappings
       tools:
         - AskUserQuestion
       mcp-servers:

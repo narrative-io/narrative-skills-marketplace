@@ -21,7 +21,7 @@ compatibility: >-
   scripts/lookalike_state_tag.py for UI re-edit support. Portable to
   any agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.1.0
+  version: 0.1.1
   narrative:
     args:
       - name: "--seed"
@@ -113,6 +113,8 @@ metadata:
         - narrative_jobs_search
         - narrative_jobs_describe
     recommends:
+      skills:
+        - narrative-common:generate-rosetta-stone-mappings
       tools:
         - AskUserQuestion
         - Bash
