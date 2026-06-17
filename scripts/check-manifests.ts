@@ -16,6 +16,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { extractNameAndDescription } from './frontmatter.ts';
+import { listSkills, skillRequirements } from './read-skills.ts';
 
 const ROOT = resolve(import.meta.dir, '..');
 const DESCRIPTION_MAX_CHARS = 1024;
@@ -183,6 +184,86 @@ for (const pluginName of declaredPlugins) {
         `description is ${description.length} chars, exceeds ${DESCRIPTION_MAX_CHARS}-char cap`,
       );
     }
+  }
+}
+
+// ─── Skill dependencies (metadata.narrative.{requires,recommends}.skills) ──
+//
+// Each declared dependency is a fully-qualified `<plugin>:<skill>` id. Verify
+// every reference resolves to a skill on disk, and that the `requires.skills`
+// graph has no cycles (a cycle means no skill in it can run first).
+
+const SKILL_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const allSkills = listSkills(ROOT);
+const knownSkillIds = new Set(allSkills.map((s) => `${s.plugin}:${s.dir}`));
+const requiresGraph = new Map<string, string[]>();
+
+for (const skill of allSkills) {
+  const id = `${skill.plugin}:${skill.dir}`;
+  const reqs = skillRequirements(skill.frontmatter);
+  const requiredSkills = reqs?.requires?.skills ?? [];
+  requiresGraph.set(id, []);
+
+  for (const [bucket, deps] of [
+    ['requires', requiredSkills],
+    ['recommends', reqs?.recommends?.skills ?? []],
+  ] as const) {
+    for (const dep of deps) {
+      if (!SKILL_ID_RE.test(dep)) {
+        fail(
+          skill.skillMdPath,
+          `metadata.narrative.${bucket}.skills entry "${dep}" must be a fully-qualified "<plugin>:<skill>" id`,
+        );
+        continue;
+      }
+      if (!knownSkillIds.has(dep)) {
+        fail(
+          skill.skillMdPath,
+          `metadata.narrative.${bucket}.skills references "${dep}", which does not exist`,
+        );
+        continue;
+      }
+      if (dep === id) {
+        fail(skill.skillMdPath, `metadata.narrative.${bucket}.skills lists itself ("${dep}")`);
+        continue;
+      }
+      if (bucket === 'requires') {
+        requiresGraph.get(id)?.push(dep);
+      }
+    }
+  }
+}
+
+// Detect cycles in the requires graph via DFS, reporting one node per cycle.
+const VISITING = 1;
+const DONE = 2;
+const state = new Map<string, number>();
+const cyclesReported = new Set<string>();
+
+function visit(id: string, stack: string[]): void {
+  state.set(id, VISITING);
+  stack.push(id);
+  for (const dep of requiresGraph.get(id) ?? []) {
+    const depState = state.get(dep);
+    if (depState === VISITING) {
+      const cycle = [...stack.slice(stack.indexOf(dep)), dep].join(' → ');
+      if (!cyclesReported.has(cycle)) {
+        cyclesReported.add(cycle);
+        const skillMd = allSkills.find((s) => `${s.plugin}:${s.dir}` === id)?.skillMdPath ?? id;
+        fail(skillMd, `requires.skills forms a dependency cycle: ${cycle}`);
+      }
+    } else if (depState === undefined) {
+      visit(dep, stack);
+    }
+  }
+  stack.pop();
+  state.set(id, DONE);
+}
+
+for (const id of requiresGraph.keys()) {
+  if (state.get(id) === undefined) {
+    visit(id, []);
   }
 }
 

@@ -762,6 +762,29 @@ bearing. The body uses them when present, ignores them when not.
 - `mcp-servers:` — server names as declared in `plugin.json`.
 - `mcp-tools:` — fully qualified tool names (no server prefix
   duplication).
+- `skills:` — other skills this one depends on, as fully-qualified
+  `<plugin>:<skill>` ids (the same form `{{SKILL_ID}}` renders). Put a
+  skill under `requires.skills` when the body invokes it mid-flow and
+  can't proceed without its output (e.g. `generate-identity-graph`
+  maps each input via `narrative-common:generate-rosetta-stone-mappings`
+  before building the graph); under `recommends.skills` when it's a
+  suggested companion. `check:manifests` resolves every id against the
+  skills on disk and fails on a dangling reference, a self-reference, or
+  a cycle in the `requires.skills` graph. The frontmatter is declarative
+  — it feeds tooling and `skills.json`; the body must still tell the
+  agent to call the dependency (a `requires.skills` entry doesn't invoke
+  anything on its own).
+
+```yaml
+metadata:
+  narrative:
+    requires:
+      skills:
+        - narrative-common:generate-rosetta-stone-mappings
+    recommends:
+      skills:
+        - narrative-common:find-attribute
+```
 
 Be specific. "Requires Bash" is less useful than "Requires Bash, Read,
 AskUserQuestion." The list doubles as a hint to the agent about what
