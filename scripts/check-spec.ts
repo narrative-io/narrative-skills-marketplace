@@ -38,7 +38,7 @@ const COMPATIBILITY_MAX = 500;
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 
 const KNOWN_COMPAT_BUCKETS = new Set(['requires', 'recommends']);
-const KNOWN_COMPAT_KEYS = new Set(['tools', 'mcp-servers', 'mcp-tools']);
+const KNOWN_COMPAT_KEYS = new Set(['tools', 'mcp-servers', 'mcp-tools', 'skills']);
 
 const errors: string[] = [];
 const warnings: string[] = [];
@@ -74,7 +74,7 @@ function checkCompatibility(skillMd: string, compat: SkillCompatibility): void {
       if (!KNOWN_COMPAT_KEYS.has(key)) {
         warn(
           skillMd,
-          `compatibility.${bucket}.${key} is not a known key (expected: tools, mcp-servers, mcp-tools)`,
+          `compatibility.${bucket}.${key} is not a known key (expected: tools, mcp-servers, mcp-tools, skills)`,
         );
       }
     }

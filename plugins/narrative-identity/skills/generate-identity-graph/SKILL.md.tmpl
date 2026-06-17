@@ -20,13 +20,22 @@ compatibility: >-
   server. Portable to any agentskills.io-compliant harness via the
   documented fallbacks.
 metadata:
-  version: 0.4.4
+  version: 0.4.6
   # Strictly interactive — takes no command-line arguments. Every
   # load-bearing decision is elicited via AskUserQuestion; there is no
   # --auto / --yes / --non-interactive mode (see "Interaction mode").
   narrative:
     args: []
     requires:
+      skills:
+        # Each input must be mapped to the Rosetta Stone graph-edge
+        # attribute (find-attribute resolves the id; grsm maps unmapped
+        # datasets), then the edges view is authored via write-nql and
+        # composed/submitted via create-workflow.
+        - narrative-common:find-attribute
+        - narrative-common:generate-rosetta-stone-mappings
+        - narrative-common:write-nql
+        - narrative-common:create-workflow
       tools:
         - Read
       mcp-servers:
@@ -38,6 +47,8 @@ metadata:
         - narrative_datasets_search
         - narrative_datasets_describe
     recommends:
+      skills:
+        - narrative-identity:triage-pregraph-data
       tools:
         - AskUserQuestion
       mcp-servers:

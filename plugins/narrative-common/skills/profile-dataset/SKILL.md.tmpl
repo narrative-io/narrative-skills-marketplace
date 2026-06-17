@@ -21,7 +21,7 @@ compatibility: >-
   Portable to any agentskills.io-compliant harness via the documented
   fallbacks.
 metadata:
-  version: 0.1.1
+  version: 0.1.2
   narrative:
     args:
       - name: "--dataset"
@@ -84,6 +84,8 @@ metadata:
         - narrative_dataset_request_sample
         - narrative_jobs_describe
     recommends:
+      skills:
+        - narrative-common:write-nql
       tools:
         - AskUserQuestion
       mcp-servers:

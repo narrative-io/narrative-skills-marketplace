@@ -18,6 +18,13 @@ interface CompatibilityRequirements {
   tools?: string[];
   'mcp-servers'?: string[];
   'mcp-tools'?: string[];
+  /**
+   * Fully-qualified ids (`<plugin>:<skill>`) of other skills this skill
+   * depends on. `requires.skills` is load-bearing (the body invokes the
+   * dependency mid-flow); `recommends.skills` is a suggested companion.
+   * Validated against the discovered skill set by check-manifests.ts.
+   */
+  skills?: string[];
 }
 
 export interface SkillCompatibility {
