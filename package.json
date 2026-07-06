@@ -6,7 +6,7 @@
     "@commitlint/config-conventional": "^21.0.2",
     "@types/bun": "latest",
     "gray-matter": "^4.0.3",
-    "knip": "^6.16.1",
+    "knip": "^6.17.1",
     "lefthook": "^2.1.9",
     "typescript": "^6.0.3"
   },
