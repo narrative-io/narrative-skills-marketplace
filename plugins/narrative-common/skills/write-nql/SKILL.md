@@ -17,7 +17,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.4
+  version: 0.5.5
   narrative:
     args:
       - name: "--run"
@@ -109,6 +109,40 @@ when (and only when) the user asks for it.
 The validate step is **non-negotiable**. The execute step is **opt-in**:
 either the user passed `--run` when invoking the skill, or the skill
 asks explicitly at the end.
+
+## Exit criteria — every invocation MUST end in one of these states
+
+This is the acceptance contract for the whole skill. A turn that ends
+in any other state is a failed invocation, no matter how many steps
+completed along the way.
+
+1. **Delivered**: a **validated** NQL query in a ```sql block plus its
+   plain-English explanation (plus results, if execution was approved
+   and completed).
+2. **Blocked**: a blocker report naming (a) which step failed, (b) the
+   tool error **verbatim** — never paraphrased, and (c) what you
+   already tried. End with the concrete question or retry option the
+   user can act on.
+3. **Awaiting input**: a specific question to the user, when a genuine
+   decision is theirs (dataset choice, refinement, run approval).
+
+**Never end the turn with a statement of intent.** "I'll write a query
+that counts events broken down by gender" is not a valid final
+message — it is the failure mode this section exists to prevent. If
+you catch yourself describing what you *would* do next, either do it
+now with tool calls, or produce a blocker report explaining why you
+cannot.
+
+A failed sub-step does not release you from this contract. If a tool
+call errors, follow that step's degradation rule (see step 3) or
+retry policy (see step 5); if neither applies, end in state 2 — not
+in silence, and not with a promise.
+
+**Final gate — run this check before ending every turn:** does my last
+message contain either (a) a fenced ```sql block with a validated
+query, (b) an explicit blocker report with the verbatim error, or
+(c) a direct question to the user? If none of the three, the turn is
+not done — keep working.
 
 ## Arguments
 
@@ -221,6 +255,24 @@ What to extract:
   doesn't surface a plane field for this tenant, call
   `narrative_data_planes_list(include: ["metadata"])` and pick the
   matching plane (or ask the user) before proceeding.
+
+**Degradation rule — partial describe failures do not abort the flow.**
+"Mandatory" for this step means: you must have the **schema** before
+drafting. The other slices are best-effort:
+
+- If the `sample` and/or `stats` slices error or come back empty but
+  `schema` succeeded, **proceed with the schema alone**. Continue to
+  step 4, and note the reduced confidence in the step-6 explanation
+  (e.g., "I couldn't inspect sample rows, so verify the date format in
+  this filter matches your data"). Do not stop, and do not silently
+  drop the task.
+- If `metadata` fails but you can resolve the data plane another way
+  (`narrative_data_planes_list`, or the user tells you), proceed.
+- If the `schema` slice itself fails after one retry, this step is
+  genuinely blocked: stop and end the turn in the **Blocked** exit
+  state — name the failed call, quote the error verbatim, and ask the
+  user how to proceed. Never draft a query against guessed column
+  names.
 
 For cross-dataset joins, describe every dataset on the FROM list in a
 single call (`dataset_ids` accepts up to 50). Confirm a join key
