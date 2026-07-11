@@ -17,7 +17,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.5
+  version: 0.5.6
   narrative:
     args:
       - name: "--run"
@@ -125,6 +125,12 @@ completed along the way.
    user can act on.
 3. **Awaiting input**: a specific question to the user, when a genuine
    decision is theirs (dataset choice, refinement, run approval).
+4. **Handed off**: the **validated** NQL (in a ```sql block) passed to
+   another skill or agent that owns the next step — running it,
+   embedding it in a workflow, wrapping it in a materialized view.
+   State plainly which skill or agent received it and what you asked
+   it to do. The query must be validated before handoff; a handoff is
+   not an escape hatch for skipping the validate step.
 
 **Never end the turn with a statement of intent.** "I'll write a query
 that counts events broken down by gender" is not a valid final
@@ -140,9 +146,10 @@ in silence, and not with a promise.
 
 **Final gate — run this check before ending every turn:** does my last
 message contain either (a) a fenced ```sql block with a validated
-query, (b) an explicit blocker report with the verbatim error, or
-(c) a direct question to the user? If none of the three, the turn is
-not done — keep working.
+query, (b) an explicit blocker report with the verbatim error, (c) a
+direct question to the user, or (d) a validated ```sql block handed to
+a named skill or agent for the next step? If none of the four, the
+turn is not done — keep working.
 
 ## Arguments
 
