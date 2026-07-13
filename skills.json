@@ -587,7 +587,7 @@
     },
     {
       "name": "write-nql",
-      "version": "0.5.5",
+      "version": "0.5.6",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/write-nql/SKILL.md",
