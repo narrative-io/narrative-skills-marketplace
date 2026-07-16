@@ -72,12 +72,16 @@ two `--array-field-handling` modes below):
   `target_id` JSON with `target_id_type =
   'soundex_first_name|libpostal_normalized_address_array'`.
 
-The **partner** side needs either the standalone attributes OR raw
-`person_name|postal_address` `identifier_value` rows (step 2b
-reconstructs the components from those). If a side exposes none of
-these, route to `/generate-rosetta-stone-mappings`. The mappings need no
-runtime change — the explosion happens here in the workflow, not in the
-mapped dataset.
+The **partner** side needs raw `person_name|postal_address`
+`identifier_value` rows — step 2b reconstructs the components from
+those. A supplier AR that exposes the computed `soundex_first_name` /
+`libpostal_normalized_address_array` attributes does **not** satisfy
+this prerequisite at scale: those attributes are not stored, they are
+re-derived per row at query time (see step 2), so selecting them over a
+large graph is exactly the SC-61797 failure. If the partner has no raw
+name|address rows, route to `/generate-rosetta-stone-mappings`. The
+mappings need no runtime change — the explosion happens here in the
+workflow, not in the mapped dataset.
 
 ## Step 1 — customer edges (explode): two `--array-field-handling` modes
 
@@ -94,6 +98,13 @@ modes emit the identical `(CUSTOMER_PERSON_ID, ID, ID_TYPE)` output and
 are **proven bit-for-bit equivalent** (ND Consumer 150k × Verisk:
 standalone-attribute run and graph-edge-json run both matched 30,491
 compound-key persons / 94,182 overall / 61.8% — SC-62612).
+
+**`--array-field-handling` is a customer-side switch only.** Reading a
+computed Rosetta attribute directly is safe here solely because the
+customer side is a bounded CRM file — the query-time `ADDRESS_HASHES`
+re-derivation runs over a small table. The supplier side never reads
+these attributes, in either mode; it always goes raw-then-block (step
+2).
 
 `CUSTOMER_PERSON_ID` always comes from `graph_edge['source_id']` — the
 person anchor the report counts on, independent of the match key.
@@ -178,12 +189,34 @@ volume** (see **SC-61797**). Exploding it over the full supplier slice
 will hard-fail the run ~3 minutes in, and the error is currently
 swallowed by the platform API.
 
-So step 2 splits into **2a** (materialize the raw slice) and **2b**
-(block to the customer's `(soundex, postal_code)` pairs, *then* hash the
-survivors). Blocking on `(soundex_first_name, postal_code)` is standard
+**Never select a supplier AR's computed key attributes directly.** A
+Rosetta `libpostal_normalized_address_array` (or `soundex_first_name`)
+attribute is **not stored** — the access-rule mapping computes
+`ADDRESS_HASHES(...)` at query time. So
+`SELECT x._rosetta_stone.libpostal_normalized_address_array FROM
+<SUPPLIER_AR_TABLE>` runs the external function over the **entire
+underlying table** before any `WHERE`/`JOIN` can prune it — the 500
+fires before blocking gets a chance. This is why the
+standalone-attribute vs graph-edge-json distinction is irrelevant on
+the supplier side: both shapes re-derive per row over the full graph.
+SC-61797 was hit in production this way even in `standalone-attribute`
+mode. The supplier side therefore **always** goes raw-then-block,
+regardless of what attributes the AR exposes:
+
+1. **Step 2a** — materialize the raw `person_id` + `identifier_value`
+   slice (`WHERE identifier_type = 'person_name|postal_address'`). No
+   hashing of any kind.
+2. **Step 2b** — block to the customer's distinct
+   `(SOUNDEX(given_name), postal_code)` pairs via `INNER JOIN`, then
+   call `ADDRESS_HASHES` on the survivors only.
+
+Blocking on `(soundex_first_name, postal_code)` is standard
 record-linkage; recall loss is negligible because same-person/same-
 address rows share a zip. In practice this prunes a ~497M-row slice to
 single-digit millions — comfortably under the `ADDRESS_HASHES` wall.
+The block is **mandatory at any non-trivial supplier size, not a tuning
+knob**. Only the small customer side (a bounded CRM file) may read the
+computed attribute directly and `UNNEST` it (step 1).
 
 ### Step 2a — raw name|address slice
 
@@ -253,11 +286,11 @@ Notes:
   the workflow runner and the NQL validator (Calcite → Snowflake) accept
   it. `GET_JSON_OBJECT` and colon/`JSON_EXTRACT` syntax are rejected by
   Calcite — do not substitute them.
-- If the supplier AR instead exposes structured `soundex_first_name` /
-  `libpostal_normalized_address_array` attributes (or the `graph-edge-json`
-  shape), read those the way step 1 does and skip the `TRY_PARSE_JSON`
-  extraction — but **keep the soundex+zip blocking before
-  `ADDRESS_HASHES` regardless of scale.**
+- Do **not** shortcut this by reading the supplier AR's
+  `soundex_first_name` / `libpostal_normalized_address_array` attributes
+  (or its `graph-edge-json` edge) "the way step 1 does" — those are
+  computed at query time and re-derive over the full table (see above).
+  Raw-then-block is the only supplier-side path.
 
 ## Step 3 wiring
 
@@ -281,6 +314,13 @@ you summarize (skill Phase 8), reinterpret the numbers:
   `match_identifiers_by_type` reads
   `soundex_first_name|libpostal_normalized_address_array` — that is the
   compound-key channel's contribution.
+
+One structural exception: if the customer dataset is a **`_nio_view`**
+(a view dataset, not a materialized one), step 5 must **not** read it
+directly inside an aggregate CTE — that 500s at run time. Point the
+customer-baseline CTE at the **step-1 MV** instead and derive the
+customer file-total from it; the step-1 MV is materialized and carries
+every row the run actually matched on.
 
 ## Multiple match keys (identifiers + compound key)
 

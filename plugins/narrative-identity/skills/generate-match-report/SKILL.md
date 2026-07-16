@@ -20,7 +20,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.7.1
+  version: 0.7.2
   narrative:
     args:
       - name: "--dataset"
@@ -50,12 +50,13 @@ metadata:
         value: "<standalone-attribute|graph-edge-json>"
         required: false
         description: >-
-          Custom match keys only. How the customer sources the key's
-          component attributes: standalone-attribute (each mapped as its
-          own attribute, UNNEST native arrays) or graph-edge-json
-          (TRY_PARSE_JSON the graph_edge target_id, CAST AS
-          ARRAY<STRING>, UNNEST). Auto-detected if omitted; both yield
-          the identical compound key.
+          Custom match keys, CUSTOMER side only. How the customer
+          sources the key's component attributes: standalone-attribute
+          (each mapped as its own attribute, UNNEST native arrays) or
+          graph-edge-json (TRY_PARSE_JSON the graph_edge target_id,
+          CAST AS ARRAY<STRING>, UNNEST). Auto-detected if omitted;
+          both yield the identical compound key. The supplier side
+          always goes raw-then-block regardless (SC-61797).
       - name: "--dry-run"
         required: false
         description: "Render the YAML and show it without submitting."
@@ -147,15 +148,18 @@ free-text reserved for inputs MCP cannot enumerate.
   on both channels; the report breaks results down per `ID_TYPE`.
   See [`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md).
 - `/generate-match-report --array-field-handling <standalone-attribute|graph-edge-json>`
-  — (custom match keys only) how the customer sources the key's
-  component attributes. `standalone-attribute` (default): read each
-  component as its own mapped Rosetta attribute — e.g.
+  — (custom match keys, **customer side only**) how the customer sources
+  the key's component attributes. `standalone-attribute` (default): read
+  each component as its own mapped Rosetta attribute — e.g.
   `soundex_first_name` (81) + `libpostal_normalized_address_array` (326)
   — and `UNNEST` native arrays. `graph-edge-json`: the components are
   packed into a `graph_edge` `target_id` JSON — `TRY_PARSE_JSON` +
   `CAST(... AS ARRAY<STRING>)` + `UNNEST` instead.
   Both yield the identical compound key (proven equivalent, SC-62612).
-  Omit to auto-detect from the customer dataset's mappings.
+  Omit to auto-detect from the customer dataset's mappings. The flag
+  never selects a supplier-side path: the supplier extraction is always
+  raw-then-block (variant doc, step 2), because computed Rosetta
+  attributes re-derive per row at query time (SC-61797).
 - `/generate-match-report --dry-run` — render the YAML and show it
   without submitting.
 
@@ -390,6 +394,12 @@ If the customer exposes **neither** shape, route to
 `/generate-rosetta-stone-mappings` (same hand-off as the `graph_edge`
 branch above). The partner side is checked in Phase 4.
 
+`ARRAY_FIELD_HANDLING` binds the **customer** side only. Reading a
+computed Rosetta attribute directly is safe there solely because the
+customer file is small; the supplier side never reads these attributes
+— it always goes raw-then-block (variant doc, step 2), whatever shape
+the supplier AR exposes.
+
 ---
 
 ### Phase 3. Compute customer identifier-type coverage
@@ -471,17 +481,20 @@ Bind `SUPPLIER_AR_TABLE` = the qualified `<company_slug>.<ar_name>`
 `OVERLAP_ID_TYPES`.
 
 **Custom match key.** A custom-key channel's "overlap" is binary, not a
-count: can the partner AR yield the key's components — i.e. does it
-expose them as attributes (`soundex_first_name` (81) +
-`libpostal_normalized_address_array` (326) in the worked example), **or**
-raw `person_name|postal_address` `identifier_value` rows that step 2b
-reconstructs them from? Rank/label partners on that instead of shared
-`target_id_type` count; a partner with neither is a blocker for that
+count: does the partner AR have raw `person_name|postal_address`
+`identifier_value` rows that step 2b reconstructs the key's components
+from? That is the **only** supplier-side source that counts. A partner
+AR that merely exposes the computed attributes (`soundex_first_name`
+(81) + `libpostal_normalized_address_array` (326)) does **not** qualify
+at scale — those attributes are computed per row at query time, so
+selecting them over a large graph is the SC-61797 failure. Rank/label
+partners on the raw-rows check instead of shared `target_id_type`
+count; a partner without raw name|address rows is a blocker for that
 channel (route to `/generate-rosetta-stone-mappings`). **Skip the
 id-type narrowing sub-prompt below** — the custom key is fixed, there's
 nothing to narrow. When `identifiers` is also in `MATCH_KEYS`, keep
-narrowing for that channel and additionally require the custom key's
-source.
+narrowing for that channel and additionally require the raw
+name|address source.
 
 #### Narrowing the overlap (only if `len(OVERLAP_ID_TYPES) > 2`)
 
@@ -628,9 +641,12 @@ step-1 body per the `ARRAY_FIELD_HANDLING` bound in Phase 2.5 — and step
 `step_2b_supplier_compound`), so point step 3's supplier `FROM` at the
 2b table. Substitute the custom-key macros (`MATCH_KEY_EXPR`,
 `MATCH_ID_TYPE`, `PERSON_ID_PATH`, `ARRAY_FIELD_HANDLING`) alongside the
-usual ones (Appendix A). **Keep the soundex+zip blocking in 2b
-regardless of partner size** — it is not an optimization, it is what
-stops `ADDRESS_HASHES` from 500ing at scale (SC-61797). The confirmation
+usual ones (Appendix A). **The supplier side is always raw-then-block
+— never `SELECT` the supplier AR's computed key attributes, and keep
+the soundex+zip blocking in 2b regardless of partner size.** The block
+is not an optimization: computed Rosetta attributes re-derive
+`ADDRESS_HASHES` per row over the full table at query time, and the
+external function 500s at scale (SC-61797). The confirmation
 summary should name the key (e.g. "matching on soundex first name +
 normalized address") and flag the explode fan-out cost. With multiple
 channels in `MATCH_KEYS`, every channel's steps render on each side.
@@ -909,12 +925,24 @@ new company context.
   out of the customer's main dataset list. No manual cleanup needed.
   See Phase 8.
 - **`ADDRESS_HASHES` 500 at scale (SC-61797).** `ADDRESS_HASHES`
-  is a remote external function that HTTP-500s when exploded over a
-  large supplier slice, and the platform swallows the error (the run
-  just shows `failed`). Never explode the raw supplier name|address
-  slice — always block it to the customer `(soundex, postal_code)` pairs
-  first (variant doc, step 2b). Mandatory at any non-trivial partner
-  size, not a tuning knob.
+  is a remote external function that HTTP-500s when run over a large
+  supplier slice, and the platform swallows the error (the run just
+  shows `failed`). Two ways to trip it: exploding the raw supplier
+  name|address slice without blocking, **or** selecting the supplier
+  AR's computed `soundex_first_name` /
+  `libpostal_normalized_address_array` attributes — those are not
+  stored; the AR mapping re-derives `ADDRESS_HASHES(...)` per row over
+  the entire underlying table before any predicate can prune it, so
+  the failure fires in `standalone-attribute` shape too. Supplier side
+  is always raw slice (2a) → block to the customer's distinct
+  `(SOUNDEX(given_name), postal_code)` pairs → `ADDRESS_HASHES` on
+  survivors only (2b). Mandatory at any non-trivial partner size, not
+  a tuning knob. Only the bounded customer side may read the computed
+  attribute directly.
+- **Customer dataset is a `_nio_view`.** Step 5 must not read a view
+  dataset directly inside an aggregate CTE — it 500s at run time.
+  Derive the customer file-total from the **step-1 MV** instead (it is
+  materialized and carries every row the run matched on).
 - **`UNNEST` rejects `VARIANT`.** In `graph-edge-json` handling,
   `TRY_PARSE_JSON(target_id)['libpostal_normalized_address_array']` is a
   `VARIANT` — `CAST(... AS ARRAY<STRING>)` before `UNNEST` or you get
@@ -996,7 +1024,7 @@ ignored when matching on `identifiers` only):
 
 | Macro | Example | Notes |
 |---|---|---|
-| `<ARRAY_FIELD_HANDLING>` | `standalone-attribute` | Which customer step-1 body to render: `standalone-attribute` (components as their own attrs, UNNEST native arrays) or `graph-edge-json` (`TRY_PARSE_JSON(target_id)` + `CAST(... AS ARRAY<STRING>)` + UNNEST). Bound in Phase 2.5 from `--array-field-handling` or auto-detect. Outputs are equivalent. |
+| `<ARRAY_FIELD_HANDLING>` | `standalone-attribute` | Which customer step-1 body to render: `standalone-attribute` (components as their own attrs, UNNEST native arrays) or `graph-edge-json` (`TRY_PARSE_JSON(target_id)` + `CAST(... AS ARRAY<STRING>)` + UNNEST). Bound in Phase 2.5 from `--array-field-handling` or auto-detect. Outputs are equivalent. **Customer side only** — supplier extraction is always raw-then-block (SC-61797). |
 | `<MATCH_KEY_EXPR>` | `CONCAT(soundex_first_name, '::', addr_hash)` | The compound `ID` expression. Delimiter is `::`, never `\|`. Both sides must use the identical expression. |
 | `<MATCH_ID_TYPE>` | `soundex_first_name\|libpostal_normalized_address_array` | The fixed `ID_TYPE` label for a custom-key channel (`a\|b` type-label convention — the `\|` here is the type name, not the value delimiter). |
 | `<PERSON_ID_PATH>` | `_rosetta_stone.graph_edge['source_id']` | Person anchor on each side, independent of the match key. On a raw name\|address supplier slice it is the bare `person_id` column. |
