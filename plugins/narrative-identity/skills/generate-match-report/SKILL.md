@@ -20,7 +20,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.7.0
+  version: 0.7.1
   narrative:
     args:
       - name: "--dataset"
@@ -36,23 +36,26 @@ metadata:
         description: >-
           Identity-only run; omit step 4 and the attribute-related step-5
           CTEs.
-      - name: "--match-mode"
-        value: "<deterministic|fuzzy|combined>"
+      - name: "--match-key"
+        value: "<attr[+attr…]|identifiers>"
         required: false
         description: >-
-          Match key. deterministic (default) = graph_edge identifiers
-          (email/phone). fuzzy = soundex_first_name + libpostal address
-          composite. combined = both. --fuzzy is shorthand for
-          --match-mode fuzzy.
+          Add a match channel (repeatable). identifiers (default) =
+          graph_edge identifiers (email/phone). Any other value names
+          Rosetta attributes joined with + and fused into one compound
+          key, e.g. soundex_first_name+libpostal_normalized_address_array.
+          Array-typed components (attribute type = array) are exploded
+          with UNNEST. Pass twice to match on both channels.
       - name: "--array-field-handling"
         value: "<standalone-attribute|graph-edge-json>"
         required: false
         description: >-
-          Fuzzy/combined only. How the customer's fuzzy array field is
-          sourced: standalone-attribute (attrs 81+326, UNNEST native
-          array) or graph-edge-json (TRY_PARSE_JSON the graph_edge
-          target_id, CAST AS ARRAY<STRING>, UNNEST). Auto-detected if
-          omitted; both yield the identical composite key.
+          Custom match keys only. How the customer sources the key's
+          component attributes: standalone-attribute (each mapped as its
+          own attribute, UNNEST native arrays) or graph-edge-json
+          (TRY_PARSE_JSON the graph_edge target_id, CAST AS
+          ARRAY<STRING>, UNNEST). Auto-detected if omitted; both yield
+          the identical compound key.
       - name: "--dry-run"
         required: false
         description: "Render the YAML and show it without submitting."
@@ -96,7 +99,7 @@ metadata:
 
 ## Persona
 
-You are a marketplace match-report engineer who turns a fuzzy
+You are a marketplace match-report engineer who turns a plain-English
 "how does my data compare to theirs" question into a submitted
 Narrative workflow. You optimize for:
 
@@ -133,20 +136,25 @@ free-text reserved for inputs MCP cannot enumerate.
 - `/generate-match-report --supplier-ar <id>` — skip the partner prompt.
 - `/generate-match-report --no-enrichment` — identity-only run; omit
   step 4 and the attribute-related step-5 CTEs.
-- `/generate-match-report --match-mode <deterministic|fuzzy|combined>` —
-  pick the match key. `deterministic` (default) matches on `graph_edge`
-  identifiers (email/phone/etc.); `fuzzy` matches on the
-  `soundex_first_name` + `libpostal_normalized_address_array` composite;
-  `combined` unions both. `--fuzzy` is shorthand for `--match-mode fuzzy`.
-  See [`references/FUZZY_NAME_ADDRESS_VARIANT.md`](references/FUZZY_NAME_ADDRESS_VARIANT.md).
+- `/generate-match-report --match-key <attr[+attr…]|identifiers>` —
+  add a match channel (repeatable). `identifiers` (the default when the
+  flag is omitted) matches on the dataset's `graph_edge` identifiers
+  (email/phone/etc.). Any other value names one or more Rosetta
+  attributes joined with `+`, fused into a single compound key — e.g.
+  `--match-key soundex_first_name+libpostal_normalized_address_array`.
+  Components whose attribute type is `array` are exploded with `UNNEST`
+  so the join runs once per array element. Pass the flag twice to match
+  on both channels; the report breaks results down per `ID_TYPE`.
+  See [`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md).
 - `/generate-match-report --array-field-handling <standalone-attribute|graph-edge-json>`
-  — (fuzzy/combined only) how the customer's fuzzy array field is
-  sourced. `standalone-attribute` (default): read the mapped
+  — (custom match keys only) how the customer sources the key's
+  component attributes. `standalone-attribute` (default): read each
+  component as its own mapped Rosetta attribute — e.g.
   `soundex_first_name` (81) + `libpostal_normalized_address_array` (326)
-  attributes and `UNNEST` the native array. `graph-edge-json`: both
-  signals are packed into a fuzzy `graph_edge` `target_id` JSON —
-  `TRY_PARSE_JSON` + `CAST(... AS ARRAY<STRING>)` + `UNNEST` instead.
-  Both yield the identical composite key (proven equivalent, SC-62612).
+  — and `UNNEST` native arrays. `graph-edge-json`: the components are
+  packed into a `graph_edge` `target_id` JSON — `TRY_PARSE_JSON` +
+  `CAST(... AS ARRAY<STRING>)` + `UNNEST` instead.
+  Both yield the identical compound key (proven equivalent, SC-62612).
   Omit to auto-detect from the customer dataset's mappings.
 - `/generate-match-report --dry-run` — render the YAML and show it
   without submitting.
@@ -189,17 +197,18 @@ reimplement here. The `graph_edge` branch is a live check in
 
 ## Procedure
 
-The interactive flow: pin the company, choose the match mode, pick the
+The interactive flow: pin the company, choose the match key(s), pick the
 customer dataset, confirm mappings, ground the customer id-types, pick
 the partner identity AR, optionally pick an enrichment AR, render and
 confirm the workflow YAML, submit + poll, and summarize the result.
 
-**Match mode threads through the phases.** The default
-(`deterministic`) is the flow documented below verbatim. `fuzzy` /
-`combined` swap the two edge-extraction steps and add a prerequisite
-check — every such deviation is called out inline under a **Fuzzy mode**
+**The match key threads through the phases.** The default
+(`identifiers`) is the flow documented below verbatim. A custom match
+key — a compound of attributes, an array-typed attribute, or both —
+swaps the two edge-extraction steps and adds a prerequisite check;
+every such deviation is called out inline under a **Custom match key**
 heading, and the full surgery lives in
-[`references/FUZZY_NAME_ADDRESS_VARIANT.md`](references/FUZZY_NAME_ADDRESS_VARIANT.md).
+[`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md).
 
 ### Phase 1. Pin the company / context
 
@@ -236,29 +245,38 @@ confirm before switching:
 
 ---
 
-### Phase 1.5. Choose the match mode
+### Phase 1.5. Choose the match key(s)
 
-Skip this prompt if `--match-mode` / `--fuzzy` was passed; otherwise ask:
+Skip this prompt if `--match-key` was passed; otherwise ask:
 
-> **Context:** Deciding **how** to match the two datasets.
-> **Plain English:** Match on exact shared identifiers (email, phone),
-> on a fuzzy first-name + address key, or both?
-> **Recommend:** Deterministic — exact and cheapest — unless the user
-> specifically wants name/address reach.
+> **Context:** Deciding **what key** joins the two datasets.
+> **Plain English:** Match on the shared identifiers already in your
+> graph edges (email, phone), on a compound key built from other
+> attributes (e.g. soundex first name + normalized address), or both?
+> **Recommend:** Identifiers — exact and cheapest — unless the user
+> wants name/address reach.
 >
 > Options:
-> - **A)** Deterministic — exact identifier match (email/phone/…) (recommended)
-> - **B)** Fuzzy — soundex first name + libpostal address
-> - **C)** Combined — both, broken down per identifier type
+> - **A)** Identifiers — `graph_edge` identifier match (email/phone/…) (recommended)
+> - **B)** Compound name+address key — `soundex_first_name` + `libpostal_normalized_address_array`
+> - **C)** Both — each channel broken down per `ID_TYPE`
 
-Bind `MATCH_MODE`. For `deterministic`, follow every phase below as
-written and ignore the **Fuzzy mode** callouts. For `fuzzy` /
-`combined`, apply each **Fuzzy mode** callout and render the
-edge-extraction steps from
-[`references/FUZZY_NAME_ADDRESS_VARIANT.md`](references/FUZZY_NAME_ADDRESS_VARIANT.md).
-`combined` = render **both** the deterministic and the fuzzy
-edge-extraction steps on each side and `UNION ALL` them in step 3 (the
-variant doc's "Combined mode" section).
+Bind `MATCH_KEYS` — the list of match channels. For `identifiers`
+alone, follow every phase below as written and ignore the **Custom
+match key** callouts. When a custom key is in the list, apply each
+**Custom match key** callout and render that channel's edge-extraction
+steps from
+[`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md).
+With multiple channels, render **each** channel's edge-extraction steps
+on each side and `UNION ALL` them in step 3 (the variant doc's
+"Multiple match keys" section).
+
+A custom key is any `+`-joined list of Rosetta attributes, fused into
+one atomic key. Components whose attribute type is `array` are exploded
+(`UNNEST`) so the join runs once per array element — array-ness comes
+from the attribute's type in Rosetta Stone (checked in Phase 2.5),
+never from its name. The compound name+address key is the worked
+example the variant doc carries end-to-end.
 
 ---
 
@@ -342,16 +360,20 @@ zero candidates to begin with), ask the user:
 Do **not** try to author the mapping inline — `/generate-rosetta-stone-mappings` owns
 that contract end-to-end.
 
-#### Fuzzy mode — prerequisite + array-field handling
+#### Custom match key — component prerequisites + array-field handling
 
-In `fuzzy` / `combined` mode the match key is a composite of
-`soundex_first_name` (81) and `libpostal_normalized_address_array`
-(326). From the same `include=["mappings"]` describe, bind
-**`ARRAY_FIELD_HANDLING`** — the shape the customer exposes those signals
-in:
+When `MATCH_KEYS` includes a custom key (worked example: the compound
+`soundex_first_name` (81) + `libpostal_normalized_address_array` (326)
+key), resolve each component attribute with
+`narrative_attributes_describe` and note its **type** — a component
+whose attribute type is `array` (like `libpostal_normalized_address_array`)
+gets exploded with `UNNEST` in step 1; scalar components are used
+directly. From the same `include=["mappings"]` describe, bind
+**`ARRAY_FIELD_HANDLING`** — the shape the customer exposes the
+components in:
 
-- **`standalone-attribute`** — 81 and 326 mapped as their own Rosetta
-  attributes. Step 1 reads them directly and `UNNEST`s the native array.
+- **`standalone-attribute`** — each component mapped as its own Rosetta
+  attribute. Step 1 reads them directly and `UNNEST`s the native array.
 - **`graph-edge-json`** — a `graph_edge` (362) mapping whose
   `target_id_type` is `soundex_first_name|libpostal_normalized_address_array`
   and whose `target_id` is a JSON object
@@ -363,7 +385,7 @@ Honor `--array-field-handling` if passed; otherwise auto-detect (prefer
 `graph-edge-json` when that edge exists, else `standalone-attribute`).
 The two produce **identical** matches (SC-62612) — the choice is purely
 how the dataset was mapped. Both step-1 bodies are in
-[`references/FUZZY_NAME_ADDRESS_VARIANT.md`](references/FUZZY_NAME_ADDRESS_VARIANT.md).
+[`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md).
 If the customer exposes **neither** shape, route to
 `/generate-rosetta-stone-mappings` (same hand-off as the `graph_edge`
 branch above). The partner side is checked in Phase 4.
@@ -395,13 +417,13 @@ This step is informational — no question to the user. Just note:
 
 > Your dataset emits `<N>` identifier types: `<list>`.
 
-**Fuzzy mode.** The fuzzy channel doesn't match on `target_id_type`, so
-this histogram doesn't gate it. Instead report the fuzzy-key coverage —
-the share of customer rows with both a non-null `soundex_first_name` and
-a non-empty `libpostal_normalized_address_array` (the rows the step-1
-explode keeps). Low coverage caps the achievable fuzzy match rate;
-surface it. In `combined` mode, report **both** this coverage and the
-`CUSTOMER_ID_TYPES` histogram.
+**Custom match key.** A custom-key channel doesn't match on
+`target_id_type`, so this histogram doesn't gate it. Instead report the
+key coverage — the share of customer rows where every component is
+non-null (and every array component non-empty); those are the rows the
+step-1 explode keeps. Low coverage caps that channel's achievable match
+rate; surface it. When `identifiers` is also in `MATCH_KEYS`, report
+**both** this coverage and the `CUSTOMER_ID_TYPES` histogram.
 
 ---
 
@@ -448,16 +470,18 @@ Bind `SUPPLIER_AR_TABLE` = the qualified `<company_slug>.<ar_name>`
 (human-readable name for the report description), and
 `OVERLAP_ID_TYPES`.
 
-**Fuzzy mode.** The fuzzy channel's "overlap" is binary, not a count:
-can the partner AR yield the pair — i.e. does it expose
-`soundex_first_name` (81) + `libpostal_normalized_address_array` (326),
-**or** raw `person_name|postal_address` `identifier_value` rows that
-step 2b reconstructs them from? Rank/label partners on that instead of
-shared `target_id_type` count; a partner with neither is a blocker for
-the fuzzy channel (route to `/generate-rosetta-stone-mappings`). **Skip
-the id-type narrowing sub-prompt below** — the fuzzy match key is fixed,
-there's nothing to narrow. In `combined` mode, keep narrowing for the
-deterministic channel and additionally require the fuzzy source.
+**Custom match key.** A custom-key channel's "overlap" is binary, not a
+count: can the partner AR yield the key's components — i.e. does it
+expose them as attributes (`soundex_first_name` (81) +
+`libpostal_normalized_address_array` (326) in the worked example), **or**
+raw `person_name|postal_address` `identifier_value` rows that step 2b
+reconstructs them from? Rank/label partners on that instead of shared
+`target_id_type` count; a partner with neither is a blocker for that
+channel (route to `/generate-rosetta-stone-mappings`). **Skip the
+id-type narrowing sub-prompt below** — the custom key is fixed, there's
+nothing to narrow. When `identifiers` is also in `MATCH_KEYS`, keep
+narrowing for that channel and additionally require the custom key's
+source.
 
 #### Narrowing the overlap (only if `len(OVERLAP_ID_TYPES) > 2`)
 
@@ -595,20 +619,21 @@ and present the result:
 
 If `--dry-run`, stop here, print the YAML, and exit.
 
-**Fuzzy mode.** Render steps 1 and 2 from
-[`references/FUZZY_NAME_ADDRESS_VARIANT.md`](references/FUZZY_NAME_ADDRESS_VARIANT.md)
+**Custom match key.** Render steps 1 and 2 from
+[`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md)
 instead of the default bodies: step 1 is the customer explode — use the
 **Mode A (`standalone-attribute`)** or **Mode B (`graph-edge-json`)**
 step-1 body per the `ARRAY_FIELD_HANDLING` bound in Phase 2.5 — and step
 2 becomes **two** MVs (`step_2a_supplier_nameaddr_slice` +
-`step_2b_supplier_fuzzy`), so point step 3's supplier `FROM` at the 2b
-table. Substitute the fuzzy macros (`MATCH_KEY_EXPR`, `MATCH_ID_TYPE`,
-`PERSON_ID_PATH`, `ARRAY_FIELD_HANDLING`) alongside the usual ones
-(Appendix A). **Keep the soundex+zip blocking in 2b regardless of
-partner size** — it is not an optimization, it is what stops
-`ADDRESS_HASHES` from 500ing at scale (SC-61797). The confirmation
-summary should say "matching on fuzzy first-name + address" and flag the
-fan-out cost. In `combined` mode both channels' steps render on each side.
+`step_2b_supplier_compound`), so point step 3's supplier `FROM` at the
+2b table. Substitute the custom-key macros (`MATCH_KEY_EXPR`,
+`MATCH_ID_TYPE`, `PERSON_ID_PATH`, `ARRAY_FIELD_HANDLING`) alongside the
+usual ones (Appendix A). **Keep the soundex+zip blocking in 2b
+regardless of partner size** — it is not an optimization, it is what
+stops `ADDRESS_HASHES` from 500ing at scale (SC-61797). The confirmation
+summary should name the key (e.g. "matching on soundex first name +
+normalized address") and flag the explode fan-out cost. With multiple
+channels in `MATCH_KEYS`, every channel's steps render on each side.
 
 #### Pre-flight: validate each NQL block
 
@@ -827,20 +852,21 @@ Partner overlaps on 3+ id-types but the user wants to scope the run
 the unwanted types. Bind only the remaining types into
 `SELECTED_ID_TYPES_QUOTED`. Match count drops; runtime unchanged.
 
-### Fuzzy name + address run
+### Compound name + address key
 
 User wants reach beyond exact identifiers, or has only name+address on
-one side. Pick `fuzzy` (or `combined`) in Phase 1.5. Phase 2.5 binds
-`ARRAY_FIELD_HANDLING` — the customer exposes soundex+libpostal as
-standalone attrs (81+326) **or** packed in a fuzzy `graph_edge`
-target_id JSON (`--array-field-handling` overrides; both equivalent).
-Steps 1 and 2 render from
-[`references/FUZZY_NAME_ADDRESS_VARIANT.md`](references/FUZZY_NAME_ADDRESS_VARIANT.md)
+one side. Pick the compound key (or both channels) in Phase 1.5. Phase
+2.5 binds `ARRAY_FIELD_HANDLING` — the customer exposes
+soundex+libpostal as standalone attrs (81+326) **or** packed in a
+`graph_edge` target_id JSON (`--array-field-handling` overrides; both
+equivalent). Steps 1 and 2 render from
+[`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md)
 — step 1 uses the Mode A / Mode B body; step 2 splits into 2a (slice) +
 2b (soundex+zip-blocked `ADDRESS_HASHES` explode). Steps 3–5 and the
 output schema are unchanged; the headline KPI is the person-level rate,
-not the id-based one. Expect higher compute (per-side explode fan-out)
-and probabilistic matches (false positives).
+not the id-based one. Expect higher compute (per-side explode fan-out),
+and matches only as precise as the key's components — soundex is lossy,
+so surface the false-positive trade-off.
 
 ### Dry-run preview
 
@@ -882,20 +908,20 @@ new company context.
   `_nio_interactive` tag — they auto-expire in 24h and are filtered
   out of the customer's main dataset list. No manual cleanup needed.
   See Phase 8.
-- **Fuzzy: `ADDRESS_HASHES` 500 at scale (SC-61797).** `ADDRESS_HASHES`
+- **`ADDRESS_HASHES` 500 at scale (SC-61797).** `ADDRESS_HASHES`
   is a remote external function that HTTP-500s when exploded over a
   large supplier slice, and the platform swallows the error (the run
   just shows `failed`). Never explode the raw supplier name|address
   slice — always block it to the customer `(soundex, postal_code)` pairs
   first (variant doc, step 2b). Mandatory at any non-trivial partner
   size, not a tuning knob.
-- **Fuzzy: `UNNEST` rejects `VARIANT`.** In `graph-edge-json` handling,
+- **`UNNEST` rejects `VARIANT`.** In `graph-edge-json` handling,
   `TRY_PARSE_JSON(target_id)['libpostal_normalized_address_array']` is a
   `VARIANT` — `CAST(... AS ARRAY<STRING>)` before `UNNEST` or you get
   HTTP 422.
-- **Fuzzy: composite-key delimiter.** The `ID` composite joins soundex
-  and address hash with `::`, never `|` — libpostal hashes contain `|`.
-  A `|` delimiter silently under-matches.
+- **Compound-key delimiter.** The `ID` composite joins its components
+  with `::`, never `|` — libpostal hashes contain `|`. A `|` delimiter
+  silently under-matches.
 
 ---
 
@@ -932,10 +958,11 @@ tools or generic Read / Bash / Write.
   mappings into identifiers vs enrichment.
 - [`references/IDENTITY_ONLY_VARIANT.md`](references/IDENTITY_ONLY_VARIANT.md)
   — exact diff to apply when running identity-only (no enrichment AR).
-- [`references/FUZZY_NAME_ADDRESS_VARIANT.md`](references/FUZZY_NAME_ADDRESS_VARIANT.md)
-  — step-1/2 explode bodies (both `--array-field-handling` modes),
-  composite-key + delimiter rule, the `ADDRESS_HASHES` soundex+zip
-  blocking (SC-61797), and KPI relabeling for `--match-mode fuzzy`/`combined`.
+- [`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md)
+  — compound-key + array-component rules (type-based array detection,
+  `::` delimiter), step-1/2 explode bodies (both `--array-field-handling`
+  modes), the `ADDRESS_HASHES` soundex+zip blocking (SC-61797), and KPI
+  reinterpretation for custom-key channels.
 - [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md)
   — prose-mode fallbacks for `narrative_nql_validate` and
   `AskUserQuestion` (both Claude-Code-specific).
@@ -963,15 +990,15 @@ tools or generic Read / Bash / Write.
 | `<SELECTED_ID_TYPES_QUOTED>` | `'normalized_email', 'e164_phone_number'` | Comma-separated quoted strings for the `IN (...)` clause |
 | `<ATTRIBUTE_STRUCTS>` | (multi-line block, see below) | Comma-separated `NAMED_STRUCT(...)` entries |
 
-**Fuzzy-mode-only macros** (used by
-[`references/FUZZY_NAME_ADDRESS_VARIANT.md`](references/FUZZY_NAME_ADDRESS_VARIANT.md);
-ignored in deterministic mode):
+**Custom-match-key macros** (used by
+[`references/CUSTOM_MATCH_KEY_VARIANT.md`](references/CUSTOM_MATCH_KEY_VARIANT.md);
+ignored when matching on `identifiers` only):
 
 | Macro | Example | Notes |
 |---|---|---|
-| `<ARRAY_FIELD_HANDLING>` | `standalone-attribute` | Which customer step-1 body to render: `standalone-attribute` (attrs 81+326, UNNEST native array) or `graph-edge-json` (`TRY_PARSE_JSON(target_id)` + `CAST(... AS ARRAY<STRING>)` + UNNEST). Bound in Phase 2.5 from `--array-field-handling` or auto-detect. Outputs are equivalent. |
-| `<MATCH_KEY_EXPR>` | `CONCAT(soundex_first_name, '::', addr_hash)` | The composite `ID` expression. Delimiter is `::`, never `\|`. Both sides must use the identical expression. |
-| `<MATCH_ID_TYPE>` | `soundex_first_name\|libpostal_normalized_address_array` | The fixed `ID_TYPE` label for the fuzzy channel (`a\|b` type-label convention — the `\|` here is the type name, not the value delimiter). |
+| `<ARRAY_FIELD_HANDLING>` | `standalone-attribute` | Which customer step-1 body to render: `standalone-attribute` (components as their own attrs, UNNEST native arrays) or `graph-edge-json` (`TRY_PARSE_JSON(target_id)` + `CAST(... AS ARRAY<STRING>)` + UNNEST). Bound in Phase 2.5 from `--array-field-handling` or auto-detect. Outputs are equivalent. |
+| `<MATCH_KEY_EXPR>` | `CONCAT(soundex_first_name, '::', addr_hash)` | The compound `ID` expression. Delimiter is `::`, never `\|`. Both sides must use the identical expression. |
+| `<MATCH_ID_TYPE>` | `soundex_first_name\|libpostal_normalized_address_array` | The fixed `ID_TYPE` label for a custom-key channel (`a\|b` type-label convention — the `\|` here is the type name, not the value delimiter). |
 | `<PERSON_ID_PATH>` | `_rosetta_stone.graph_edge['source_id']` | Person anchor on each side, independent of the match key. On a raw name\|address supplier slice it is the bare `person_id` column. |
 
 **Building `<REPORT_DISPLAY_NAME>`.** Pattern:
