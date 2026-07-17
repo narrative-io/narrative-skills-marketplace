@@ -7,5 +7,5 @@ on:
 
 jobs:
   s3-backup-daily:
-    uses: narrative-io/common-github/.github/workflows/backup.yml@c8c12dcd280c68e5e406545d12153195ce8e0f03
+    uses: narrative-io/common-github/.github/workflows/backup.yml@ad6b23573ee7a7573f6499818f61429cc5238e76 # 2026-07-16, post-hardening (sc-62809)
     secrets: inherit
