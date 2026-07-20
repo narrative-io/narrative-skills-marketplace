@@ -700,7 +700,7 @@
     },
     {
       "name": "generate-match-report",
-      "version": "0.6.2",
+      "version": "0.7.2",
       "description": "Compare your data to a partner's data in the marketplace. Given a\ndataset you already own with person/edge data, this skill walks you\nthrough picking a partner data source to match against, choosing which\nidentifier types to match on, optionally selecting which enrichment\nattributes to attach, and then submits the report — returning overlap,\nmatch counts, and demographic coverage.\nUse when: \"how does my data compare to your marketplace\", \"compare my\ndata to [partner]\", \"how much overlap do I have with [supplier]\",\n\"run a match report\", \"match my customers against 3P data\", \"see\nwhat enrichment is available for my dataset\", or any open-ended\nquestion about marketplace overlap.\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-match-report/SKILL.md",
@@ -766,6 +766,18 @@
           "name": "--no-enrichment",
           "required": false,
           "description": "Identity-only run; omit step 4 and the attribute-related step-5 CTEs."
+        },
+        {
+          "name": "--match-key",
+          "value": "<attr[+attr…]|identifiers>",
+          "required": false,
+          "description": "Add a match channel (repeatable). identifiers (default) = graph_edge identifiers (email/phone). Any other value names Rosetta attributes joined with + and fused into one compound key, e.g. soundex_first_name+libpostal_normalized_address_array. Array-typed components (attribute type = array) are exploded with UNNEST. Pass twice to match on both channels."
+        },
+        {
+          "name": "--array-field-handling",
+          "value": "<standalone-attribute|graph-edge-json>",
+          "required": false,
+          "description": "Custom match keys, CUSTOMER side only. How the customer sources the key's component attributes: standalone-attribute (each mapped as its own attribute, UNNEST native arrays) or graph-edge-json (TRY_PARSE_JSON the graph_edge target_id, CAST AS ARRAY<STRING>, UNNEST). Auto-detected if omitted; both yield the identical compound key. The supplier side always goes raw-then-block regardless (SC-61797)."
         },
         {
           "name": "--dry-run",
