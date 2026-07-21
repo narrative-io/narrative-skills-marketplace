@@ -156,7 +156,8 @@ auth:
 # present. `hash`/`normalization` capture the destination's expectations.
 # Every `attribute` URI is verified against the live catalog via the
 # narrative-common find-attribute skill — never typed from memory. An
-# attribute that doesn't exist yet is a blocker, not a TODO.
+# attribute that doesn't exist yet is created at preflight with the
+# user's approval, never invented in the spec.
 identifier_groups:
   - name: email
     attribute: "https://api.narrative.io/attributes/sha256_hashed_email"

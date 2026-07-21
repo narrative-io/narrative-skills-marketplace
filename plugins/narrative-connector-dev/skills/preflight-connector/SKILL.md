@@ -15,11 +15,12 @@ compatibility: >-
   be named differently across harnesses) plus the narrative-common
   find-attribute skill (narrative-mcp) for Rosetta attribute
   verification. Recommends AskUserQuestion (prose fallback documented
-  in the body). Attribute verification and app_id pinning need access
-  to a Narrative environment; without one, each degrades to a blocking
-  open question rather than a guessed value.
+  in the body) and the narrative_attribute_create and
+  narrative_app_create MCP tools for creating missing attributes and
+  the marketplace app; both degrade to blocking open questions when
+  unavailable.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   narrative:
     args:
       - name: "<spec-path>"
@@ -38,6 +39,9 @@ metadata:
     recommends:
       tools:
         - AskUserQuestion
+      mcp-tools:
+        - narrative_attribute_create
+        - narrative_app_create
       skills:
         - narrative-connector-dev:spec-connector
         - narrative-connector-dev:scaffold-connector
@@ -63,8 +67,8 @@ signs off before any code is generated. You optimize for:
    structure and prose belong to `/spec-connector`.
 
 You never invent a value to clear a TODO, never pass a spec that
-carries a blocking open question, and never apply a spec edit the
-user hasn't approved.
+carries a blocking open question, and never, without the user's
+approval, apply a spec edit or create anything in a live system.
 
 ## Overview
 
@@ -72,7 +76,10 @@ The gate between spec and code. Reads `connector-spec.yaml`, proves
 it is complete and internally consistent enough to build from,
 resolves the fuzzy values into exact ones, and delivers a single
 verdict: **go** (every downstream skill can run without guessing or
-re-asking) or **no-go** (at least one blocker remains). The verdict
+re-asking) or **no-go** (at least one blocker remains). What is
+missing rather than fuzzy (a Rosetta attribute the catalog lacks,
+the marketplace app itself) is created with the user's approval,
+not just flagged. The verdict
 and every finding behind it land in a `preflight-report.md` written
 next to the spec; resolved values are written back into the spec
 itself as approved edits.
@@ -175,11 +182,17 @@ For each group, compare the skill's structured result to the spec:
 - **Close but different** — the catalog's canonical URI differs from
   the spec's (a stale copy, a renamed attribute). Propose the
   corrected URI as a spec edit; do not apply it silently.
-- **Not found** — the attribute does not exist in the catalog. This
-  is a **blocker, not a TODO to skip**. Record an `open_questions`
-  entry (owner: internal) stating that the attribute must be created
-  before the connector can ship, and carry it into Phase 7 as
-  blocking.
+- **Not found** — the attribute does not exist in the catalog. Offer
+  to create it. With the user's explicit approval, call the
+  `narrative_attribute_create` MCP tool using the name, schema
+  shape, and hash / normalization expectations the spec records for
+  the group, then re-run `narrative-common:find-attribute` to
+  confirm the new attribute resolves, and propose the returned URI
+  as a spec edit. If the tool is unavailable or the user declines,
+  the gap is a **blocker, not a TODO to skip**. Record an
+  `open_questions` entry (owner: internal) stating that the
+  attribute must be created before the connector can ship, and
+  carry it into Phase 7 as blocking.
 
 Then sanity-check `ref_kind` for each verified group. It must be one
 of the schema's four enum values and fit the attribute's actual
@@ -198,22 +211,27 @@ and database names, so a silent fix in either direction risks
 breaking a name the user chose deliberately. Apply the answer as a
 proposed spec edit.
 
-### Phase 5 — Pin app_id
+### Phase 5 — Create the app and pin app_id
 
-`app_id` is `max(id) + 1` over the apps already registered in the
-marketplace. This skill cannot query the marketplace itself — the
-operator runs the query and reports the result:
+`app_id` identifies the connector's marketplace app. Pin it by
+creating the app:
 
-1. Ask the operator to run their marketplace app query (admin UI or
-   database, whatever their environment provides) and report the
-   current maximum app id.
-2. Set `app_id` to that maximum plus one, and record in the report
-   where the number came from and when it was read.
-3. If the operator cannot run the query (no access, no Narrative
+1. With the user's explicit approval (creating a marketplace app is
+   visible outside this session), call the `narrative_app_create`
+   MCP tool, supplying the identity fields the spec records. Set
+   `app_id` to the id the marketplace returns, and record in the
+   report that this run created the app.
+2. If the mounted narrative-mcp server does not expose
+   `narrative_app_create`, fall back to the manual path. Ask the
+   user to run their marketplace app query (admin UI or database,
+   whatever their environment provides) and report the current
+   maximum app id. Set `app_id` to that maximum plus one, and
+   record where the number came from and when it was read.
+3. If neither path is possible (no access, no Narrative
    environment), `app_id` stays `null` and gains a **blocking**
    `open_questions` entry. Do not accept a number recalled from
-   memory in place of a query result; record such a number in the
-   report as unverified and keep the open question.
+   memory in place of a created app or a query result; record such
+   a number in the report as unverified and keep the open question.
 
 ### Phase 6 — Shape checks
 
@@ -298,6 +316,9 @@ Then:
 - **The spec was already preflighted** — re-verify everything;
   attribute catalogs and marketplaces change between runs, so a
   previous report is evidence of a past state, not this one.
+- **The spec already carries a non-null `app_id`** — do not create
+  a second app. Record the existing id as pinned, and note in the
+  report where it came from if the spec or the user can say.
 - **Attribute found under a different URI than the spec claims** —
   propose the correction; the stale copied URI is exactly the bug
   this skill exists to catch.
@@ -325,8 +346,13 @@ tools or generic Read / Bash / Write.
   Tell the user why the gate holds. An unverified identifier
   surfaces later as a delivery failure in a built and deployed
   connector, which is the failure this gate exists to prevent.
-- **No marketplace access** — Phase 5 degrades as documented:
-  `app_id` stays `null` with a blocking open question.
+- **`narrative_attribute_create` unavailable** — missing attributes
+  cannot be created in this run; each one stays a blocking open
+  question, which forces a no-go.
+- **`narrative_app_create` unavailable** — fall back to Phase 5's
+  manual path (the user runs the marketplace app query). If that is
+  also impossible, `app_id` stays `null` with a blocking open
+  question.
 - **Write unavailable** — present the full report content in the
   conversation and ask the user to save it; the verdict logic is
   unchanged.
@@ -412,7 +438,8 @@ auth:
 # present. `hash`/`normalization` capture the destination's expectations.
 # Every `attribute` URI is verified against the live catalog via the
 # narrative-common find-attribute skill — never typed from memory. An
-# attribute that doesn't exist yet is a blocker, not a TODO.
+# attribute that doesn't exist yet is created at preflight with the
+# user's approval, never invented in the spec.
 identifier_groups:
   - name: email
     attribute: "https://api.narrative.io/attributes/sha256_hashed_email"

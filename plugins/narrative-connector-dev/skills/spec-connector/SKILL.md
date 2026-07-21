@@ -23,7 +23,7 @@ compatibility: >-
   Shortcut or Notion MCP servers for publishing the finished spec —
   all degrade gracefully when absent.
 metadata:
-  version: 1.2.1
+  version: 1.3.0
   narrative:
     args:
       - name: "<platform>"
@@ -238,12 +238,13 @@ each group: attribute URI, metaschema `ref_kind`, hash requirement,
 and normalization.
 
 If an identifier has **no existing Rosetta attribute**, do not invent
-a URI — and do not create the attribute here. Authoring the attribute
-is out of scope for the spec; this skill only flags the gap. Record it
-as a blocker in `open_questions` (owner: internal) noting that the
-attribute must be created (via the `narrative_attribute_create` MCP
-tool) before the connector can ship, so `/preflight-connector` refuses
-to pass until it exists.
+a URI, and do not create the attribute here; creation happens at
+preflight. Record the gap in `open_questions` (owner: internal),
+including the schema shape and hash / normalization expectations the
+new attribute needs. `/preflight-connector` uses that entry to create
+the attribute (via the `narrative_attribute_create` MCP tool, with
+the user's approval) and re-verifies the URI before passing the
+spec.
 
 ### Phase 6 — Draft the spec + schema fit-check
 
@@ -451,7 +452,8 @@ auth:
 # present. `hash`/`normalization` capture the destination's expectations.
 # Every `attribute` URI is verified against the live catalog via the
 # narrative-common find-attribute skill — never typed from memory. An
-# attribute that doesn't exist yet is a blocker, not a TODO.
+# attribute that doesn't exist yet is created at preflight with the
+# user's approval, never invented in the spec.
 identifier_groups:
   - name: email
     attribute: "https://api.narrative.io/attributes/sha256_hashed_email"
