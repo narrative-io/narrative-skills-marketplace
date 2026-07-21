@@ -851,7 +851,7 @@
     },
     {
       "name": "provision-connector-db",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Author the connector's narrative-db migrations (V1/V2 + undo, plus the\nOAuth and measurement tables when those are in scope) and the RDS\nterraform, in the separate narrative-db repo — writing them for review,\nstopping before any migration or apply is run.\nUse when: \"provision the connector database\", \"write the narrative-db\nmigrations for the connector\", \"set up the connector RDS\", \"add the\nconnector db terraform\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/provision-connector-db/SKILL.md",
@@ -888,19 +888,37 @@
     },
     {
       "name": "scaffold-connector",
-      "version": "0.1.0",
-      "description": "Generate the sbt module skeleton for a new connector — the\napi/services/stores/worker/executor/poller modules, build.sbt and\nQuickPublish entries, and ops docs — from the reference connector\ntemplate, driven entirely by connector-spec.yaml.\nUse when: \"scaffold the <slug> connector\", \"generate the connector\nmodules\", \"create the sbt skeleton for the connector\", \"stand up the\nconnector project\".\n(narrative-connector-dev)",
+      "version": "1.0.0",
+      "description": "Generate the code skeleton for a new connector in whatever codebase\nhosts it, driven by connector-spec.yaml and a scaffold target: a\ntemplate repo carrying a connector-scaffold.yaml manifest, an existing\nconnector to clone conventions from, or a greenfield runtime profile\n(cloudflare-workers first). Derives the component set from the spec,\ncopies and renames, wires build files — every change a reviewable\nworking-tree diff.\nUse when: \"scaffold the <slug> connector\", \"generate the connector\nmodules\", \"stand up the connector project\", \"scaffold a connector in\nmy repo\", \"start a connector from scratch\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/scaffold-connector/SKILL.md",
-      "compatibility": "Stub — implementation pending. No hard requirements: local filesystem/git codegen in the narrative-connectors working tree; no infra, DB, or registration side effects. Reads connector-spec.yaml. Runs on any agentskills.io-compliant harness.",
+      "compatibility": "Requires Bash, Read, Write, and Edit (or equivalent capabilities — these tools may be named differently across harnesses) for local codegen in a git working tree. Reads connector-spec.yaml; no infra, DB, or registration side effects. Recommends AskUserQuestion (prose fallback documented in the body). Runs on any agentskills.io-compliant harness.",
       "requirements": {
+        "requires": {
+          "tools": [
+            "Bash",
+            "Read",
+            "Write",
+            "Edit"
+          ]
+        },
         "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
           "skills": [
             "narrative-connector-dev:preflight-connector",
             "narrative-connector-dev:define-connector-interface"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "<spec-path>",
+          "required": false,
+          "description": "Path to connector-spec.yaml. If omitted, the skill looks in the conventional location and asks when it can't find one."
+        }
+      ]
     },
     {
       "name": "scaffold-connector-infra",
@@ -922,7 +940,7 @@
     },
     {
       "name": "spec-connector",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "description": "Research and author a connector spec for a new destination platform —\ninterview, prior-art recon, vendor-doc research, and a differentiator\nwalk across five axes (auth, destination data model, identifiers and\nmatching, sync semantics, operational constraints) — then emit the\nmachine-readable connector-spec.yaml the rest of the plugin builds\nfrom, plus a prose spec.md. Identifiers, rate limits, and data-removal\nsemantics are never guessed; unknowns become partner questions.\nUse when: \"spec out a connector for <platform>\", \"start a new\nconnector\", \"research the <platform> connector\", \"write the connector\nspec\", \"draft connector-spec.yaml\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/spec-connector/SKILL.md",

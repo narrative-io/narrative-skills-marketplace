@@ -155,7 +155,18 @@ delivery:
 # ── Open questions ──────────────────────────────────────────
 open_questions: []                # shipped connector — none outstanding
 
-# ── Build & deploy targets ──────────────────────────────────
+# ── Scaffold target ───────────────────────────────────────────
+target:
+  mode: template-repo
+  repo_path: "~/dev/narrative-connectors"
+  manifest_path: null            # default <repo_path>/connector-scaffold.yaml
+  reference_connector: null
+  runtime: null
+
+# ── Build & deploy stages ───────────────────────────────────────
 stages: [dev, prod]
-modules_omitted: []
-narrative_db_path: "~/projects/narrative-db"
+
+# ── Narrative-internal extension ────────────────────────────────
+internal:
+  narrative_db_path: "~/projects/narrative-db"
+  modules_omitted: []

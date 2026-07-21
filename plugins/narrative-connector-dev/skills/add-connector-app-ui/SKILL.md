@@ -98,13 +98,13 @@ field values.
 schema_version: 1
 
 # ── Identity ────────────────────────────────────────────────
-slug: google-dv360            # lowercase, dashes ok. Drives module dirs,
-                              # SSM paths, deploy URLs, Docker image names.
-package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
-                              # + narrative-db dir names.
+slug: google-dv360            # lowercase, dashes ok. Drives directory names,
+                              # deploy names, image names.
+package_slug: googledv360     # dashes dropped — the identifier-safe variant
+                              # for code packages and database identifiers.
 display_name: "Display & Video 360"   # human-facing listing name
-app_id: 47                    # marketplace app id — max(id)+1 over existing
-                              # apps. null until /preflight-connector pins it.
+app_id: 47                    # marketplace app id. null until
+                              # /preflight-connector pins it.
 destination_type: audience    # audience | conversion_api | measurement | combined.
                               # `audience` means any outbound record/membership
                               # delivery — ad audiences, email list members, CRM
@@ -178,9 +178,9 @@ destination:
                                     # (e.g. a CRM contact's list memberships)
 
 # ── Quick settings ──────────────────────────────────────────
-# One entry per QuickSettingsType the connector exposes. `type` is the
+# One entry per quick-settings type the connector exposes. `type` is the
 # JSON discriminator ("<platform>_<kind>_quick_settings"); fields drive
-# both the Scala codecs and the app-ui form.
+# both the connector's codecs and the settings form.
 quick_settings:
   - type: dv360_audience_quick_settings
     parser: Dv360AudienceParser
@@ -230,11 +230,32 @@ open_questions:
     owner: partner              # partner | internal | customer
     status: "asked 2026-07-20; awaiting reply"
 
-# ── Build & deploy targets ──────────────────────────────────
+# ── Scaffold target ─────────────────────────────────────────
+# Where connector code materializes. The rest of the spec says what the
+# connector is; `target` says where and how it gets built.
+# /scaffold-connector resolves this block (asking when absent) and
+# writes it back; the implementation skills read it to know which
+# working tree and conventions they operate in.
+target:
+  mode: template-repo         # template-repo | reference-clone | greenfield
+  repo_path: "~/dev/my-connectors"   # working tree for template-repo / reference-clone
+  manifest_path: null         # template-repo: scaffold-manifest location; null means
+                              # <repo_path>/connector-scaffold.yaml
+  reference_connector: null   # reference-clone: path (inside repo_path) of the
+                              # existing connector to copy conventions from
+  runtime: null               # greenfield: runtime profile (cloudflare-workers)
+
+# ── Build & deploy stages ───────────────────────────────────
 stages: [dev, prod]
-modules_omitted: []            # of api|services|stores|worker|executor|poller|infra —
-                               # rare; empty means the standard full module set
-narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+
+# ── Narrative-internal extension (optional) ─────────────────
+# Read only by skills that operate inside Narrative's own environment
+# (DB provisioning, app registration, listing, deploys). Builders
+# outside Narrative omit the whole block; the portable skills never
+# require it.
+internal:
+  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  modules_omitted: []          # rare tuning of the internal template's module set
 ```
 
 Fields not yet known carry the literal `TODO` (or `null` where optional)
