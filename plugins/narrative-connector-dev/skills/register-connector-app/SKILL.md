@@ -1,22 +1,22 @@
 ---
 name: register-connector-app
 description: |
-  Register the connector as a Narrative marketplace app — the marketplace-db
-  app row, SSM credentials, the DSM installation, and the bearer token — via
-  the bootstrap-app flow, driven by connector-spec.yaml and gated on human
-  confirmation.
+  Register the connector as a Narrative marketplace app — the app-registry
+  row, secret-store credentials, the platform installation, and the access
+  token — via the registration flow, driven by connector-spec.yaml and gated
+  on human confirmation.
   Use when: "register the connector app", "bootstrap the marketplace app",
-  "create the app row for the connector", "run bootstrap-app for the
+  "create the app row for the connector", "run the app registration for the
   connector".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. Mutates marketplace-db, SSM, S3, and DSM and
-  needs a browser-copied DSM token — a hard human gate, per stage. Reads
-  connector-spec.yaml. Recommends AskUserQuestion. Runs on any
-  agentskills.io-compliant harness.
+  Stub — implementation pending. Mutates the app registry, secret store,
+  object storage, and platform installation and needs a browser-copied
+  access token — a hard human gate, per stage. Reads connector-spec.yaml.
+  Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -31,15 +31,14 @@ metadata:
 # Register Connector App
 
 > **Status: stub — implementation pending.** Contract only. Consolidates
-> the app-registration step of `create-connector` (the `bootstrap-app.py`
-> flow).
+> the app-registration step of `create-connector`.
 
 ## Purpose
 
-Make the connector a real marketplace app: create its marketplace-db row,
-write its SSM credentials, create the DSM installation, and mint the bearer
-token. This is the most side-effect-heavy registration step and is fully
-gated.
+Make the connector a real marketplace app: create its app-registry row,
+write its secret-store credentials, create the platform installation, and
+mint the access token. This is the most side-effect-heavy registration step
+and is fully gated.
 
 Phase: **registration**.
 
@@ -51,14 +50,15 @@ Phase: **registration**.
 
 ## Outputs
 
-- Marketplace app row, SSM credentials, DSM app installation, bearer token —
-  per stage.
+- Marketplace app row, secret-store credentials, platform installation,
+  access token — per stage.
 
 ## Human gates
 
-- **`bootstrap-app.py` mutates marketplace-db, SSM, S3, and DSM** and needs
-  a **browser-copied DSM token**. Hard human gate, run per stage on explicit
-  confirmation — never unattended.
+- **The registration flow mutates the app registry, secret store, object
+  storage, and platform installation** and needs a **browser-copied access
+  token**. Hard human gate, run per stage on explicit confirmation — never
+  unattended.
 
 ## Composition contract
 
@@ -218,8 +218,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -258,7 +258,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

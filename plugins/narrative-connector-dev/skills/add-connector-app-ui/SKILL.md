@@ -1,7 +1,7 @@
 ---
 name: add-connector-app-ui
 description: |
-  Build the connector's app UI in narrative-platform-ui — the profile-creation
+  Build the connector's app UI in the frontend repo — the profile-creation
   flow (OAuth connect button or credential fields) and the quick-settings
   form — generated from the auth and quick_settings blocks of
   connector-spec.yaml.
@@ -12,11 +12,11 @@ description: |
 license: MIT
 compatibility: >-
   Stub — implementation pending. No hard requirements: local UI code in the
-  narrative-platform-ui working tree, PR-reviewed; no infra or destructive
+  frontend repo's working tree, PR-reviewed; no infra or destructive
   ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -29,7 +29,7 @@ metadata:
 # Add Connector App UI
 
 > **Status: stub — implementation pending.** Contract only. Targets the
-> `narrative-platform-ui` working tree.
+> frontend repo's working tree.
 
 ## Purpose
 
@@ -51,11 +51,11 @@ Phase: **frontend**.
 ## Outputs
 
 - The connector's profile-creation and quick-settings React
-  components/forms, in narrative-platform-ui.
+  components/forms, in the frontend repo.
 
 ## Human gates
 
-- Local UI code only — shipped through the normal narrative-platform-ui PR
+- Local UI code only — shipped through the frontend repo's normal PR
   review; no direct deploy from this skill.
 
 ## Composition contract
@@ -216,8 +216,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -256,7 +256,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

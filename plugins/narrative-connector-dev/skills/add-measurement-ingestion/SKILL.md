@@ -2,21 +2,21 @@
 name: add-measurement-ingestion
 description: |
   Wire the framework measurement-feed engine into a connector — scan a
-  partner S3 inbox, copy new files into a Narrative dataset ingestion
-  folder, write _NIO_COMMIT, and dedup so files are never copied twice —
-  driven by the measurement block of connector-spec.yaml.
+  partner object-storage inbox, copy new files into a Narrative dataset
+  ingestion folder, write _NIO_COMMIT, and dedup so files are never copied
+  twice — driven by the measurement block of connector-spec.yaml.
   Use when: "add measurement ingestion to the connector", "ingest the
-  partner measurement feed", "wire up the S3 inbox scan", "pull conversion
-  feedback files".
+  partner measurement feed", "wire up the object-storage inbox scan", "pull
+  conversion feedback files".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
   Stub — implementation pending. Mostly local codegen, but creates a
-  dataset, a cross-repo DB migration, and an inbox-bucket terraform module
+  dataset, a cross-repo DB migration, and inbox-bucket infrastructure
   at human gates. Reads the measurement block of connector-spec.yaml.
   Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -31,16 +31,15 @@ metadata:
 
 # Add Measurement Ingestion
 
-> **Status: stub — implementation pending.** Contract only. Consolidates
-> `narrative-connectors/.claude/skills/add-measurement-feed-ingestion`.
+> **Status: stub — implementation pending.** Contract only.
 
 ## Purpose
 
 Give a connector an inbound measurement/conversion-feedback path: the
-generic framework measurement-feed engine scans a partner S3 inbox bucket
-we own, copies new files verbatim into a Narrative dataset ingestion
-folder, writes `_NIO_COMMIT`, and dedups against an idempotency table so
-nothing is copied twice.
+generic framework measurement-feed engine scans a partner object-storage
+inbox bucket the platform owns, copies new files verbatim into a Narrative
+dataset ingestion folder, writes `_NIO_COMMIT`, and dedups against an
+idempotency table so nothing is copied twice.
 
 Phase: **service** (+ DB + infra + deploy-verify at gates).
 
@@ -57,14 +56,14 @@ Phase: **service** (+ DB + infra + deploy-verify at gates).
 - `MeasurementFeed` config + Resources wiring; a poller fiber
   (`runForever`).
 - `measurement_feed_ingestion` idempotency-table migration (cross-repo).
-- A `measurement-feed` terraform module (inbox bucket + hardening + partner
-  access + worker read grant).
+- A `measurement-feed` infrastructure module (inbox bucket + hardening +
+  partner access + worker read grant).
 
 ## Human gates
 
 - **Dataset creation** (dev + prod) — pause and confirm.
-- **Cross-repo DB migration** + `shared-db-migrations` pin bump — confirm.
-- **terraform apply** for the inbox bucket + partner access — gated at
+- **Cross-repo DB migration** + migrations pin bump — confirm.
+- **infrastructure apply** for the inbox bucket + partner access — gated at
   `/deploy-connector`.
 - Verify step uploads a sample file and watches for the
   `writing commit file` success line.
@@ -227,8 +226,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -267,7 +266,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

@@ -285,10 +285,10 @@ wiring:
 infrastructure:
   iac: terraform                 # terraform | pulumi | wrangler | cloudformation | none
   path: "{slug}-infra"           # where the connector's infra code lives
-  provision: "terraform plan for review; apply per stage is a human gate"
+  provision: "plan for review; apply per stage is a human gate"
 database:
   engine: postgres               # postgres | mysql | d1 | dynamodb | none
-  migrations_path: "~/projects/narrative-db"   # may be a separate repo; prompted if so
+  migrations_path: "~/projects/db-migrations"   # may be a separate repo; prompted if so
 deploy:
   build: "sbt {package_slug}Api/docker:publish"   # how an image/artifact is produced
   promote: "bump the pinned image version per stage, then apply"   # dev → prod discipline
@@ -500,8 +500,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -540,7 +540,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

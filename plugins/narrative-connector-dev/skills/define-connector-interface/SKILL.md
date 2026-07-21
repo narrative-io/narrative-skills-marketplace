@@ -12,11 +12,11 @@ description: |
 license: MIT
 compatibility: >-
   Stub — implementation pending. No hard requirements: local codegen of
-  schema/codec files in the narrative-connectors working tree; no infra or
+  schema/codec files in the connector repo's working tree; no infra or
   destructive ops. Reads connector-spec.yaml. Recommends the narrative-common
   find-attribute skill. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -221,8 +221,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -261,7 +261,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

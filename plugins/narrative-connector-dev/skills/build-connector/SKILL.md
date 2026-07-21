@@ -3,8 +3,8 @@ name: build-connector
 description: |
   Orchestrate a full connector build — sequence the spec, service, infra,
   registration, frontend, and deploy/verify skills against a single
-  connector-spec.yaml, stopping at every human gate (terraform applies,
-  narrative-db migrations, app registration, prod promotion).
+  connector-spec.yaml, stopping at every human gate (infrastructure
+  applies, database migrations, app registration, prod promotion).
   Use when: "build a connector for <platform> end to end", "run the whole
   connector build", "orchestrate the connector from spec to deploy", "take
   the connector from spec to prod".
@@ -16,7 +16,7 @@ compatibility: >-
   itself. Reads and writes connector-spec.yaml as shared state. Recommends
   AskUserQuestion. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -75,12 +75,14 @@ the operator for the irreversible ones.
 
 ## Human gates (the orchestrator always stops here)
 
-- **terraform applies** — shared ECR, connector infra, KMS/IAM, RDS,
+- **infrastructure applies** — the shared image registry, connector infra,
+  encryption keys and access policies, the managed database, the
   measurement inbox bucket.
-- **narrative-db migrations** — running any migration, in the separate
-  narrative-db repo.
-- **app registration** — the `bootstrap-app.py` marketplace/SSM/DSM flow.
-- **prod promotion** — every prod `terraform apply` and the final
+- **database migrations** — running any migration, wherever the migrations
+  live (separate repo or monorepo path).
+- **app registration** — the marketplace registration flow (secret store +
+  platform installation).
+- **prod promotion** — every prod infrastructure apply and the final
   `/verify-connector` sign-off.
 
 At each gate the orchestrator summarizes what is about to happen and waits
@@ -244,8 +246,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -284,7 +286,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

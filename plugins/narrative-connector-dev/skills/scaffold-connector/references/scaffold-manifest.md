@@ -13,8 +13,8 @@ Keeping conventions in the repo's manifest rather than in the skill is
 what lets one skill serve every team. A team's module taxonomy, build
 wiring, and docs layout live in that team's repo, next to the code they
 describe, visible only to people who can already read the repo.
-Narrative's own manifest lives in the `narrative-connectors` repo; any
-other team writes one for their layout.
+One team's manifest lives alongside its connector code; another team
+writes one for its own layout.
 
 Authoring a manifest is the `/create-scaffold-manifest` skill's job,
 by inference from a reference connector or by interview. This reference
@@ -82,10 +82,10 @@ wiring:
 infrastructure:
   iac: terraform                 # terraform | pulumi | wrangler | cloudformation | none
   path: "{slug}-infra"           # where the connector's infra code lives
-  provision: "terraform plan for review; apply per stage is a human gate"
+  provision: "plan for review; apply per stage is a human gate"
 database:
   engine: postgres               # postgres | mysql | d1 | dynamodb | none
-  migrations_path: "~/projects/narrative-db"   # may be a separate repo; prompted if so
+  migrations_path: "~/projects/db-migrations"   # may be a separate repo; prompted if so
 deploy:
   build: "sbt {package_slug}Api/docker:publish"   # how an image/artifact is produced
   promote: "bump the pinned image version per stage, then apply"   # dev → prod discipline

@@ -128,7 +128,7 @@ open_questions:
 # ── Scaffold target ───────────────────────────────────────────
 target:
   mode: template-repo
-  repo_path: "~/dev/narrative-connectors"
+  repo_path: "~/dev/connectors"
   manifest_path: null            # default <repo_path>/connector-scaffold.yaml
   reference_connector: null
   runtime: null
@@ -136,7 +136,7 @@ target:
 # ── Build & deploy stages ───────────────────────────────────────
 stages: [dev, prod]
 
-# ── Narrative-internal extension ────────────────────────────────
-internal:
-  narrative_db_path: "~/projects/narrative-db"
+# ── Deployment extension ────────────────────────────────────────
+deployment:
+  migrations_path: "~/projects/db-migrations"
   modules_omitted: []

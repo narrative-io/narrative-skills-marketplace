@@ -1,22 +1,23 @@
 ---
 name: add-connector-oauth
 description: |
-  Add a third-party OAuth 2.0 authorization-code flow with KMS-encrypted
+  Add a third-party OAuth 2.0 authorization-code flow with encrypted
   token storage to a scaffolded connector — domains, stores, api client,
   oauth service, callback + authorize routes, the token-table migration,
-  and the KMS/IAM/SSM plumbing — all driven by the auth.oauth block of
-  connector-spec.yaml.
+  and the encryption-key, access-policy, and secret-store plumbing — all
+  driven by the auth.oauth block of connector-spec.yaml.
   Use when: "add OAuth to the connector", "wire up the <platform> OAuth
   flow", "the connector needs authorization-code auth", "add token storage".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
   Stub — implementation pending. Mostly local codegen, but reaches the DB
-  (token-table migration) and infra (KMS/IAM/SSM) at human gates. Reads the
+  (token-table migration) and infra (encryption key, access policy, secret
+  store) at human gates. Reads the
   auth.oauth block of connector-spec.yaml. Recommends AskUserQuestion for
   gate confirmations. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -30,20 +31,12 @@ metadata:
 
 # Add Connector OAuth
 
-> **Status: stub — implementation pending.** Contract only. Consolidates
-> `narrative-connectors/.claude/skills/add-connector-oauth`.
->
-> **Name-collision note.** A repo-local skill of the same name lives at
-> `narrative-connectors/.claude/skills/add-connector-oauth`. This plugin's
-> copy is intended to become the canonical one; the repo-local copy becomes
-> a thin pointer once the plugin is adopted. See the plugin README for the
-> decision. (There is no collision inside this marketplace — the flat
-> portable build only dedupes within the marketplace's own skills.)
+> **Status: stub — implementation pending.** Contract only.
 
 ## Purpose
 
 Bolt a provider OAuth 2.0 authorization-code flow onto an already-scaffolded
-connector, with company-scoped, KMS-encrypted token storage. Runs *after*
+connector, with company-scoped, encrypted token storage. Runs *after*
 `/scaffold-connector`.
 
 Phase: **service** (+ DB + infra at gates).
@@ -59,20 +52,21 @@ Phase: **service** (+ DB + infra at gates).
 ## Outputs
 
 - `<Slug>OAuthState` / `<Slug>OAuthToken` domains + company-scoped stores.
-- `TokenEncryptionService` (AWS KMS), `<Slug>ApiClient`
+- `TokenEncryptionService` (a managed encryption key), `<Slug>ApiClient`
   (authorize/exchange/refresh/me), `<Slug>OAuthService`.
 - Public `GET /callback` + authed `GET /profiles/{id}/authorize` routes.
-- V3/U3 narrative-db migrations; KMS key + IAM + SSM client-id/secret
-  terraform; oauth tests.
+- V3/U3 database migrations; encryption key + access policy + secret-store
+  client-id/secret infrastructure; oauth tests.
 
 ## Human gates
 
 - **DB migration** (V3/U3) — applied via the `/provision-connector-db`
   machinery, at that skill's gate.
-- **terraform apply** for the KMS key + IAM SSM statement — a *missing* SSM
-  statement silently wedges ECS rollout, so this is called out explicitly.
-- **Manual one-time SSM writes** of `client_id` / `client_secret` per stage
-  (needs AWS). Confirm before each.
+- **infrastructure apply** for the encryption key + secret-store access
+  policy — a *missing* secret-store grant silently wedges the service
+  rollout, so this is called out explicitly.
+- **Manual one-time secret-store writes** of `client_id` / `client_secret`
+  per stage. Confirm before each.
 - Out of scope: access-token auto-refresh and token revocation.
 
 ## Composition contract
@@ -233,8 +227,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -273,7 +267,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

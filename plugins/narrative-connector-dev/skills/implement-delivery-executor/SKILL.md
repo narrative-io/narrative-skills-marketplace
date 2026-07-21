@@ -12,11 +12,11 @@ description: |
 license: MIT
 compatibility: >-
   Stub — implementation pending. No hard requirements: local codegen in the
-  narrative-connectors working tree; partner delivery happens only at the
+  connector repo's working tree; partner delivery happens only at the
   deploy/verify gate. Reads the delivery + identifier_groups blocks of
   connector-spec.yaml. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -30,11 +30,9 @@ metadata:
 # Implement Delivery Executor
 
 > **Status: stub — implementation pending.** Contract only. Consolidates
-> the greenfield Arrow-path patterns from
-> `narrative-connectors/.claude/skills/migrate-connector-to-arrow`
-> (`Arrow<Slug>ConnectorParser`, `Arrow<Slug>AudienceFileReader`,
-> `FileDeliveryMetrics`) so new connectors start on the Arrow path rather
-> than the legacy JSON path.
+> the greenfield Arrow-path patterns (`Arrow<Slug>ConnectorParser`,
+> `Arrow<Slug>AudienceFileReader`, `FileDeliveryMetrics`) so new connectors
+> start on the Arrow path rather than the legacy JSON path.
 
 ## Purpose
 
@@ -227,8 +225,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -267,7 +265,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

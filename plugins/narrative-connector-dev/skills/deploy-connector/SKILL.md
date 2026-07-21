@@ -1,20 +1,20 @@
 ---
 name: deploy-connector
 description: |
-  Deploy the connector — quick-publish the image, terraform apply to dev,
-  then promote to prod — one gated step at a time, driven by
+  Deploy the connector — quick-publish the image, apply infrastructure to
+  dev, then promote to prod — one gated step at a time, driven by
   connector-spec.yaml.
   Use when: "deploy the connector", "quick-publish and apply to dev",
   "promote the connector to prod", "ship the connector image".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. Runs quick-publish, terraform apply, and
-  prod promotion — every one a hard human gate. Reads connector-spec.yaml.
+  Stub — implementation pending. Runs quick-publish, infrastructure applies,
+  and prod promotion — every one a hard human gate. Reads connector-spec.yaml.
   Recommends AskUserQuestion for per-stage confirmation. Runs on any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -36,7 +36,7 @@ metadata:
 
 ## Purpose
 
-Get the connector running: quick-publish the image, `terraform apply` to
+Get the connector running: quick-publish the image, apply infrastructure to
 dev, and — after dev is verified — promote to prod. This skill owns the
 applies that the scaffold/provision skills deliberately left un-run.
 
@@ -54,7 +54,7 @@ Phase: **deploy/verify**.
 
 ## Human gates
 
-- **quick-publish force-push**, **`terraform apply` dev**, and **prod
+- **quick-publish force-push**, **infrastructure apply to dev**, and **prod
   promotion** are each hard human gates, confirmed per stage.
 - **Two-PR discipline** where it applies: add-then-verify before any
   delete/cutover; no fix-forward across a correctness gate.
@@ -218,8 +218,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -258,7 +258,7 @@ stages: [dev, prod]
 # (Today these skills assume Narrative's stack; the values below are its
 # defaults.)
 deployment:
-  narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
   modules_omitted: []          # rare tuning of the template's module set
 ```
 

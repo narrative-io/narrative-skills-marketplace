@@ -3,8 +3,8 @@ name: build-connector
 description: |
   Orchestrate a full connector build — sequence the spec, service, infra,
   registration, frontend, and deploy/verify skills against a single
-  connector-spec.yaml, stopping at every human gate (terraform applies,
-  narrative-db migrations, app registration, prod promotion).
+  connector-spec.yaml, stopping at every human gate (infrastructure
+  applies, database migrations, app registration, prod promotion).
   Use when: "build a connector for <platform> end to end", "run the whole
   connector build", "orchestrate the connector from spec to deploy", "take
   the connector from spec to prod".
@@ -16,7 +16,7 @@ compatibility: >-
   itself. Reads and writes connector-spec.yaml as shared state. Recommends
   AskUserQuestion. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -73,12 +73,14 @@ the operator for the irreversible ones.
 
 ## Human gates (the orchestrator always stops here)
 
-- **terraform applies** — shared ECR, connector infra, KMS/IAM, RDS,
+- **infrastructure applies** — the shared image registry, connector infra,
+  encryption keys and access policies, the managed database, the
   measurement inbox bucket.
-- **narrative-db migrations** — running any migration, in the separate
-  narrative-db repo.
-- **app registration** — the `bootstrap-app.py` marketplace/SSM/DSM flow.
-- **prod promotion** — every prod `terraform apply` and the final
+- **database migrations** — running any migration, wherever the migrations
+  live (separate repo or monorepo path).
+- **app registration** — the marketplace registration flow (secret store +
+  platform installation).
+- **prod promotion** — every prod infrastructure apply and the final
   `/verify-connector` sign-off.
 
 At each gate the orchestrator summarizes what is about to happen and waits
