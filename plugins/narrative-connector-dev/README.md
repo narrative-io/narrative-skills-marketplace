@@ -53,12 +53,11 @@ freely; the irreversible ones always stop for explicit human confirmation:
 `/build-connector` never performs these itself; it hands off to the owning
 skill only after the operator confirms.
 
-## Scaffold targets: two audiences, one skill set
+## Scaffold targets
 
-The plugin serves both Narrative engineers and teams building connectors
-in their own codebases. The split point between the two audiences is the
-spec's `target` block, which `/scaffold-connector` resolves into one of
-three modes:
+Any engineer building a connector uses the same skill set; what varies
+is where the code materializes. The spec's `target` block records that
+choice, and `/scaffold-connector` resolves it into one of three modes:
 
 - **`template-repo`** — the target repo carries a
   `connector-scaffold.yaml` manifest declaring its template, rename
@@ -88,7 +87,7 @@ which builders outside Narrative omit.
 ## Working trees
 
 This plugin operates on repos that are **not** part of this marketplace.
-For Narrative engineers the usual set is:
+The skills that run inside Narrative's own environment use:
 
 - **narrative-connectors** — the Scala connector monorepo and the
   default `template-repo` scaffold target; its path is recorded in the
@@ -99,8 +98,8 @@ For Narrative engineers the usual set is:
   the DB skills ask for its path and record it in the spec's
   `internal.narrative_db_path`.
 
-Teams outside Narrative point the scaffold target at their own repo (or
-none, for greenfield) and skip the three above entirely.
+Everyone else points the scaffold target at their own repo (or none,
+for greenfield) and skips the three above entirely.
 
 No MCP servers are required — hence no `mcpServers` block in `plugin.json`.
 
