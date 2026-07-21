@@ -3,10 +3,13 @@ name: create-scaffold-manifest
 description: |
   Author a repo's connector-scaffold.yaml — the manifest that teaches
   /scaffold-connector the repo's template, rename rules, component map,
-  and build wiring. Two entry paths: infer the conventions from an
-  existing reference connector (repo archaeology with human
+  build wiring, and stack profile (languages, cloud services,
+  libraries, code idioms). Two entry paths: infer the conventions from
+  an existing reference connector (repo archaeology with human
   confirmation), or interview the user section by section when no clean
-  exemplar exists. A per-repo, one-time onboarding job.
+  exemplar exists. Handles connectors that span several repos (service
+  code, migrations, frontend) by exploring all of them in one run. A
+  per-repo, one-time onboarding job.
   Use when: "create a scaffold manifest", "write connector-scaffold.yaml",
   "onboard my repo for connector scaffolding", "infer connector
   conventions from my repo", "teach the scaffolder our repo layout".
@@ -19,13 +22,16 @@ compatibility: >-
   Recommends AskUserQuestion (prose fallback documented in the body).
   Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 1.0.1
+  version: 1.1.0
   narrative:
     args:
-      - name: "<repo-path>"
+      - name: "<repo-path>..."
         required: false
         description: >-
-          Path to the repo to onboard. If omitted, the skill asks.
+          Paths to the repos to onboard. The first is the primary repo,
+          which hosts the manifest and (usually) the connector code;
+          any further paths are the other repos a connector spans, such
+          as a migrations or frontend repo. If omitted, the skill asks.
       - name: "--reference <connector-dir>"
         required: false
         description: >-
@@ -69,6 +75,21 @@ a per-connector step; run it once, then scaffold connectors against
 the manifest indefinitely. Update the manifest only when the repo's
 conventions change.
 
+Beyond layout and naming, the manifest records a **stack profile**:
+the languages, cloud provider and managed services, libraries, and
+code idioms the repo's connectors are built with. The generalized
+service, infra, DB, and deploy skills read this profile to turn their
+generic steps into the repo's concrete ones when building against a
+`connector-spec.yaml`. This skill only detects and records the
+profile; applying it is the downstream skills' job.
+
+A connector doesn't always live in one repo. When service code,
+database migrations, and frontend live in separate repos, pass all of
+them. The skill explores each, records which repo hosts which role in
+the manifest's `repos` list, and resolves every path against the repo
+that owns it. A single repo or monorepo stays the default and needs
+no `repos` list at all.
+
 Two entry paths:
 
 - **Infer** — the repo has a connector worth treating as exemplary.
@@ -95,18 +116,27 @@ use for:
 
 ## Procedure
 
-### Phase 1 — Locate the repo, pick the entry path
+### Phase 1 — Locate the repos, pick the entry path
 
-Resolve the repo root from `<repo-path>` (ask if omitted; confirm it's
-a git working tree). If a `connector-scaffold.yaml` already exists,
-stop and ask: update it (walk the phases against the existing content)
-or leave it alone. Never silently overwrite.
+Resolve each `<repo-path>` to a repo root (ask if none were given;
+confirm each is a git working tree). The first path is the primary
+repo, which hosts the manifest and usually the connector code. If a
+`connector-scaffold.yaml` already exists at the primary root, stop
+and ask: update it (walk the phases against the existing content) or
+leave it alone. Never silently overwrite.
+
+With more than one repo, confirm each secondary repo's role
+(database, frontend, infra, docs) before inferring anything from it.
+Propose a role from what the repo's top level shows (a migrations
+tree, a UI build) and let the user correct it. One repo means no
+`repos` list and no role questions; that stays the simplest path.
 
 Then pick the entry path. With `--reference` given, inference is
-selected and the exemplar named. Otherwise list the directories that
-look like connectors and ask **one question** (AskUserQuestion where
-available; see Harness fallbacks): which connector is the exemplar to
-infer from, with an option for "none — interview me instead."
+selected and the exemplar named. Otherwise list the primary repo's
+directories that look like connectors and ask **one question**
+(AskUserQuestion where available; see Harness fallbacks): which
+connector is the exemplar to infer from, with an option for "none —
+interview me instead."
 
 ### Phase 2 — Gather the conventions
 
@@ -132,14 +162,44 @@ files as evidence:
 5. **Docs and verify.** The exemplar's per-connector docs become the
    `docs` list; the repo's cheapest compile-or-typecheck command for
    one connector becomes `verify.command`.
+6. **Stack profile.** Read the stack off the repo's own files, one
+   concern at a time:
+   - Languages, from build files and source-file extensions.
+   - Cloud provider and managed services (object store, queue, secret
+     store, key management), from IaC files and the cloud SDKs the
+     exemplar's code actually uses.
+   - The library serving each code concern (the connector framework,
+     HTTP client, serialization, database access), from dependency
+     manifests and the exemplar's import statements.
+   - Code idioms the exemplar follows: its effect style (for example
+     tagless-final), how its delivery executor reads incoming data,
+     its error-handling conventions. These come from reading its
+     sources, and each `patterns` entry gets a one-line `where`
+     describing what the idiom looks like in this repo.
+   A dependency that is declared but never imported is not a finding;
+   every stack entry needs a file that shows the technology in use.
+
+When the connector spans repos, run the steps that apply against
+each secondary repo: find the exemplar's footprint there (a
+migrations directory named after its slug, frontend components built
+for it), record those paths with the owning repo's `<repo-name>:`
+prefix, and fold that repo's own language and libraries into the
+stack profile. A secondary repo with no trace of the exemplar is a
+question for the user, not a blank section.
 
 Record the evidence for each finding (file paths, one example each)
 in a working notes file, `scaffold-manifest-notes.md`, next to the
-manifest.
+manifest. Stack findings get the same treatment: one entry per
+recorded language, service, library, and idiom, each naming the
+files that show it.
 
-**Interview path.** Walk the same five areas in the same order, one
+**Interview path.** Walk the same six areas in the same order, one
 question at a time, grounding each question in what the repo does
-show (even a fresh repo has a build tool and a language). Where the
+show (even a fresh repo has a build tool and a language). The stack
+profile depends least on interviewing, because dependency manifests
+and IaC files exist even without an exemplar. Read them first, and
+ask the user only to confirm or fill gaps, not to recite their stack
+from memory. Where the
 user is designing conventions rather than reporting them, propose a
 default from the manifest schema's example and let them adjust; for
 layout decisions (how many units, what splits from what), the process
@@ -157,9 +217,18 @@ Draft the manifest, then prove it executes:
   unrelated code means that rule needs narrowing. Then confirm that
   with the rules applied longest first, no rule matches text another
   rule already claimed.
-- **Resolve every path.** `template.path`, each component unit, each
-  `wiring[].file`, each doc — all must exist for the exemplar (or be
-  confirmed intentional for interview-designed layouts).
+- **Resolve every path against the repo that owns it.** A
+  `<repo-name>:` prefix selects a repo from the `repos` list; an
+  unprefixed path means the manifest's repo. `template.path`, each
+  component unit, each `wiring[].file`, each doc — all must exist for
+  the exemplar in their owning repo (or be confirmed intentional for
+  interview-designed layouts). A prefix naming a repo the list
+  doesn't have is a validation failure.
+- **Check every stack entry against its evidence.** Each language,
+  service, library, and idiom in `stack` must have at least one
+  evidence file in the notes, and that file must exist. An entry
+  without evidence is either dropped or confirmed with the user as a
+  deliberate exception, with the reason noted.
 - **Run `verify.command`** against the exemplar once, so a broken
   verify never ships in the manifest.
 - **Check schema completeness** against the schema below: required
@@ -172,16 +241,18 @@ reason to soften the rule that caught it.
 
 Walk the draft with the user section by section, showing the evidence
 from Phase 2 alongside each rule. On approval, write
-`connector-scaffold.yaml` at the repo root (or the location the user
-chooses; note that `/scaffold-connector` looks at the root by
-default). Leave it uncommitted for review, alongside
-`scaffold-manifest-notes.md`.
+`connector-scaffold.yaml` at the primary repo's root (or the location
+the user chooses; note that `/scaffold-connector` looks at the root
+by default). Leave it uncommitted for review, alongside
+`scaffold-manifest-notes.md`. Secondary repos get no files; the
+manifest's `repos` list is what records them.
 
 ### Phase 5 — Hand off
 
 - If a `connector-spec.yaml` is in play (the user came from
   `/scaffold-connector` or names one), propose recording the repo in
-  its `target` block: `mode: template-repo`, `repo_path`, and
+  its `target` block: `mode: template-repo`, `repo_path` (the primary
+  repo; the manifest's `repos` list carries the others), and
   `manifest_path` when the manifest isn't at the root.
 - Suggest `/scaffold-connector` as the next step for the first
   connector built against the new manifest.
@@ -189,9 +260,10 @@ default). Leave it uncommitted for review, alongside
 ## Files this skill produces
 
 ```
-<repo root>/
+<primary repo root>/
 ├── connector-scaffold.yaml       # the manifest, uncommitted
-└── scaffold-manifest-notes.md    # evidence per rule; delete or keep at the user's option
+└── scaffold-manifest-notes.md    # evidence per rule and per stack finding;
+                                  # delete or keep at the user's option
 ```
 
 ## Edge cases and gotchas
@@ -210,6 +282,14 @@ default). Leave it uncommitted for review, alongside
 - **No compile command cheaper than building the whole repo** — leave
   `verify` out rather than encode a command too slow to run per
   scaffold; note the omission.
+- **A declared dependency the code never touches** — dependency
+  manifests accumulate leftovers. The stack profile records what the
+  exemplar demonstrably uses, so an unused declaration is at most a
+  note, never a `libraries` entry.
+- **Secondary repos with their own stacks** — a frontend repo in
+  TypeScript alongside Scala services is normal, not a conflict.
+  List both languages (primary first) and let the per-concern
+  `libraries` entries carry the detail.
 
 ## Harness fallbacks
 
@@ -226,8 +306,59 @@ tools or generic Read / Bash / Write.
 ### Schema
 
 ```yaml
-# connector-scaffold.yaml — at the template repo's root
+# connector-scaffold.yaml — at the template repo's root (the primary
+# repo, when a connector spans more than one)
 schema_version: 1
+
+# ── Repos (optional) ────────────────────────────────────────
+# Omit for a single repo or a monorepo. Every path in the manifest
+# then resolves against the repo that holds this file. List repos
+# only when a connector spans several (service code in one, database
+# migrations or frontend in another). The
+# first entry is the repo that holds this manifest. Elsewhere in the
+# manifest, a path may carry a `<repo-name>:` prefix (for example
+# `migrations:connectors/{slug}`) to resolve against that repo; an
+# unprefixed path resolves against the manifest's repo.
+repos:
+  - name: services
+    path: "."                    # the manifest's own repo
+    role: connector_code         # connector_code | database | frontend | infra | docs
+  - name: migrations
+    path: "~/dev/db-migrations"  # repo root; absolute or ~-relative
+    role: database
+  - name: frontend
+    path: "~/dev/app-frontend"
+    role: frontend
+
+# ── Stack profile ───────────────────────────────────────────
+# The concrete technologies connectors in this repo are built with.
+# The generalized service, infra, DB, and deploy skills read this to
+# turn their generic steps into stack-specific ones: "add an HTTP
+# client" becomes "add an sttp client the way the exemplar does".
+# Record only what the repo shows evidence for, and put the evidence
+# (file paths, one example each) in scaffold-manifest-notes.md; omit
+# any key the repo gives no evidence for.
+stack:
+  languages: [scala]            # primary first; from build files and source extensions
+  cloud:
+    providers: [aws]            # from IaC files and cloud SDK dependencies
+    services:                   # the managed service serving each concern
+      object_store: s3
+      queue: sqs
+      secret_store: aws_secrets_manager
+      key_management: kms
+  libraries:                    # the library serving each concern, from
+                                # dependency manifests and imports
+    connector_framework: "io.narrative::connector-framework"
+    http_client: sttp
+    serialization: circe
+    database_access: doobie
+  patterns:                     # code idioms a generated connector is expected
+                                # to follow, observed in the exemplar's sources
+    - name: tagless-final
+      where: "services and stores are traits parameterized on F[_]"
+    - name: arrow-delivery-reader
+      where: "delivery executors consume Arrow record batches via the framework reader"
 
 # ── Template source ─────────────────────────────────────────
 template:
@@ -288,7 +419,9 @@ infrastructure:
   provision: "plan for review; apply per stage is a human gate"
 database:
   engine: postgres               # postgres | mysql | d1 | dynamodb | none
-  migrations_path: "~/projects/db-migrations"   # may be a separate repo; prompted if so
+  migrations_path: "migrations:connectors/{slug}"   # when migrations live in a separate
+                                 # repo, list it in `repos` and prefix the path; a plain
+                                 # path means the manifest's own repo
 deploy:
   build: "sbt {package_slug}Api/docker:publish"   # how an image/artifact is produced
   promote: "bump the pinned image version per stage, then apply"   # dev → prod discipline
@@ -337,6 +470,16 @@ Tokens resolve from `connector-spec.yaml`:
 - **Stop on rename collisions.** If applying `naming.rename` would
   overwrite an existing path in the repo, report and ask; the
   connector may already be partially scaffolded.
+- **Resolve paths against the owning repo.** Without a `repos` list,
+  every path resolves against the manifest's repo. With one, a
+  `<repo-name>:` prefix selects the owning repo and an unprefixed
+  path means the manifest's repo. A prefix that names no listed repo
+  is an error to report, not a path to guess.
+- **The `stack` section is read, not executed.** Scaffolding copies
+  the template, which already embodies the stack. The profile exists
+  so the skills that later write new code into the scaffold (service
+  logic, infra, DB, deploy) match the repo's languages, services,
+  libraries, and idioms instead of following generic steps.
 
 ## Composition contract
 

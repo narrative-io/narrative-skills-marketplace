@@ -762,8 +762,8 @@
     },
     {
       "name": "create-scaffold-manifest",
-      "version": "1.0.1",
-      "description": "Author a repo's connector-scaffold.yaml — the manifest that teaches\n/scaffold-connector the repo's template, rename rules, component map,\nand build wiring. Two entry paths: infer the conventions from an\nexisting reference connector (repo archaeology with human\nconfirmation), or interview the user section by section when no clean\nexemplar exists. A per-repo, one-time onboarding job.\nUse when: \"create a scaffold manifest\", \"write connector-scaffold.yaml\",\n\"onboard my repo for connector scaffolding\", \"infer connector\nconventions from my repo\", \"teach the scaffolder our repo layout\".\n(narrative-connector-dev)",
+      "version": "1.1.0",
+      "description": "Author a repo's connector-scaffold.yaml — the manifest that teaches\n/scaffold-connector the repo's template, rename rules, component map,\nbuild wiring, and stack profile (languages, cloud services,\nlibraries, code idioms). Two entry paths: infer the conventions from\nan existing reference connector (repo archaeology with human\nconfirmation), or interview the user section by section when no clean\nexemplar exists. Handles connectors that span several repos (service\ncode, migrations, frontend) by exploring all of them in one run. A\nper-repo, one-time onboarding job.\nUse when: \"create a scaffold manifest\", \"write connector-scaffold.yaml\",\n\"onboard my repo for connector scaffolding\", \"infer connector\nconventions from my repo\", \"teach the scaffolder our repo layout\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/create-scaffold-manifest/SKILL.md",
       "compatibility": "Requires Bash, Read, and Write (or equivalent capabilities — these tools may be named differently across harnesses) to inspect the repo and write the manifest. No infra, DB, or registration side effects. Recommends AskUserQuestion (prose fallback documented in the body). Runs on any agentskills.io-compliant harness.",
@@ -786,9 +786,9 @@
       },
       "args": [
         {
-          "name": "<repo-path>",
+          "name": "<repo-path>...",
           "required": false,
-          "description": "Path to the repo to onboard. If omitted, the skill asks."
+          "description": "Paths to the repos to onboard. The first is the primary repo, which hosts the manifest and (usually) the connector code; any further paths are the other repos a connector spans, such as a migrations or frontend repo. If omitted, the skill asks."
         },
         {
           "name": "--reference <connector-dir>",

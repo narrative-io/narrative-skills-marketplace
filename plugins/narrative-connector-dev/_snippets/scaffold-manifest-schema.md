@@ -1,8 +1,59 @@
 ### Schema
 
 ```yaml
-# connector-scaffold.yaml — at the template repo's root
+# connector-scaffold.yaml — at the template repo's root (the primary
+# repo, when a connector spans more than one)
 schema_version: 1
+
+# ── Repos (optional) ────────────────────────────────────────
+# Omit for a single repo or a monorepo. Every path in the manifest
+# then resolves against the repo that holds this file. List repos
+# only when a connector spans several (service code in one, database
+# migrations or frontend in another). The
+# first entry is the repo that holds this manifest. Elsewhere in the
+# manifest, a path may carry a `<repo-name>:` prefix (for example
+# `migrations:connectors/{slug}`) to resolve against that repo; an
+# unprefixed path resolves against the manifest's repo.
+repos:
+  - name: services
+    path: "."                    # the manifest's own repo
+    role: connector_code         # connector_code | database | frontend | infra | docs
+  - name: migrations
+    path: "~/dev/db-migrations"  # repo root; absolute or ~-relative
+    role: database
+  - name: frontend
+    path: "~/dev/app-frontend"
+    role: frontend
+
+# ── Stack profile ───────────────────────────────────────────
+# The concrete technologies connectors in this repo are built with.
+# The generalized service, infra, DB, and deploy skills read this to
+# turn their generic steps into stack-specific ones: "add an HTTP
+# client" becomes "add an sttp client the way the exemplar does".
+# Record only what the repo shows evidence for, and put the evidence
+# (file paths, one example each) in scaffold-manifest-notes.md; omit
+# any key the repo gives no evidence for.
+stack:
+  languages: [scala]            # primary first; from build files and source extensions
+  cloud:
+    providers: [aws]            # from IaC files and cloud SDK dependencies
+    services:                   # the managed service serving each concern
+      object_store: s3
+      queue: sqs
+      secret_store: aws_secrets_manager
+      key_management: kms
+  libraries:                    # the library serving each concern, from
+                                # dependency manifests and imports
+    connector_framework: "io.narrative::connector-framework"
+    http_client: sttp
+    serialization: circe
+    database_access: doobie
+  patterns:                     # code idioms a generated connector is expected
+                                # to follow, observed in the exemplar's sources
+    - name: tagless-final
+      where: "services and stores are traits parameterized on F[_]"
+    - name: arrow-delivery-reader
+      where: "delivery executors consume Arrow record batches via the framework reader"
 
 # ── Template source ─────────────────────────────────────────
 template:
@@ -63,7 +114,9 @@ infrastructure:
   provision: "plan for review; apply per stage is a human gate"
 database:
   engine: postgres               # postgres | mysql | d1 | dynamodb | none
-  migrations_path: "~/projects/db-migrations"   # may be a separate repo; prompted if so
+  migrations_path: "migrations:connectors/{slug}"   # when migrations live in a separate
+                                 # repo, list it in `repos` and prefix the path; a plain
+                                 # path means the manifest's own repo
 deploy:
   build: "sbt {package_slug}Api/docker:publish"   # how an image/artifact is produced
   promote: "bump the pinned image version per stage, then apply"   # dev → prod discipline
@@ -112,3 +165,13 @@ Tokens resolve from `connector-spec.yaml`:
 - **Stop on rename collisions.** If applying `naming.rename` would
   overwrite an existing path in the repo, report and ask; the
   connector may already be partially scaffolded.
+- **Resolve paths against the owning repo.** Without a `repos` list,
+  every path resolves against the manifest's repo. With one, a
+  `<repo-name>:` prefix selects the owning repo and an unprefixed
+  path means the manifest's repo. A prefix that names no listed repo
+  is an error to report, not a path to guess.
+- **The `stack` section is read, not executed.** Scaffolding copies
+  the template, which already embodies the stack. The profile exists
+  so the skills that later write new code into the scaffold (service
+  logic, infra, DB, deploy) match the repo's languages, services,
+  libraries, and idioms instead of following generic steps.
