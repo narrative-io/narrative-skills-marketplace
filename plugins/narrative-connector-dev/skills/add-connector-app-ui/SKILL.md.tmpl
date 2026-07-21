@@ -1,0 +1,61 @@
+---
+name: add-connector-app-ui
+description: |
+  Build the connector's app UI in narrative-platform-ui — the profile-creation
+  flow (OAuth connect button or credential fields) and the quick-settings
+  form — generated from the auth and quick_settings blocks of
+  connector-spec.yaml.
+  Use when: "build the connector app UI", "add the profile creation form",
+  "wire up the quick settings form", "add the OAuth connect button for the
+  connector".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. No hard requirements: local UI code in the
+  narrative-platform-ui working tree, PR-reviewed; no infra or destructive
+  ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant
+  harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:register-connector-app
+        - narrative-connector-dev:define-connector-interface
+---
+
+# Add Connector App UI
+
+> **Status: stub — implementation pending.** Contract only. Targets the
+> `narrative-platform-ui` working tree.
+
+## Purpose
+
+Build the interactive app UI a customer uses to configure the connector:
+the profile-creation flow — an OAuth "connect" button (bound to
+`/add-connector-oauth`'s authorize route) or credential input fields — and
+the quick-settings form, generated from the connector's quick-setting
+types so the form and the backend codecs stay in lockstep.
+
+Phase: **frontend**.
+
+## Inputs (from connector-spec.yaml)
+
+- `auth.model` → OAuth connect button vs credential fields; `redirect_uri`.
+- `quick_settings[]` (`type`, `fields[]` with name/type/required/purpose) →
+  the form.
+- `identifier_groups[]` → what the profile advertises.
+
+## Outputs
+
+- The connector's profile-creation and quick-settings React
+  components/forms, in narrative-platform-ui.
+
+## Human gates
+
+- Local UI code only — shipped through the normal narrative-platform-ui PR
+  review; no direct deploy from this skill.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

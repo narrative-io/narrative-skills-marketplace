@@ -23,6 +23,12 @@
       ]
     },
     {
+      "name": "narrative-connector-dev",
+      "version": "0.1.0",
+      "description": "Build Narrative data connectors agentically — a spec-driven skill set that carries a connector from spec through service code, infrastructure, platform registration, frontend listing, and deploy/verify, stopping at every human gate. Filesystem/git work across narrative-connectors, narrative-db, and narrative-platform-ui.",
+      "mcpServers": []
+    },
+    {
       "name": "narrative-identity",
       "version": "0.1.0",
       "description": "Identity-graph workflows backed by the narrative-mcp server — pre-graph data-quality auditing, edge-quality analysis, and graph-build hygiene.",
@@ -650,6 +656,320 @@
           "description": "Treated as the user's question (e.g., /write-nql --dataset 12345 how many distinct users last 30 days). With no arguments, the skill walks the user through the flow interactively."
         }
       ]
+    },
+    {
+      "name": "add-connector-app-ui",
+      "version": "0.1.0",
+      "description": "Build the connector's app UI in narrative-platform-ui — the profile-creation\nflow (OAuth connect button or credential fields) and the quick-settings\nform — generated from the auth and quick_settings blocks of\nconnector-spec.yaml.\nUse when: \"build the connector app UI\", \"add the profile creation form\",\n\"wire up the quick settings form\", \"add the OAuth connect button for the\nconnector\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/add-connector-app-ui/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: local UI code in the narrative-platform-ui working tree, PR-reviewed; no infra or destructive ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:register-connector-app",
+            "narrative-connector-dev:define-connector-interface"
+          ]
+        }
+      }
+    },
+    {
+      "name": "add-connector-listing",
+      "version": "0.1.0",
+      "description": "Add the connector's marketplace listing to narrative-platform-ui — display\nname, logo, description, and categories — from connector-spec.yaml, as a\nreviewable UI change.\nUse when: \"add the connector listing\", \"list the connector in the\nmarketplace UI\", \"add the connector card\", \"register the connector in the\ncatalog UI\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/add-connector-listing/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: local UI edits in the narrative-platform-ui working tree, PR-reviewed; no infra or destructive ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:register-connector-app"
+          ]
+        }
+      }
+    },
+    {
+      "name": "add-connector-oauth",
+      "version": "0.1.0",
+      "description": "Add a third-party OAuth 2.0 authorization-code flow with KMS-encrypted\ntoken storage to a scaffolded connector — domains, stores, api client,\noauth service, callback + authorize routes, the token-table migration,\nand the KMS/IAM/SSM plumbing — all driven by the auth.oauth block of\nconnector-spec.yaml.\nUse when: \"add OAuth to the connector\", \"wire up the <platform> OAuth\nflow\", \"the connector needs authorization-code auth\", \"add token storage\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/add-connector-oauth/SKILL.md",
+      "compatibility": "Stub — implementation pending. Mostly local codegen, but reaches the DB (token-table migration) and infra (KMS/IAM/SSM) at human gates. Reads the auth.oauth block of connector-spec.yaml. Recommends AskUserQuestion for gate confirmations. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:scaffold-connector",
+            "narrative-connector-dev:provision-connector-db"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "add-measurement-ingestion",
+      "version": "0.1.0",
+      "description": "Wire the framework measurement-feed engine into a connector — scan a\npartner S3 inbox, copy new files into a Narrative dataset ingestion\nfolder, write _NIO_COMMIT, and dedup so files are never copied twice —\ndriven by the measurement block of connector-spec.yaml.\nUse when: \"add measurement ingestion to the connector\", \"ingest the\npartner measurement feed\", \"wire up the S3 inbox scan\", \"pull conversion\nfeedback files\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/add-measurement-ingestion/SKILL.md",
+      "compatibility": "Stub — implementation pending. Mostly local codegen, but creates a dataset, a cross-repo DB migration, and an inbox-bucket terraform module at human gates. Reads the measurement block of connector-spec.yaml. Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:scaffold-connector",
+            "narrative-connector-dev:provision-connector-db",
+            "narrative-connector-dev:scaffold-connector-infra"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "build-connector",
+      "version": "0.1.0",
+      "description": "Orchestrate a full connector build — sequence the spec, service, infra,\nregistration, frontend, and deploy/verify skills against a single\nconnector-spec.yaml, stopping at every human gate (terraform applies,\nnarrative-db migrations, app registration, prod promotion).\nUse when: \"build a connector for <platform> end to end\", \"run the whole\nconnector build\", \"orchestrate the connector from spec to deploy\", \"take\nthe connector from spec to prod\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/build-connector/SKILL.md",
+      "compatibility": "Stub — implementation pending. An orchestrator: it sequences the other skills and pauses at every human gate rather than doing destructive work itself. Reads and writes connector-spec.yaml as shared state. Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:spec-connector",
+            "narrative-connector-dev:preflight-connector",
+            "narrative-connector-dev:scaffold-connector",
+            "narrative-connector-dev:define-connector-interface",
+            "narrative-connector-dev:add-connector-oauth",
+            "narrative-connector-dev:implement-partner-client",
+            "narrative-connector-dev:implement-delivery-executor",
+            "narrative-connector-dev:add-measurement-ingestion",
+            "narrative-connector-dev:test-connector",
+            "narrative-connector-dev:scaffold-connector-infra",
+            "narrative-connector-dev:provision-connector-db",
+            "narrative-connector-dev:register-connector-app",
+            "narrative-connector-dev:add-connector-listing",
+            "narrative-connector-dev:add-connector-app-ui",
+            "narrative-connector-dev:deploy-connector",
+            "narrative-connector-dev:verify-connector"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "define-connector-interface",
+      "version": "0.1.0",
+      "description": "Define the connector's data contract — the audience metaschema, the\nQuickSettingsType / ParserType enums and codecs, the identifier-group\nattribute metaschema with correct $ref kinds, and the collaboration\npolicy — all generated from connector-spec.yaml.\nUse when: \"define the connector interface\", \"generate the audience\nmetaschema\", \"wire up the quick settings types\", \"build the collaboration\npolicy for the connector\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/define-connector-interface/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: local codegen of schema/codec files in the narrative-connectors working tree; no infra or destructive ops. Reads connector-spec.yaml. Recommends the narrative-common find-attribute skill. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:scaffold-connector",
+            "narrative-common:find-attribute"
+          ]
+        }
+      }
+    },
+    {
+      "name": "deploy-connector",
+      "version": "0.1.0",
+      "description": "Deploy the connector — quick-publish the image, terraform apply to dev,\nthen promote to prod — one gated step at a time, driven by\nconnector-spec.yaml.\nUse when: \"deploy the connector\", \"quick-publish and apply to dev\",\n\"promote the connector to prod\", \"ship the connector image\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/deploy-connector/SKILL.md",
+      "compatibility": "Stub — implementation pending. Runs quick-publish, terraform apply, and prod promotion — every one a hard human gate. Reads connector-spec.yaml. Recommends AskUserQuestion for per-stage confirmation. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:test-connector",
+            "narrative-connector-dev:scaffold-connector-infra",
+            "narrative-connector-dev:provision-connector-db",
+            "narrative-connector-dev:register-connector-app"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "implement-delivery-executor",
+      "version": "0.1.0",
+      "description": "Implement the audience-delivery executor on the Arrow Dataset path —\nfield parsers, narrative_id routing, batching, file-delivery metrics, and\nthe runtime config wiring — driven by the delivery block of\nconnector-spec.yaml.\nUse when: \"implement the delivery executor\", \"write the audience delivery\npath\", \"wire up the Arrow reader for the connector\", \"build the connector\nexecutor\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/implement-delivery-executor/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: local codegen in the narrative-connectors working tree; partner delivery happens only at the deploy/verify gate. Reads the delivery + identifier_groups blocks of connector-spec.yaml. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:scaffold-connector",
+            "narrative-connector-dev:define-connector-interface",
+            "narrative-connector-dev:implement-partner-client"
+          ]
+        }
+      }
+    },
+    {
+      "name": "implement-partner-client",
+      "version": "0.1.0",
+      "description": "Implement the connector's partner API client — request/response models,\nauth headers, pagination, rate-limit handling, retry/backoff, and error\nmapping — from the partner_api block of connector-spec.yaml.\nUse when: \"implement the partner API client\", \"write the <platform> API\nclient\", \"wire up the delivery endpoints\", \"handle the partner rate\nlimits\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/implement-partner-client/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: local codegen in the narrative-connectors working tree; no live partner calls without confirmation. Reads the partner_api block of connector-spec.yaml. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:scaffold-connector",
+            "narrative-connector-dev:add-connector-oauth"
+          ]
+        }
+      }
+    },
+    {
+      "name": "preflight-connector",
+      "version": "0.1.0",
+      "description": "Validate and enrich a connector-spec.yaml before any code is generated —\nresolve every identifier group to a canonical Rosetta Stone attribute,\npin the marketplace app_id, confirm the package-slug derivation, and flag\nevery remaining TODO. Produces a go / no-go preflight report.\nUse when: \"preflight the connector spec\", \"is this connector spec ready\nto build\", \"validate connector-spec.yaml\", \"check the connector spec\nbefore scaffolding\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/preflight-connector/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: a read-and-enrich skill over connector-spec.yaml; no infra or destructive ops. Recommends the narrative-common find-attribute skill for Rosetta resolution and AskUserQuestion for confirmations. Runs on any agentskills.io harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:spec-connector",
+            "narrative-common:find-attribute"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "provision-connector-db",
+      "version": "0.1.0",
+      "description": "Author the connector's narrative-db migrations (V1/V2 + undo, plus the\nOAuth and measurement tables when those are in scope) and the RDS\nterraform, in the separate narrative-db repo — writing them for review,\nstopping before any migration or apply is run.\nUse when: \"provision the connector database\", \"write the narrative-db\nmigrations for the connector\", \"set up the connector RDS\", \"add the\nconnector db terraform\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/provision-connector-db/SKILL.md",
+      "compatibility": "Stub — implementation pending. Writes migrations + terraform into the separate narrative-db repo; running migrations and terraform apply are hard human gates. Reads connector-spec.yaml. Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:scaffold-connector"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "register-connector-app",
+      "version": "0.1.0",
+      "description": "Register the connector as a Narrative marketplace app — the marketplace-db\napp row, SSM credentials, the DSM installation, and the bearer token — via\nthe bootstrap-app flow, driven by connector-spec.yaml and gated on human\nconfirmation.\nUse when: \"register the connector app\", \"bootstrap the marketplace app\",\n\"create the app row for the connector\", \"run bootstrap-app for the\nconnector\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/register-connector-app/SKILL.md",
+      "compatibility": "Stub — implementation pending. Mutates marketplace-db, SSM, S3, and DSM and needs a browser-copied DSM token — a hard human gate, per stage. Reads connector-spec.yaml. Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:provision-connector-db",
+            "narrative-connector-dev:scaffold-connector-infra"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "scaffold-connector",
+      "version": "0.1.0",
+      "description": "Generate the sbt module skeleton for a new connector — the\napi/services/stores/worker/executor/poller modules, build.sbt and\nQuickPublish entries, and ops docs — from the reference connector\ntemplate, driven entirely by connector-spec.yaml.\nUse when: \"scaffold the <slug> connector\", \"generate the connector\nmodules\", \"create the sbt skeleton for the connector\", \"stand up the\nconnector project\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/scaffold-connector/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: local filesystem/git codegen in the narrative-connectors working tree; no infra, DB, or registration side effects. Reads connector-spec.yaml. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:preflight-connector",
+            "narrative-connector-dev:define-connector-interface"
+          ]
+        }
+      }
+    },
+    {
+      "name": "scaffold-connector-infra",
+      "version": "0.1.0",
+      "description": "Generate the connector's <slug>-infra terraform (ECS service, ECR, security\ngroups, IAM) and CI workflows from connector-spec.yaml — writing the plans\nlocally without applying them.\nUse when: \"scaffold the connector infra\", \"generate the terraform for the\nconnector\", \"add the CI workflows for the connector\", \"set up the ECS\nservice for the connector\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/scaffold-connector-infra/SKILL.md",
+      "compatibility": "Stub — implementation pending. Writes terraform + CI locally in the narrative-connectors working tree; does NOT run terraform apply (that is /deploy-connector). Reads connector-spec.yaml. Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:scaffold-connector"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "spec-connector",
+      "version": "0.1.0",
+      "description": "Research and author a Narrative connector spec for a new destination\nplatform — interview, prior-art recon, vendor-doc research, and a\ndifferentiator pass — then emit the machine-readable connector-spec.yaml\n(plus a prose spec.md) that the rest of the plugin builds from.\nUse when: \"spec out a connector for <platform>\", \"start a new connector\",\n\"research the <platform> connector\", \"write the connector spec\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/spec-connector/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: a research + authoring skill that writes connector-spec.yaml and spec.md; no infra or destructive ops. Recommends AskUserQuestion for the one-question-at-a- time interview. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:preflight-connector"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
+    },
+    {
+      "name": "test-connector",
+      "version": "0.1.0",
+      "description": "Author and run the connector's test suite — sanity, OAuth round-trip, and\ndelivery tests against the connector-testkit Postgres testcontainer — and\nconfirm the modules compile before anything is deployed.\nUse when: \"test the connector\", \"run the connector tests\", \"add sanity\ntests for the connector\", \"does the connector compile and pass\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/test-connector/SKILL.md",
+      "compatibility": "Stub — implementation pending. No hard requirements: local test authoring and execution in the narrative-connectors working tree; no deploy or destructive ops. Reads connector-spec.yaml. Runs on any agentskills.io- compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:implement-delivery-executor"
+          ]
+        }
+      }
+    },
+    {
+      "name": "verify-connector",
+      "version": "0.1.0",
+      "description": "Verify a deployed connector end to end — enqueue a delivery job, read the\nfile-delivery logs, and confirm total_rows / total_identifiers against the\nexpected baseline, plus the OAuth callback round-trip and any measurement\nsample-file commit — and return a go / no-go verdict.\nUse when: \"verify the connector\", \"run an end-to-end delivery check\",\n\"confirm the connector delivered correctly\", \"check the connector logs\nafter deploy\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/verify-connector/SKILL.md",
+      "compatibility": "Stub — implementation pending. Enqueues live jobs and reads logs in dev (and prod after promotion) — confirm before prod verification. Reads connector-spec.yaml. Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "recommends": {
+          "skills": [
+            "narrative-connector-dev:deploy-connector"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      }
     },
     {
       "name": "generate-identity-graph",
