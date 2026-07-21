@@ -72,18 +72,17 @@ The rest are organized into five phases plus an orchestrator:
 | **onboard** (once per repo) | `/create-scaffold-manifest` | Author the repo's `connector-scaffold.yaml` so `/scaffold-connector` can execute it. Applies to `template-repo` mode only; every later connector built in that repo skips this row. |
 | **spec** | `/spec-connector`, `/preflight-connector` | Research and author `connector-spec.yaml`; validate it and resolve identifiers/`app_id` before any code. |
 | **service** | `/scaffold-connector`, `/define-connector-interface`, `/add-connector-oauth`, `/implement-partner-client`, `/implement-delivery-executor`, `/add-measurement-ingestion`, `/test-connector` | Generate the code skeleton and the data contract in the scaffold target; add OAuth, the partner client, the delivery executor, and measurement ingestion; test and compile. |
-| **infra / registration** (Narrative-internal) | `/scaffold-connector-infra`, `/provision-connector-db`, `/register-connector-app` | Write the `<slug>-infra` terraform and CI; author narrative-db migrations + RDS terraform; register the marketplace app. |
-| **frontend** (Narrative-internal) | `/add-connector-listing`, `/add-connector-app-ui` | Add the catalog listing and the profile / quick-settings app UI in narrative-platform-ui. |
-| **deploy / verify** (Narrative-internal) | `/deploy-connector`, `/verify-connector` | Quick-publish, `terraform apply` to dev, promote to prod; run an end-to-end delivery check and return a go / no-go. |
+| **infra / registration** | `/scaffold-connector-infra`, `/provision-connector-db`, `/register-connector-app` | Write the `<slug>-infra` terraform and CI; author narrative-db migrations + RDS terraform; register the marketplace app. |
+| **frontend** | `/add-connector-listing`, `/add-connector-app-ui` | Add the catalog listing and the profile / quick-settings app UI in narrative-platform-ui. |
+| **deploy / verify** | `/deploy-connector`, `/verify-connector` | Quick-publish, `terraform apply` to dev, promote to prod; run an end-to-end delivery check and return a go / no-go. |
 | **orchestrator** | `/build-connector` | Sequences all of the above against one `connector-spec.yaml`, stopping at every human gate. |
 
-The onboard, spec, and service phases are portable — they run against any
-scaffold target. The three Narrative-internal phases describe the skills
-that operate inside Narrative's own environment, so their specifics
-(terraform, RDS, narrative-platform-ui) are Narrative's stack, not
-requirements of the phase. A connector built in another repo — or
-greenfield — provides its own infrastructure, frontend, and deploy, and
-skips these three rows.
+The infra/registration, frontend, and deploy/verify phases still assume
+Narrative's own stack — the terraform, RDS, and narrative-platform-ui
+specifics above are the current implementation, not requirements of the
+phase. Generalizing these skills to read a repo's own infrastructure and
+deploy conventions from its scaffold manifest is planned work, not yet
+done. Until then, read their specifics as Narrative's defaults.
 
 ## Human gates
 
@@ -129,14 +128,15 @@ The portable component model behind all three modes is
 [`skills/scaffold-connector/references/connector-anatomy.md`](skills/scaffold-connector/references/connector-anatomy.md);
 the manifest schema is
 [`skills/scaffold-connector/references/scaffold-manifest.md`](skills/scaffold-connector/references/scaffold-manifest.md).
-The infra, DB, registration, listing, and deploy skills remain
-Narrative-internal. They read the spec's optional `internal:` block,
-which builders outside Narrative omit.
+The infra, DB, registration, listing, and deploy skills still assume
+Narrative's stack today; they read the spec's optional `deployment:`
+block for the paths they need. Generalizing them to any repo's stack is
+planned work.
 
 ## Working trees
 
 This plugin operates on repos that are **not** part of this marketplace.
-The skills that run inside Narrative's own environment use:
+Against Narrative's own stack, the skills use:
 
 - **narrative-connectors** — the Scala connector monorepo and the
   default `template-repo` scaffold target; its path is recorded in the
@@ -145,7 +145,7 @@ The skills that run inside Narrative's own environment use:
 - **narrative-db** — the migrations/RDS repo, not checked out next to
   the other repos by default (the convention is `~/projects/narrative-db`);
   the DB skills ask for its path and record it in the spec's
-  `internal.narrative_db_path`.
+  `deployment.narrative_db_path`.
 
 Everyone else points the scaffold target at their own repo (or none,
 for greenfield) and skips the three above entirely.

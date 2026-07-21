@@ -276,6 +276,27 @@ wiring:
   - file: "project/Publish.scala"
     edit: "register the new units' publish flags alongside the template connector's"
 
+# ── Infrastructure & deploy ─────────────────────────────────
+# How this repo provisions and ships a connector. The infra, DB,
+# registration, and deploy phases read this so they don't assume a
+# stack. Record what the exemplar actually uses; omit a concern the
+# repo handles elsewhere (a `none` engine, no separate registration).
+# Tokens apply to paths and commands.
+infrastructure:
+  iac: terraform                 # terraform | pulumi | wrangler | cloudformation | none
+  path: "{slug}-infra"           # where the connector's infra code lives
+  provision: "terraform plan for review; apply per stage is a human gate"
+database:
+  engine: postgres               # postgres | mysql | d1 | dynamodb | none
+  migrations_path: "~/projects/narrative-db"   # may be a separate repo; prompted if so
+deploy:
+  build: "sbt {package_slug}Api/docker:publish"   # how an image/artifact is produced
+  promote: "bump the pinned image version per stage, then apply"   # dev → prod discipline
+  ci:                            # CI files that build/publish the connector
+    - ".github/workflows/{slug}-publish.yml"
+registration: null               # optional — how a built connector registers with its
+                                 # platform (e.g. a marketplace bootstrap step); null if none
+
 # ── Docs set ────────────────────────────────────────────────
 # Per-connector docs to create, with tokens applied. The generator
 # seeds each from the template connector's counterpart when one
@@ -512,14 +533,15 @@ target:
 # ── Build & deploy stages ───────────────────────────────────
 stages: [dev, prod]
 
-# ── Narrative-internal extension (optional) ─────────────────
-# Read only by skills that operate inside Narrative's own environment
-# (DB provisioning, app registration, listing, deploys). Builders
-# outside Narrative omit the whole block; the portable skills never
-# require it.
-internal:
+# ── Deployment extension (optional) ─────────────────────────
+# Stack-specific paths and tuning the infra, DB, registration, and
+# deploy skills read. Values here are the target environment's, not the
+# connector's; a scaffold target that doesn't need them omits the block.
+# (Today these skills assume Narrative's stack; the values below are its
+# defaults.)
+deployment:
   narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
-  modules_omitted: []          # rare tuning of the internal template's module set
+  modules_omitted: []          # rare tuning of the template's module set
 ```
 
 Fields not yet known carry the literal `TODO` (or `null` where optional)

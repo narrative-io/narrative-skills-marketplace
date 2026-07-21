@@ -908,7 +908,7 @@
     },
     {
       "name": "provision-connector-db",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Author the connector's narrative-db migrations (V1/V2 + undo, plus the\nOAuth and measurement tables when those are in scope) and the RDS\nterraform, in the separate narrative-db repo — writing them for review,\nstopping before any migration or apply is run.\nUse when: \"provision the connector database\", \"write the narrative-db\nmigrations for the connector\", \"set up the connector RDS\", \"add the\nconnector db terraform\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/provision-connector-db/SKILL.md",

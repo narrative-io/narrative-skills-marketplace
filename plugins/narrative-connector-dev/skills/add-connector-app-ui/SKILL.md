@@ -249,14 +249,15 @@ target:
 # ── Build & deploy stages ───────────────────────────────────
 stages: [dev, prod]
 
-# ── Narrative-internal extension (optional) ─────────────────
-# Read only by skills that operate inside Narrative's own environment
-# (DB provisioning, app registration, listing, deploys). Builders
-# outside Narrative omit the whole block; the portable skills never
-# require it.
-internal:
+# ── Deployment extension (optional) ─────────────────────────
+# Stack-specific paths and tuning the infra, DB, registration, and
+# deploy skills read. Values here are the target environment's, not the
+# connector's; a scaffold target that doesn't need them omits the block.
+# (Today these skills assume Narrative's stack; the values below are its
+# defaults.)
+deployment:
   narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
-  modules_omitted: []          # rare tuning of the internal template's module set
+  modules_omitted: []          # rare tuning of the template's module set
 ```
 
 Fields not yet known carry the literal `TODO` (or `null` where optional)
