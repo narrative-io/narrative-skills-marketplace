@@ -1,7 +1,7 @@
 ---
 name: add-connector-listing
 description: |
-  Add the connector's marketplace listing to narrative-platform-ui — display
+  Add the connector's marketplace listing to the frontend repo — display
   name, logo, description, and categories — from connector-spec.yaml, as a
   reviewable UI change.
   Use when: "add the connector listing", "list the connector in the
@@ -11,11 +11,11 @@ description: |
 license: MIT
 compatibility: >-
   Stub — implementation pending. No hard requirements: local UI edits in the
-  narrative-platform-ui working tree, PR-reviewed; no infra or destructive
+  frontend repo's working tree, PR-reviewed; no infra or destructive
   ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -25,8 +25,7 @@ metadata:
 # Add Connector Listing
 
 > **Status: stub — implementation pending.** Contract only. Targets the
-> `narrative-platform-ui` working tree (present at
-> `~/dev/narrative-platform-ui`).
+> frontend repo's working tree.
 
 ## Purpose
 
@@ -42,11 +41,11 @@ Phase: **frontend**.
 
 ## Outputs
 
-- The catalog listing entry + logo/asset, in narrative-platform-ui.
+- The catalog listing entry + logo/asset, in the frontend repo.
 
 ## Human gates
 
-- Local UI edits only — shipped through the normal narrative-platform-ui PR
+- Local UI edits only — shipped through the frontend repo's normal PR
   review; no direct deploy from this skill.
 
 ## Composition contract

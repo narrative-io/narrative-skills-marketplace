@@ -1,20 +1,20 @@
 ---
 name: deploy-connector
 description: |
-  Deploy the connector — quick-publish the image, terraform apply to dev,
-  then promote to prod — one gated step at a time, driven by
+  Deploy the connector — quick-publish the image, apply infrastructure to
+  dev, then promote to prod — one gated step at a time, driven by
   connector-spec.yaml.
   Use when: "deploy the connector", "quick-publish and apply to dev",
   "promote the connector to prod", "ship the connector image".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. Runs quick-publish, terraform apply, and
-  prod promotion — every one a hard human gate. Reads connector-spec.yaml.
+  Stub — implementation pending. Runs quick-publish, infrastructure applies,
+  and prod promotion — every one a hard human gate. Reads connector-spec.yaml.
   Recommends AskUserQuestion for per-stage confirmation. Runs on any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -36,7 +36,7 @@ metadata:
 
 ## Purpose
 
-Get the connector running: quick-publish the image, `terraform apply` to
+Get the connector running: quick-publish the image, apply infrastructure to
 dev, and — after dev is verified — promote to prod. This skill owns the
 applies that the scaffold/provision skills deliberately left un-run.
 
@@ -54,7 +54,7 @@ Phase: **deploy/verify**.
 
 ## Human gates
 
-- **quick-publish force-push**, **`terraform apply` dev**, and **prod
+- **quick-publish force-push**, **infrastructure apply to dev**, and **prod
   promotion** are each hard human gates, confirmed per stage.
 - **Two-PR discipline** where it applies: add-then-verify before any
   delete/cutover; no fix-forward across a correctness gate.
@@ -100,10 +100,10 @@ field values.
 schema_version: 1
 
 # ── Identity ────────────────────────────────────────────────
-slug: google-dv360            # lowercase, dashes ok. Drives module dirs,
-                              # SSM paths, deploy URLs, Docker image names.
-package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
-                              # + narrative-db dir names.
+slug: google-dv360            # lowercase, dashes ok. Drives directory names,
+                              # deploy names, image names.
+package_slug: googledv360     # dashes dropped — the identifier-safe variant
+                              # for code packages and database identifiers.
 display_name: "Display & Video 360"   # human-facing listing name
 app_id: 47                    # marketplace app id. null until
                               # /preflight-connector pins it.
@@ -181,9 +181,9 @@ destination:
                                     # (e.g. a CRM contact's list memberships)
 
 # ── Quick settings ──────────────────────────────────────────
-# One entry per QuickSettingsType the connector exposes. `type` is the
+# One entry per quick-settings type the connector exposes. `type` is the
 # JSON discriminator ("<platform>_<kind>_quick_settings"); fields drive
-# both the Scala codecs and the app-ui form.
+# both the connector's codecs and the settings form.
 quick_settings:
   - type: dv360_audience_quick_settings
     parser: Dv360AudienceParser
@@ -218,8 +218,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -233,11 +233,33 @@ open_questions:
     owner: partner              # partner | internal | customer
     status: "asked 2026-07-20; awaiting reply"
 
-# ── Build & deploy targets ──────────────────────────────────
+# ── Scaffold target ─────────────────────────────────────────
+# Where connector code materializes. The rest of the spec says what the
+# connector is; `target` says where and how it gets built.
+# /scaffold-connector resolves this block (asking when absent) and
+# writes it back; the implementation skills read it to know which
+# working tree and conventions they operate in.
+target:
+  mode: template-repo         # template-repo | reference-clone | greenfield
+  repo_path: "~/dev/my-connectors"   # working tree for template-repo / reference-clone
+  manifest_path: null         # template-repo: scaffold-manifest location; null means
+                              # <repo_path>/connector-scaffold.yaml
+  reference_connector: null   # reference-clone: path (inside repo_path) of the
+                              # existing connector to copy conventions from
+  runtime: null               # greenfield: runtime profile (cloudflare-workers)
+
+# ── Build & deploy stages ───────────────────────────────────
 stages: [dev, prod]
-modules_omitted: []            # of api|services|stores|worker|executor|poller|infra —
-                               # rare; empty means the standard full module set
-narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+
+# ── Deployment extension (optional) ─────────────────────────
+# Stack-specific paths and tuning the infra, DB, registration, and
+# deploy skills read. Values here are the target environment's, not the
+# connector's; a scaffold target that doesn't need them omits the block.
+# (Today these skills assume Narrative's stack; the values below are its
+# defaults.)
+deployment:
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
+  modules_omitted: []          # rare tuning of the template's module set
 ```
 
 Fields not yet known carry the literal `TODO` (or `null` where optional)

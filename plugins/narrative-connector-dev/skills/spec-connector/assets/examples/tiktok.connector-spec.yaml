@@ -1,9 +1,8 @@
 # connector-spec.yaml — worked example: TikTok (ad-platform flavor)
 #
-# Reverse-engineered from the shipped TikTok connector in
-# narrative-connectors (tiktok-stores QuickSettings + parser types,
-# tiktok-api audience-metaschema.json, tiktok-services TikTokApiClient /
-# TikTokOAuthService / TikTokBatchManager, tiktok/architecture.md).
+# Reverse-engineered from a shipped TikTok connector (QuickSettings +
+# parser types, audience-metaschema.json, TikTokApiClient /
+# TikTokOAuthService / TikTokBatchManager, architecture.md).
 # Demonstrates the schema on a destination with custom audiences,
 # conversion events, and opt-out delivery.
 schema_version: 1
@@ -155,7 +154,18 @@ delivery:
 # ── Open questions ──────────────────────────────────────────
 open_questions: []                # shipped connector — none outstanding
 
-# ── Build & deploy targets ──────────────────────────────────
+# ── Scaffold target ───────────────────────────────────────────
+target:
+  mode: template-repo
+  repo_path: "~/dev/connectors"
+  manifest_path: null            # default <repo_path>/connector-scaffold.yaml
+  reference_connector: null
+  runtime: null
+
+# ── Build & deploy stages ───────────────────────────────────────
 stages: [dev, prod]
-modules_omitted: []
-narrative_db_path: "~/projects/narrative-db"
+
+# ── Deployment extension ────────────────────────────────────────
+deployment:
+  migrations_path: "~/projects/db-migrations"
+  modules_omitted: []
