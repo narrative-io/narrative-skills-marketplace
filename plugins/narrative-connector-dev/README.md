@@ -64,12 +64,14 @@ and is inlined into every skill via `{{SNIPPET:connector-spec-contract}}`.
 
 ## Phase structure
 
-The skills are organized into five phases plus an orchestrator:
+One skill sits outside the per-connector lifecycle: repo onboarding.
+The rest are organized into five phases plus an orchestrator:
 
 | Phase | Skills | What happens |
 |-------|--------|--------------|
+| **onboard** (once per repo) | `/create-scaffold-manifest` | Author the repo's `connector-scaffold.yaml` so `/scaffold-connector` can execute it. Applies to `template-repo` mode only; every later connector built in that repo skips this row. |
 | **spec** | `/spec-connector`, `/preflight-connector` | Research and author `connector-spec.yaml`; validate it and resolve identifiers/`app_id` before any code. |
-| **service** | `/create-scaffold-manifest`, `/scaffold-connector`, `/define-connector-interface`, `/add-connector-oauth`, `/implement-partner-client`, `/implement-delivery-executor`, `/add-measurement-ingestion`, `/test-connector` | Onboard the target repo (once); generate the code skeleton and the data contract in the scaffold target; add OAuth, the partner client, the Arrow delivery executor, and measurement ingestion; test and compile. |
+| **service** | `/scaffold-connector`, `/define-connector-interface`, `/add-connector-oauth`, `/implement-partner-client`, `/implement-delivery-executor`, `/add-measurement-ingestion`, `/test-connector` | Generate the code skeleton and the data contract in the scaffold target; add OAuth, the partner client, the Arrow delivery executor, and measurement ingestion; test and compile. |
 | **infra / registration** | `/scaffold-connector-infra`, `/provision-connector-db`, `/register-connector-app` | Write the `<slug>-infra` terraform and CI; author narrative-db migrations + RDS terraform; register the marketplace app. |
 | **frontend** | `/add-connector-listing`, `/add-connector-app-ui` | Add the catalog listing and the profile / quick-settings app UI in narrative-platform-ui. |
 | **deploy / verify** | `/deploy-connector`, `/verify-connector` | Quick-publish, `terraform apply` to dev, promote to prod; run an end-to-end delivery check and return a go / no-go. |
