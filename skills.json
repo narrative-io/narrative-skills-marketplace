@@ -922,21 +922,45 @@
     },
     {
       "name": "spec-connector",
-      "version": "0.1.0",
-      "description": "Research and author a Narrative connector spec for a new destination\nplatform — interview, prior-art recon, vendor-doc research, and a\ndifferentiator pass — then emit the machine-readable connector-spec.yaml\n(plus a prose spec.md) that the rest of the plugin builds from.\nUse when: \"spec out a connector for <platform>\", \"start a new connector\",\n\"research the <platform> connector\", \"write the connector spec\".\n(narrative-connector-dev)",
+      "version": "1.2.0",
+      "description": "Research and author a connector spec for a new destination platform —\ninterview, prior-art recon, vendor-doc research, and a differentiator\nwalk across five axes (auth, destination data model, identifiers and\nmatching, sync semantics, operational constraints) — then emit the\nmachine-readable connector-spec.yaml the rest of the plugin builds\nfrom, plus a prose spec.md. Identifiers, rate limits, and data-removal\nsemantics are never guessed; unknowns become partner questions.\nUse when: \"spec out a connector for <platform>\", \"start a new\nconnector\", \"research the <platform> connector\", \"write the connector\nspec\", \"draft connector-spec.yaml\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/spec-connector/SKILL.md",
-      "compatibility": "Stub — implementation pending. No hard requirements: a research + authoring skill that writes connector-spec.yaml and spec.md; no infra or destructive ops. Recommends AskUserQuestion for the one-question-at-a- time interview. Runs on any agentskills.io-compliant harness.",
+      "compatibility": "Requires Bash, Read, Write, WebFetch, and WebSearch (or equivalent capabilities — these tools may be named differently across harnesses) for vendor-doc research, plus the narrative-common find-attribute skill (narrative-mcp) for Rosetta attribute verification. Recommends AskUserQuestion (prose fallback documented in the body), the narrative-knowledge-base MCP server for prior-art recon, and the Shortcut or Notion MCP servers for publishing the finished spec — all degrade gracefully when absent.",
       "requirements": {
+        "requires": {
+          "tools": [
+            "Bash",
+            "Read",
+            "Write",
+            "WebFetch",
+            "WebSearch"
+          ],
+          "skills": [
+            "narrative-common:find-attribute"
+          ]
+        },
         "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
           "skills": [
             "narrative-connector-dev:preflight-connector"
           ],
-          "tools": [
-            "AskUserQuestion"
+          "mcp-servers": [
+            "narrative-knowledge-base",
+            "shortcut",
+            "notion"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "<platform>",
+          "required": false,
+          "description": "The destination platform to spec (e.g. mailchimp, hubspot, snapchat). If omitted, the skill asks first."
+        }
+      ]
     },
     {
       "name": "test-connector",
