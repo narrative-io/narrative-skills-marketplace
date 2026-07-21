@@ -1,0 +1,21 @@
+# The scaffold manifest — `connector-scaffold.yaml`
+
+A template repo teaches `/scaffold-connector` its conventions through
+one file: **`connector-scaffold.yaml`** at the repo root (or wherever
+the spec's `target.manifest_path` points). The manifest declares what to
+copy, how to rename it, which build files need entries, and how to
+verify the result. The skill executes the manifest and ships no repo's
+conventions of its own.
+
+Keeping conventions in the repo's manifest rather than in the skill is
+what lets one skill serve every team. A team's module taxonomy, build
+wiring, and docs layout live in that team's repo, next to the code they
+describe, visible only to people who can already read the repo.
+Narrative's own manifest lives in the `narrative-connectors` repo; any
+other team writes one for their layout.
+
+Authoring a manifest is the `/create-scaffold-manifest` skill's job,
+by inference from a reference connector or by interview. This reference
+defines what the finished artifact looks like.
+
+{{SNIPPET:scaffold-manifest-schema}}

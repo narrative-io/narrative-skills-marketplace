@@ -30,7 +30,7 @@ The skills are organized into five phases plus an orchestrator:
 | Phase | Skills | What happens |
 |-------|--------|--------------|
 | **spec** | `/spec-connector`, `/preflight-connector` | Research and author `connector-spec.yaml`; validate it and resolve identifiers/`app_id` before any code. |
-| **service** | `/scaffold-connector`, `/define-connector-interface`, `/add-connector-oauth`, `/implement-partner-client`, `/implement-delivery-executor`, `/add-measurement-ingestion`, `/test-connector` | Generate the code skeleton in the scaffold target and the data contract; add OAuth, the partner client, the Arrow delivery executor, and measurement ingestion; test and compile. |
+| **service** | `/create-scaffold-manifest`, `/scaffold-connector`, `/define-connector-interface`, `/add-connector-oauth`, `/implement-partner-client`, `/implement-delivery-executor`, `/add-measurement-ingestion`, `/test-connector` | Onboard the target repo (once); generate the code skeleton and the data contract in the scaffold target; add OAuth, the partner client, the Arrow delivery executor, and measurement ingestion; test and compile. |
 | **infra / registration** | `/scaffold-connector-infra`, `/provision-connector-db`, `/register-connector-app` | Write the `<slug>-infra` terraform and CI; author narrative-db migrations + RDS terraform; register the marketplace app. |
 | **frontend** | `/add-connector-listing`, `/add-connector-app-ui` | Add the catalog listing and the profile / quick-settings app UI in narrative-platform-ui. |
 | **deploy / verify** | `/deploy-connector`, `/verify-connector` | Quick-publish, `terraform apply` to dev, promote to prod; run an end-to-end delivery check and return a go / no-go. |
@@ -66,6 +66,9 @@ three modes:
   manifest and ships no repo's conventions of its own. Narrative's
   manifest (the sbt module set and its wiring) lives in the
   `narrative-connectors` repo; other teams write one for their layout.
+  Authoring the manifest is a per-repo, one-time onboarding job;
+  `/create-scaffold-manifest` does it, inferring the conventions from
+  a reference connector or interviewing the user for them.
 - **`reference-clone`** — no manifest; point at an existing connector
   and the skill infers the conventions from it, confirming the plan
   before generating.

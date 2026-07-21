@@ -21,7 +21,7 @@ compatibility: >-
   fallback documented in the body). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
   narrative:
     args:
       - name: "<spec-path>"
@@ -40,6 +40,7 @@ metadata:
         - AskUserQuestion
       skills:
         - narrative-connector-dev:preflight-connector
+        - narrative-connector-dev:create-scaffold-manifest
         - narrative-connector-dev:define-connector-interface
 ---
 
@@ -133,10 +134,10 @@ Per mode:
   (default `<repo_path>/connector-scaffold.yaml`) and validate it
   against [`references/scaffold-manifest.md`](references/scaffold-manifest.md):
   known `schema_version`, a `template.path` that exists, non-empty
-  `naming.rename`. A missing manifest is not an error to work around —
-  offer to fall back to `reference-clone`, or to help author a
-  manifest for the repo (a one-time investment that makes every future
-  connector scaffold repeatable).
+  `naming.rename`. A missing manifest is not an error to work around.
+  Offer to fall back to `reference-clone`, or to hand off to
+  `/create-scaffold-manifest` to author one (a one-time investment
+  that makes every future connector scaffold repeatable).
 - **`reference-clone`.** Inspect the reference connector's tree and
   the repo's build files. Infer: the unit layout and which portable
   component each unit serves, the naming pattern (how the reference's
@@ -145,8 +146,9 @@ Per mode:
   inferred conventions to `scaffold-plan.md` in the spec directory,
   using the manifest's own format, and **walk it with the user before
   generating**. Inference is a guess until confirmed. Once confirmed,
-  offer to save the plan into the repo as `connector-scaffold.yaml`
-  so future scaffolds skip the inference step.
+  offer to promote the plan to a durable `connector-scaffold.yaml`
+  via `/create-scaffold-manifest` (seeded with `scaffold-plan.md`) so
+  future scaffolds skip the inference step.
 - **`greenfield`.** Read the runtime profile under
   `references/runtimes/` and ask where the new project directory
   should go. Follow the profile's generation rules, including its rule
@@ -193,7 +195,8 @@ Execute the plan:
   human, not something to quietly patch beyond obvious rename misses.
 - Write back to the spec anything this phase resolved (the final
   `target` block, and the manifest path if the user accepted the
-  Phase 2 offer to save the confirmed plan as `connector-scaffold.yaml`).
+  Phase 2 offer to promote the confirmed plan via
+  `/create-scaffold-manifest`).
 - Summarize: components generated, units created, wiring applied,
   gaps marked (e.g. the greenfield platform-contract stubs).
 - Hand off: suggest `/define-connector-interface` next.

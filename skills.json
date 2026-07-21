@@ -761,6 +761,43 @@
       }
     },
     {
+      "name": "create-scaffold-manifest",
+      "version": "1.0.0",
+      "description": "Author a repo's connector-scaffold.yaml — the manifest that teaches\n/scaffold-connector the repo's template, rename rules, component map,\nand build wiring. Two entry paths: infer the conventions from an\nexisting reference connector (repo archaeology with human\nconfirmation), or interview the user section by section when no clean\nexemplar exists. A per-repo, one-time onboarding job.\nUse when: \"create a scaffold manifest\", \"write connector-scaffold.yaml\",\n\"onboard my repo for connector scaffolding\", \"infer connector\nconventions from my repo\", \"teach the scaffolder our repo layout\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/create-scaffold-manifest/SKILL.md",
+      "compatibility": "Requires Bash, Read, and Write (or equivalent capabilities — these tools may be named differently across harnesses) to inspect the repo and write the manifest. No infra, DB, or registration side effects. Recommends AskUserQuestion (prose fallback documented in the body). Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "requires": {
+          "tools": [
+            "Bash",
+            "Read",
+            "Write"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "skills": [
+            "narrative-connector-dev:scaffold-connector"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "<repo-path>",
+          "required": false,
+          "description": "Path to the repo to onboard. If omitted, the skill asks."
+        },
+        {
+          "name": "--reference <connector-dir>",
+          "required": false,
+          "description": "Directory (relative to the repo root) of the connector to infer conventions from. Selects the inference path without asking."
+        }
+      ]
+    },
+    {
       "name": "define-connector-interface",
       "version": "0.1.0",
       "description": "Define the connector's data contract — the audience metaschema, the\nQuickSettingsType / ParserType enums and codecs, the identifier-group\nattribute metaschema with correct $ref kinds, and the collaboration\npolicy — all generated from connector-spec.yaml.\nUse when: \"define the connector interface\", \"generate the audience\nmetaschema\", \"wire up the quick settings types\", \"build the collaboration\npolicy for the connector\".\n(narrative-connector-dev)",
@@ -888,7 +925,7 @@
     },
     {
       "name": "scaffold-connector",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Generate the code skeleton for a new connector in whatever codebase\nhosts it, driven by connector-spec.yaml and a scaffold target: a\ntemplate repo carrying a connector-scaffold.yaml manifest, an existing\nconnector to clone conventions from, or a greenfield runtime profile\n(cloudflare-workers first). Derives the component set from the spec,\ncopies and renames, wires build files — every change a reviewable\nworking-tree diff.\nUse when: \"scaffold the <slug> connector\", \"generate the connector\nmodules\", \"stand up the connector project\", \"scaffold a connector in\nmy repo\", \"start a connector from scratch\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/scaffold-connector/SKILL.md",
@@ -908,6 +945,7 @@
           ],
           "skills": [
             "narrative-connector-dev:preflight-connector",
+            "narrative-connector-dev:create-scaffold-manifest",
             "narrative-connector-dev:define-connector-interface"
           ]
         }

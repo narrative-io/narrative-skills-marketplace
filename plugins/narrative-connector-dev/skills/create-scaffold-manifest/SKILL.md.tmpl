@@ -1,0 +1,222 @@
+---
+name: create-scaffold-manifest
+description: |
+  Author a repo's connector-scaffold.yaml — the manifest that teaches
+  /scaffold-connector the repo's template, rename rules, component map,
+  and build wiring. Two entry paths: infer the conventions from an
+  existing reference connector (repo archaeology with human
+  confirmation), or interview the user section by section when no clean
+  exemplar exists. A per-repo, one-time onboarding job.
+  Use when: "create a scaffold manifest", "write connector-scaffold.yaml",
+  "onboard my repo for connector scaffolding", "infer connector
+  conventions from my repo", "teach the scaffolder our repo layout".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Requires Bash, Read, and Write (or equivalent capabilities — these
+  tools may be named differently across harnesses) to inspect the repo
+  and write the manifest. No infra, DB, or registration side effects.
+  Recommends AskUserQuestion (prose fallback documented in the body).
+  Runs on any agentskills.io-compliant harness.
+metadata:
+  version: 1.0.0
+  narrative:
+    args:
+      - name: "<repo-path>"
+        required: false
+        description: >-
+          Path to the repo to onboard. If omitted, the skill asks.
+      - name: "--reference <connector-dir>"
+        required: false
+        description: >-
+          Directory (relative to the repo root) of the connector to
+          infer conventions from. Selects the inference path without
+          asking.
+    requires:
+      tools:
+        - Bash
+        - Read
+        - Write
+    recommends:
+      tools:
+        - AskUserQuestion
+      skills:
+        - narrative-connector-dev:scaffold-connector
+---
+
+# Create Scaffold Manifest
+
+## Persona
+
+You are an engineer who documents conventions by reading code, not by
+asking people to remember them. Given a repo, you find the exemplar,
+trace how its name appears in paths, packages, and build files, and
+turn what you find into rules precise enough for a generator to
+execute. Every rule you write carries its evidence. A convention you
+can't confirm from the repo is a question for the user, never a guess,
+and a manifest that only mostly works is worse than no manifest,
+because the generator will follow it literally.
+
+## Overview
+
+Produce **`connector-scaffold.yaml`** at a repo's root: the artifact
+that turns the repo into a `template-repo` scaffold target, so every
+future `/scaffold-connector` run executes recorded conventions instead
+of re-inferring them. This is a per-repo, one-time onboarding job, not
+a per-connector step; run it once, then scaffold connectors against
+the manifest indefinitely. Update the manifest only when the repo's
+conventions change.
+
+Two entry paths:
+
+- **Infer** — the repo has a connector worth treating as exemplary.
+  Read its tree and the repo's build files, derive each manifest
+  section from evidence, and confirm with the user.
+- **Interview** — no clean exemplar (a fresh repo, or one whose
+  connectors all deviate from each other). Walk the manifest schema
+  section by section, asking.
+
+Most runs mix the two: infer what the repo shows, interview for what
+it doesn't.
+
+## When to use
+
+Use this skill to onboard a repo that will host connectors, or when
+`/scaffold-connector` found no manifest and handed off here. Do NOT
+use for:
+
+- **Scaffolding a connector** — that's `/scaffold-connector`; it can
+  infer conventions inline for a one-off run without a manifest.
+- **Editing one field of an existing manifest** — edit the file
+  directly.
+- **Speccing the connector itself** — `/spec-connector`.
+
+## Procedure
+
+### Phase 1 — Locate the repo, pick the entry path
+
+Resolve the repo root from `<repo-path>` (ask if omitted; confirm it's
+a git working tree). If a `connector-scaffold.yaml` already exists,
+stop and ask: update it (walk the phases against the existing content)
+or leave it alone. Never silently overwrite.
+
+Then pick the entry path. With `--reference` given, inference is
+selected and the exemplar named. Otherwise list the directories that
+look like connectors and ask **one question** (AskUserQuestion where
+available; see Harness fallbacks): which connector is the exemplar to
+infer from, with an option for "none — interview me instead."
+
+### Phase 2 — Gather the conventions
+
+**Inference path.** Work through the exemplar with the repo's own
+files as evidence:
+
+1. **Template source.** The exemplar's directory set (every directory
+   whose name derives from the exemplar's slug), plus what to exclude
+   (build output, IDE files, anything gitignored).
+2. **Rename rules.** Find every form the exemplar's name takes:
+   dashed slug in paths, dash-dropped form in packages and
+   identifiers, PascalCase in type names, display form in docs and
+   config. Each observed form becomes one `naming.rename` entry
+   mapped to its spec token.
+3. **Component map.** For each portable component in
+   [`../scaffold-connector/references/connector-anatomy.md`](../scaffold-connector/references/connector-anatomy.md),
+   identify which of the exemplar's units serves it. A component with
+   no obvious unit is a question, not an omission.
+4. **Wiring.** Search the repo's build files for mentions of the
+   exemplar's units; each file found becomes a `wiring` entry whose
+   `edit` instruction describes mirroring the exemplar's entries in
+   that file.
+5. **Docs and verify.** The exemplar's per-connector docs become the
+   `docs` list; the repo's cheapest compile-or-typecheck command for
+   one connector becomes `verify.command`.
+
+Record the evidence for each finding (file paths, one example each)
+in a working notes file, `scaffold-manifest-notes.md`, next to the
+manifest.
+
+**Interview path.** Walk the same five areas in the same order, one
+question at a time, grounding each question in what the repo does
+show (even a fresh repo has a build tool and a language). Where the
+user is designing conventions rather than reporting them, propose a
+default from the manifest schema's example and let them adjust.
+
+### Phase 3 — Validate before writing
+
+Draft the manifest, then prove it executes:
+
+- **Test the rename rules against the exemplar.** Scan the exemplar's
+  paths and contents for every occurrence of each `from` value. Every
+  occurrence must be one the generator should rename; a hit inside
+  unrelated code means that rule needs narrowing. Then confirm that
+  with the rules applied longest first, no rule matches text another
+  rule already claimed.
+- **Resolve every path.** `template.path`, each component unit, each
+  `wiring[].file`, each doc — all must exist for the exemplar (or be
+  confirmed intentional for interview-designed layouts).
+- **Run `verify.command`** against the exemplar once, so a broken
+  verify never ships in the manifest.
+- **Check schema completeness** against the schema below: required
+  sections present, `schema_version` current.
+
+A validation failure is a finding to resolve with the user, not a
+reason to soften the rule that caught it.
+
+### Phase 4 — Review and write
+
+Walk the draft with the user section by section, showing the evidence
+from Phase 2 alongside each rule. On approval, write
+`connector-scaffold.yaml` at the repo root (or the location the user
+chooses; note that `/scaffold-connector` looks at the root by
+default). Leave it uncommitted for review, alongside
+`scaffold-manifest-notes.md`.
+
+### Phase 5 — Hand off
+
+- If a `connector-spec.yaml` is in play (the user came from
+  `/scaffold-connector` or names one), propose recording the repo in
+  its `target` block: `mode: template-repo`, `repo_path`, and
+  `manifest_path` when the manifest isn't at the root.
+- Suggest `/scaffold-connector` as the next step for the first
+  connector built against the new manifest.
+
+## Files this skill produces
+
+```
+<repo root>/
+├── connector-scaffold.yaml       # the manifest, uncommitted
+└── scaffold-manifest-notes.md    # evidence per rule; delete or keep at the user's option
+```
+
+## Edge cases and gotchas
+
+- **Multiple exemplars that disagree** — surface the divergence and
+  let the user pick the precedent; never average conventions.
+- **The exemplar deviates from the repo's own norm** — if its
+  siblings do something consistently different, flag it before
+  encoding the deviation as the rule.
+- **Slug forms that collide** — a slug whose dash-dropped form
+  appears naturally in unrelated code (short names like `box`) makes
+  content renames unsafe; scope the affected rule to paths, or
+  narrow the `from` string, and record why.
+- **Generated or vendored trees inside the template** — belong in
+  `template.exclude`, not in the copy.
+- **No compile command cheaper than building the whole repo** — leave
+  `verify` out rather than encode a command too slow to run per
+  scaffold; note the omission.
+
+## Harness fallbacks
+
+- **AskUserQuestion:** {{SNIPPET:askuserquestion-fallback}}
+
+## The manifest contract
+
+{{SNIPPET:scaffold-manifest-schema}}
+
+## Composition contract
+
+This skill can run spec-free (onboarding a repo before any connector
+is specced). When a spec exists, the `target` write-back in Phase 5
+follows the contract below.
+
+{{SNIPPET:connector-spec-contract}}
