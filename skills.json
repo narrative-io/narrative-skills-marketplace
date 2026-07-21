@@ -945,7 +945,7 @@
     },
     {
       "name": "scaffold-connector",
-      "version": "1.0.2",
+      "version": "1.1.0",
       "description": "Generate the code skeleton for a new connector in whatever codebase\nhosts it, driven by connector-spec.yaml and a scaffold target: a\ntemplate repo carrying a connector-scaffold.yaml manifest, an existing\nconnector to clone conventions from, or a greenfield runtime profile\n(cloudflare-workers first). Derives the component set from the spec,\ncopies and renames, wires build files — every change a reviewable\nworking-tree diff.\nUse when: \"scaffold the <slug> connector\", \"generate the connector\nmodules\", \"stand up the connector project\", \"scaffold a connector in\nmy repo\", \"start a connector from scratch\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/scaffold-connector/SKILL.md",

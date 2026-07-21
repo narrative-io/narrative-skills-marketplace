@@ -21,7 +21,7 @@ compatibility: >-
   fallback documented in the body). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 1.0.2
+  version: 1.1.0
   narrative:
     args:
       - name: "<spec-path>"

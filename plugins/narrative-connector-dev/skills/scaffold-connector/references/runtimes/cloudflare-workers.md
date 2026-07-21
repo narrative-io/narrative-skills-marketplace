@@ -43,11 +43,32 @@ Generate a TypeScript Workers project at the path the user chooses:
 | `background_worker` | Not a separate unit — the Queues consumer covers async delivery. |
 | `measurement_poller` | A [scheduled trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/) in the same Worker, reading the `measurement.inbox_prefix` source. |
 
-## Generation rules
+### Choosing Cloudflare services
+
+The table above names each component's default service. This section
+covers every service: what each does for a connector, and which spec
+fields call for it. Bind only what the spec demands. A typical
+connector ships with the Worker, one queue, and one store, and every
+extra binding is another stub the implementation skills
+(`/implement-partner-client`, `/implement-delivery-executor`) must
+fill in.
+
+| Service | Role in a connector | Reach for it when |
+|---|---|---|
+| [Queues](https://developers.cloudflare.com/queues/) | The delivery backbone. Batches land as messages, the consumer drives the executor, and retries plus a dead-letter queue give at-least-once delivery. | Any outbound direction in `delivery.directions`. Size batches to `partner_api.batch_limit`; align retry behavior with `partner_api.idempotency`. |
+| [KV](https://developers.cloudflare.com/kv/) | Default credential store: per-account tokens and small config, read often and written rarely. Eventually consistent, so a just-refreshed token may take seconds to appear at other edge locations. | `auth.model` is present and the token shape is flat. Not for counters, locks, or anything that must read its own write. |
+| [D1](https://developers.cloudflare.com/d1/) | Relational state: token tables whose columns follow `auth.oauth.token_response`, and per-row delivery bookkeeping. | `auth.oauth.token_response` implies relational shape (multi-account bindings, scope arrays), or `partner_api.failure_semantics: row_level` means each row's outcome must be recorded. |
+| [Durable Objects](https://developers.cloudflare.com/durable-objects/) | One object per destination account: serializes partner calls, enforces `partner_api.rate_limits` with strongly consistent counters, and refreshes tokens ahead of expiry via alarms. | `partner_api.rate_limits` is per-account, or concurrent queue consumers would otherwise race on the same token or quota. |
+| [R2](https://developers.cloudflare.com/r2/) | Object storage for file-shaped data: staged delivery files and the measurement inbox. | The partner API takes files rather than calls, or `measurement.inbox_prefix` needs an S3-compatible landing zone the partner can write to. |
+| [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/) | Scheduled entry points: the measurement polling loop, and sweep jobs (refreshing stale tokens, cleaning up expired memberships per `delivery.ttl`). | `delivery.directions` includes `measurement_ingestion`, or `delivery.ttl` is enforced by the connector rather than the destination. |
+| [Workflows](https://developers.cloudflare.com/workflows/) | Durable multi-step execution. Each step checkpoints, so a delivery that spans several partner calls survives restarts and partial failure. | `delivery.update_model` is `add_then_remove` or `swap_and_promote` (sequences where stopping halfway leaves the destination inconsistent). |
+| [Secrets](https://developers.cloudflare.com/workers/configuration/secrets/) | The connector's own credentials: OAuth client id/secret, static API keys. Set via `wrangler secret`, never committed and never stored beside per-account tokens. | Always. Every `auth.model` gives the connector at least one credential of its own. |
+
+
 
 - Consult the `cloudflare` and `wrangler` skills (when mounted) for
-  current Workers/Queues/KV/D1 configuration syntax rather than
-  generating bindings from memory.
+  the current binding and configuration syntax of whichever services
+  the mapping selects, rather than generating bindings from memory.
 - Seed every module with typed signatures derived from the spec
   (`identifier_groups`, `quick_settings` fields, `partner_api.endpoints`)
   and a body that fails loudly with "not implemented". The
