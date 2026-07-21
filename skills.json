@@ -922,7 +922,7 @@
     },
     {
       "name": "spec-connector",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Research and author a connector spec for a new destination platform —\ninterview, prior-art recon, vendor-doc research, and a differentiator\nwalk across five axes (auth, destination data model, identifiers and\nmatching, sync semantics, operational constraints) — then emit the\nmachine-readable connector-spec.yaml the rest of the plugin builds\nfrom, plus a prose spec.md. Identifiers, rate limits, and data-removal\nsemantics are never guessed; unknowns become partner questions.\nUse when: \"spec out a connector for <platform>\", \"start a new\nconnector\", \"research the <platform> connector\", \"write the connector\nspec\", \"draft connector-spec.yaml\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/spec-connector/SKILL.md",
@@ -959,11 +959,6 @@
           "name": "<platform>",
           "required": false,
           "description": "The destination platform to spec (e.g. mailchimp, hubspot, snapchat). If omitted, the skill asks first."
-        },
-        {
-          "name": "--quick",
-          "required": false,
-          "description": "Minimal interaction: decide the research and differentiator calls autonomously and surface only blocking unknowns."
         }
       ]
     },

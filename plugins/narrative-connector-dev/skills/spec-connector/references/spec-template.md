@@ -12,9 +12,6 @@
 | **Destination** | <Platform> — <use-case shape: outbound membership / events / opt-out / measurement> |
 | **Status** | DRAFT |
 | **Date** | <YYYY-MM-DD> |
-| **Target epic** | <link or "—"> |
-| **Owner** | <name> |
-| **Tech lead** | <name> |
 
 ---
 
@@ -160,6 +157,6 @@ platform that rejects it. Caps the match-rate ceiling.>
 
 ## Resources & Sources
 
-* **People:** <vendor contacts>, <Narrative owner>, <tech lead>
+* **People:** <vendor contacts>
 * **Vendor docs:** <official developer-docs URL>, <API reference>
 * **Prior art:** <closest existing Narrative connector + link to its spec>

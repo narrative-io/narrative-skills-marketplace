@@ -23,7 +23,7 @@ compatibility: >-
   Shortcut or Notion MCP servers for publishing the finished spec —
   all degrade gracefully when absent.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
   narrative:
     args:
       - name: "<platform>"
@@ -31,11 +31,6 @@ metadata:
         description: >-
           The destination platform to spec (e.g. mailchimp, hubspot,
           snapchat). If omitted, the skill asks first.
-      - name: "--quick"
-        required: false
-        description: >-
-          Minimal interaction: decide the research and differentiator
-          calls autonomously and surface only blocking unknowns.
     requires:
       tools:
         - Bash
@@ -114,7 +109,6 @@ Two rules are non-negotiable and apply to every phase:
 | Argument | Behavior |
 |---|---|
 | `<platform>` | Destination platform to spec. If omitted, ask first. |
-| `--quick` | Minimal interview; autonomous decisions; surface only blocking unknowns. |
 
 ## When to use
 
@@ -422,7 +416,7 @@ package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
                               # + narrative-db dir names.
 display_name: "Display & Video 360"   # human-facing listing name
 app_id: 47                    # marketplace app id — max(id)+1 over existing
-                              # apps. TODO until /preflight-connector pins it.
+                              # apps. null until /preflight-connector pins it.
 destination_type: audience    # audience | conversion_api | measurement | combined.
                               # `audience` means any outbound record/membership
                               # delivery — ad audiences, email list members, CRM
