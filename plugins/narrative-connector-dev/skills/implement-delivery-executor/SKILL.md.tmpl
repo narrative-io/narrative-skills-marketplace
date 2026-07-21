@@ -1,0 +1,72 @@
+---
+name: implement-delivery-executor
+description: |
+  Implement the audience-delivery executor on the Arrow Dataset path —
+  field parsers, narrative_id routing, batching, file-delivery metrics, and
+  the runtime config wiring — driven by the delivery block of
+  connector-spec.yaml.
+  Use when: "implement the delivery executor", "write the audience delivery
+  path", "wire up the Arrow reader for the connector", "build the connector
+  executor".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. No hard requirements: local codegen in the
+  narrative-connectors working tree; partner delivery happens only at the
+  deploy/verify gate. Reads the delivery + identifier_groups blocks of
+  connector-spec.yaml. Runs on any agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:scaffold-connector
+        - narrative-connector-dev:define-connector-interface
+        - narrative-connector-dev:implement-partner-client
+---
+
+# Implement Delivery Executor
+
+> **Status: stub — implementation pending.** Contract only. Consolidates
+> the greenfield Arrow-path patterns from
+> `narrative-connectors/.claude/skills/migrate-connector-to-arrow`
+> (`Arrow<Slug>ConnectorParser`, `Arrow<Slug>AudienceFileReader`,
+> `FileDeliveryMetrics`) so new connectors start on the Arrow path rather
+> than the legacy JSON path.
+
+## Purpose
+
+Implement the executor that reads a materialized audience and delivers it
+to the partner via `/implement-partner-client`. New connectors are built
+directly on the Arrow Dataset path (`ArrowConnectorReader.readBatches`),
+skipping the legacy JSON parse path entirely.
+
+Phase: **service**.
+
+## Inputs (from connector-spec.yaml)
+
+- `delivery.path` (arrow for new connectors), `delivery.update_model`,
+  `delivery.ttl`, `delivery.optout_handling`.
+- `identifier_groups[]` → the bound field parsers and narrative_id routing.
+- `partner_api.batch_limit` + concurrency targets → batching and JVM
+  heap/direct-memory sizing.
+
+## Outputs
+
+- `Arrow<Slug>ConnectorParser`, `Arrow<Slug>AudienceFileReader`,
+  `<Slug>ConnectorConfig`.
+- `FileDeliveryMetrics` + reporter; the rewritten executor(s);
+  `RuntimeConfig` + `ARROW_BATCH_SIZE` wiring.
+
+## Human gates
+
+- Local code — actual delivery to the partner is a `/deploy-connector` +
+  `/verify-connector` concern, gated there.
+- **Correctness rule (carried from the Arrow migration):** delivered
+  `total_rows` / `total_identifiers` must match the expected baseline
+  exactly. A parser-count mismatch is a correctness regression, not a
+  fix-forward — surfaced at verify time.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

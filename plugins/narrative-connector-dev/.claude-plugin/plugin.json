@@ -1,0 +1,8 @@
+{
+  "name": "narrative-connector-dev",
+  "version": "0.1.0",
+  "description": "Build Narrative data connectors agentically — a spec-driven skill set that carries a connector from spec through service code, infrastructure, platform registration, frontend listing, and deploy/verify, stopping at every human gate. Filesystem/git work across narrative-connectors, narrative-db, and narrative-platform-ui.",
+  "author": {
+    "name": "Narrative I/O"
+  }
+}
