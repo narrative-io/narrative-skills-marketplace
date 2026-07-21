@@ -832,22 +832,42 @@
     },
     {
       "name": "preflight-connector",
-      "version": "0.1.0",
+      "version": "1.1.0",
       "description": "Validate and enrich a connector-spec.yaml before any code is generated —\nresolve every identifier group to a canonical Rosetta Stone attribute,\npin the marketplace app_id, confirm the package-slug derivation, and flag\nevery remaining TODO. Produces a go / no-go preflight report.\nUse when: \"preflight the connector spec\", \"is this connector spec ready\nto build\", \"validate connector-spec.yaml\", \"check the connector spec\nbefore scaffolding\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/preflight-connector/SKILL.md",
-      "compatibility": "Stub — implementation pending. No hard requirements: a read-and-enrich skill over connector-spec.yaml; no infra or destructive ops. Recommends the narrative-common find-attribute skill for Rosetta resolution and AskUserQuestion for confirmations. Runs on any agentskills.io harness.",
+      "compatibility": "Requires Read and Write (or equivalent capabilities — these tools may be named differently across harnesses) plus the narrative-common find-attribute skill (narrative-mcp) for Rosetta attribute verification. Recommends AskUserQuestion (prose fallback documented in the body) and the narrative_attribute_create and narrative_app_create MCP tools for creating missing attributes and the marketplace app; both degrade to blocking open questions when unavailable.",
       "requirements": {
-        "recommends": {
-          "skills": [
-            "narrative-connector-dev:spec-connector",
-            "narrative-common:find-attribute"
+        "requires": {
+          "tools": [
+            "Read",
+            "Write"
           ],
+          "skills": [
+            "narrative-common:find-attribute"
+          ]
+        },
+        "recommends": {
           "tools": [
             "AskUserQuestion"
+          ],
+          "mcp-tools": [
+            "narrative_attribute_create",
+            "narrative_app_create"
+          ],
+          "skills": [
+            "narrative-connector-dev:spec-connector",
+            "narrative-connector-dev:scaffold-connector"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "<spec-path>",
+          "required": false,
+          "description": "Path to connector-spec.yaml, or to the directory that holds it. If omitted, the skill searches the conventional location (~/.narrative/projects/<slug>/connector-spec/) and asks when it can't find exactly one spec."
+        }
+      ]
     },
     {
       "name": "provision-connector-db",
@@ -922,7 +942,7 @@
     },
     {
       "name": "spec-connector",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Research and author a connector spec for a new destination platform —\ninterview, prior-art recon, vendor-doc research, and a differentiator\nwalk across five axes (auth, destination data model, identifiers and\nmatching, sync semantics, operational constraints) — then emit the\nmachine-readable connector-spec.yaml the rest of the plugin builds\nfrom, plus a prose spec.md. Identifiers, rate limits, and data-removal\nsemantics are never guessed; unknowns become partner questions.\nUse when: \"spec out a connector for <platform>\", \"start a new\nconnector\", \"research the <platform> connector\", \"write the connector\nspec\", \"draft connector-spec.yaml\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/spec-connector/SKILL.md",
