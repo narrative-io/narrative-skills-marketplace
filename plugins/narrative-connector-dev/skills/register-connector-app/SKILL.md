@@ -107,11 +107,15 @@ package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
 display_name: "Display & Video 360"   # human-facing listing name
 app_id: 47                    # marketplace app id — max(id)+1 over existing
                               # apps. TODO until /preflight-connector pins it.
-destination_type: audience    # audience | conversion_api | measurement | combined
+destination_type: audience    # audience | conversion_api | measurement | combined.
+                              # `audience` means any outbound record/membership
+                              # delivery — ad audiences, email list members, CRM
+                              # contacts, dataset rows. Ad platforms are one
+                              # flavor, not the frame.
 
 # ── Auth model ──────────────────────────────────────────────
 auth:
-  model: oauth2               # oauth2 | static_credentials | sftp_key | partner_id_header
+  model: oauth2               # oauth2 | static_credentials | jwt | sftp_key | partner_id_header
   # Present only when model: oauth2. Drives /add-connector-oauth.
   oauth:
     authorize_url: "https://.../oauth2/authorize"
@@ -135,6 +139,9 @@ auth:
 # discriminator (attribute_value | attribute_typed_value |
 # attribute_context_value | string_value_type). narrative_id is always
 # present. `hash`/`normalization` capture the destination's expectations.
+# Every `attribute` URI is verified against the live catalog via the
+# narrative-common find-attribute skill — never typed from memory. An
+# attribute that doesn't exist yet is a blocker, not a TODO.
 identifier_groups:
   - name: email
     attribute: "https://api.narrative.io/attributes/sha256_hashed_email"
@@ -156,6 +163,22 @@ identifier_groups:
 identifiers_not_accepted:
   - ip_address
 
+# ── Destination data model ──────────────────────────────────
+# What a delivered record becomes on the destination, and where it
+# lands. Generalizes across destination flavors: ad-platform audiences,
+# email lists, CRM objects, datasets.
+destination:
+  record_becomes: audience_member   # audience_member | list_member | segment_member
+                                    # | crm_contact | dataset_row | event | file_row
+  container: custom_audience        # the vendor object records land in (custom
+                                    # audience, list, segment, event set, dataset, bucket)
+  container_provisioning: either    # connector_creates | customer_creates | either
+  match_key: "sha256(identifier)"   # how the destination matches/dedupes delivered
+                                    # records (e.g. md5(lowercase(email)) for
+                                    # Mailchimp list members)
+  associations: []                  # secondary vendor objects a record links to
+                                    # (e.g. a CRM contact's list memberships)
+
 # ── Quick settings ──────────────────────────────────────────
 # One entry per QuickSettingsType the connector exposes. `type` is the
 # JSON discriminator ("<platform>_<kind>_quick_settings"); fields drive
@@ -175,13 +198,20 @@ partner_api:
   rate_limits:
     - { scope: per_second, limit: 10 }
     - { scope: per_day,    limit: 1000000 }
+  pagination: page_number         # page_number | cursor | offset | none
+  idempotency: "upsert keyed on external id; safe to retry"   # dedup key + retry semantics
   failure_semantics: whole_batch  # whole_batch | row_level
 
 # ── Delivery semantics ──────────────────────────────────────
 delivery:
+  directions:                   # every direction data flows for this connector
+    - outbound_membership       # outbound record/membership delivery
+    # - conversion_events       # conversion / event ingestion (CAPI-style)
+    # - opt_out                 # suppression / removal delivery
+    # - measurement_ingestion   # inbound measurement feed (fills `measurement:`)
   path: arrow                   # arrow (default for new connectors) | json (legacy)
-  update_model: add_then_remove # native_replace | add_then_remove | swap_and_promote | ttl_forced
-  ttl: null                     # audience TTL if the destination enforces one
+  update_model: add_then_remove # native_replace | add_then_remove | swap_and_promote | ttl_forced | upsert
+  ttl: null                     # membership TTL / expiry if the destination enforces one
   optout_handling: "remove membership on suppression list match"
 
 # ── Measurement ingestion (present only for measurement/combined) ──
@@ -194,8 +224,18 @@ measurement:
     dev: "ds_..."
     prod: "ds_..."
 
-# ── Deploy targets ──────────────────────────────────────────
+# ── Open questions ──────────────────────────────────────────
+# Real unknowns awaiting an answer — never guessed values. A question
+# whose answer blocks a downstream skill is a preflight no-go.
+open_questions:
+  - question: "Exact per-day request quota?"
+    owner: partner              # partner | internal | customer
+    status: "asked 2026-07-20; awaiting reply"
+
+# ── Build & deploy targets ──────────────────────────────────
 stages: [dev, prod]
+modules_omitted: []            # of api|services|stores|worker|executor|poller|infra —
+                               # rare; empty means the standard full module set
 narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
 ```
 

@@ -1,76 +1,389 @@
 ---
 name: spec-connector
 description: |
-  Research and author a Narrative connector spec for a new destination
-  platform — interview, prior-art recon, vendor-doc research, and a
-  differentiator pass — then emit the machine-readable connector-spec.yaml
-  (plus a prose spec.md) that the rest of the plugin builds from.
-  Use when: "spec out a connector for <platform>", "start a new connector",
-  "research the <platform> connector", "write the connector spec".
+  Research and author a connector spec for a new destination platform —
+  interview, prior-art recon, vendor-doc research, and a differentiator
+  walk across five axes (auth, destination data model, identifiers and
+  matching, sync semantics, operational constraints) — then emit the
+  machine-readable connector-spec.yaml the rest of the plugin builds
+  from, plus a prose spec.md. Identifiers, rate limits, and data-removal
+  semantics are never guessed; unknowns become partner questions.
+  Use when: "spec out a connector for <platform>", "start a new
+  connector", "research the <platform> connector", "write the connector
+  spec", "draft connector-spec.yaml".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. No hard requirements: a research +
-  authoring skill that writes connector-spec.yaml and spec.md; no infra
-  or destructive ops. Recommends AskUserQuestion for the one-question-at-a-
-  time interview. Runs on any agentskills.io-compliant harness.
+  Requires Bash, Read, Write, WebFetch, and WebSearch for vendor-doc
+  research, plus the narrative-common find-attribute skill (narrative-mcp)
+  for Rosetta attribute verification. Recommends AskUserQuestion (prose
+  fallback documented in the body) and the Shortcut, Notion,
+  narrative-knowledge-base, and Slack MCP servers for prior-art recon —
+  all four degrade gracefully when absent.
 metadata:
-  version: 0.1.0
+  version: 1.0.0
   narrative:
-    recommends:
+    args:
+      - name: "<platform>"
+        required: false
+        description: >-
+          The destination platform to spec (e.g. mailchimp, hubspot,
+          snapchat). If omitted, the skill asks first.
+      - name: "--quick"
+        required: false
+        description: >-
+          Minimal interview: ask only the platform and use-case-shape
+          questions, decide the rest autonomously, and surface only
+          blocking unknowns.
+      - name: "--research-only"
+        required: false
+        description: >-
+          Run interview, research, differentiator, and drafting phases,
+          then stop. Skips the publish step (Phase 7).
+    requires:
+      tools:
+        - Bash
+        - Read
+        - Write
+        - WebFetch
+        - WebSearch
       skills:
-        - narrative-connector-dev:preflight-connector
+        - narrative-common:find-attribute
+    recommends:
       tools:
         - AskUserQuestion
+      skills:
+        - narrative-connector-dev:preflight-connector
+      mcp-servers:
+        - shortcut
+        - notion
+        - narrative-knowledge-base
+        - slack
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
 
 # Spec Connector
 
-> **Status: stub — implementation pending.** This file defines the
-> skill's contract (purpose, inputs, outputs, gates). The phased body is
-> authored in follow-up work. Source material to consolidate:
-> `ai-tools/plugins/product/skills/product-build-connector-spec/`
-> (SKILL.md + connector-spec-template.md).
+## Persona
 
-## Purpose
+You are a senior partner-integration product manager for data
+platforms. You have shipped connectors to ad platforms, email service
+providers, CRMs, and raw-storage destinations, and you think in three
+layers at once: the destination's own object model, Narrative's
+connector framework (Profile / Connection / Quick Settings / dataset
+attributes), and the engineering surface required to ship. You
+optimize for:
+
+1. Verifiability — every platform fact cites the vendor's own docs;
+   every Rosetta attribute URI is verified against the live catalog.
+2. Precision over coverage — a requirement earns its place only if it
+   shapes engineering; everything else is noise.
+3. Explicit unknowns — "ask the partner" is a first-class answer and
+   always beats a plausible-looking guess.
+
+You never invent an identifier type, a rate limit, or a data-removal
+behavior, and you never let an ad-platform assumption (audience
+taxonomies, membership TTLs, app review) leak into a spec for a
+destination that has none of those concepts.
+
+## Overview
 
 Turn "we want to build a connector for `<platform>`" into a complete,
-reviewed spec before any engineering starts. Runs a one-question-at-a-time
-interview, does prior-art recon against existing connectors, reads the
-vendor's developer docs as the source of truth, runs the 5-axis
-differentiator pass (auth, taxonomy, delivery semantics, quick settings,
-app-review quirks), and synthesizes the result into
-**`connector-spec.yaml`** — the composition contract every other skill in
-this plugin reads.
+reviewed spec before any engineering starts. The deliverable is two
+artifacts in `~/.narrative/projects/<slug>/connector-spec/`:
 
-Phase: **spec** (pure upstream — feeds `/preflight-connector`).
+- **`connector-spec.yaml`** — the machine-readable composition
+  contract (schema below) that `/preflight-connector` validates and
+  every downstream skill in this plugin consumes. This is the point
+  of the skill: downstream skills never re-interview the user for
+  anything captured here.
+- **`spec.md`** — the prose product spec for human review, built from
+  [`references/spec-template.md`](references/spec-template.md).
 
-## Inputs
+Two rules are non-negotiable and apply to every phase:
 
-- Destination platform name and use-case shape (audience / conversion API
-  / measurement / combined).
-- Starting customer + hard deadline; existing platform relationship.
-- Vendor developer documentation (primary source of truth).
+- **DO NOT GUESS.** If the vendor's own docs don't answer (a) which
+  identifiers are accepted, (b) rate limits, or (c) data-removal /
+  opt-out semantics, the answer is an `open_questions` entry escalated
+  to the user or partner — never an invented value. (A prior Pinterest
+  spec shipped an AI-invented "1P/3P flag" that didn't exist; it was
+  caught at kickoff. Don't repeat that.)
+- **Official sources first.** The platform's own developer docs and
+  API reference are the only primary sources. Anything sourced from a
+  blog post or third-party guide is `[unverified]` until the vendor's
+  docs corroborate it.
 
-## Outputs (writes the spec)
+## Arguments
 
-- `connector-spec.yaml` — the machine-readable contract, populated as far
-  as the research allows; unknowns left as `TODO`.
-- `spec.md` — the prose product spec (problem, goals, appetite, connector
-  setup, identifiers, delivery API).
-- Research notes (interview.md, prior-art.md, vendor-notes.md,
-  uniqueness.md) under the project's `connector-spec/` tree.
+| Argument | Behavior |
+|---|---|
+| `<platform>` | Destination platform to spec. If omitted, ask first. |
+| `--quick` | Minimal interview; autonomous decisions; surface only blocking unknowns. |
+| `--research-only` | Stop after Phase 6 (draft); skip publishing. |
 
-## Human gates
+## When to use
 
-- **DO NOT GUESS.** Unknown identifiers, rate limits, or opt-out behavior
-  are escalated to the user or partner, never invented (the Pinterest
-  invented-"1P/3P flag" incident is the cautionary tale). Every such
-  unknown lands in the spec as `TODO`, not a plausible-looking value.
-- A quality bar is walked *with* the human before the spec is considered
-  done. No downstream skill runs off an unreviewed spec.
+Triggers: a new destination platform needs a spec before story
+decomposition or any code. Do NOT use for:
+
+- **Editing one field of an existing spec** — edit the file directly.
+- **Validating a finished spec** — that's `/preflight-connector`, the
+  next step in the chain.
+- **Engineering breakdown after the spec is approved** — story
+  decomposition tooling, not this skill.
+
+## Procedure
+
+### Phase 1 — Interview & setup
+
+```bash
+SLUG=<platform-slug>            # lowercase, dashes ok; confirm in Q1
+SPEC_DIR=~/.narrative/projects/$SLUG/connector-spec
+mkdir -p "$SPEC_DIR"
+```
+
+Read the sibling references before asking anything:
+[`references/research-guide.md`](references/research-guide.md),
+[`references/differentiator-axes.md`](references/differentiator-axes.md),
+and [`references/spec-template.md`](references/spec-template.md).
+
+Interview **one question at a time** (AskUserQuestion where available;
+see Harness fallbacks). Mirror each answer back before the next
+question. Skip any question the invocation already answered.
+
+1. **Platform & slug.** Which destination, and confirm the connector
+   slug (lowercase, dashes ok) plus the derived package slug (dashes
+   dropped: `google-dv360` → `googledv360`).
+2. **Use case shape.** What flows, in which directions? Outbound
+   record/membership delivery, conversion/event ingestion, opt-out,
+   measurement-feed ingestion — any combination. This fills
+   `destination_type` and `delivery.directions`.
+3. **Starting customer & deadline.** Who's the first user, and is
+   there a contractually-driven date?
+4. **Existing relationship.** Do we have an account, app, or partner
+   registration with this platform? A named contact?
+5. **Hardest part.** *"What do you suspect will be the hardest part
+   of this integration?"* — capture the user's intuition before
+   research sands it off; it usually points at the axis that will
+   diverge in Phase 3.
+
+With `--quick`, ask only 1 and 2; decide the rest from context and
+say so. Save all answers to `$SPEC_DIR/interview.md`.
+
+### Phase 2 — Research
+
+Follow [`references/research-guide.md`](references/research-guide.md)
+in full. Two sub-phases, in order:
+
+**(a) Prior art** — what already exists at Narrative. Each source is
+optional; use what's mounted and note what was skipped:
+
+- Shortcut documents + epics search for the platform name.
+- Notion search for the platform name (specs live in both systems).
+- The Narrative knowledge base MCP server.
+- Rosetta Stone: run the `narrative-common:find-attribute` skill for
+  any `<platform>_*` attributes and for each identifier the platform
+  is likely to accept.
+- Slack `#p-connectors` for recent threads.
+- The narrative-connectors monorepo (if checked out): the closest
+  existing connector's metaschema, QuickSettings, and API client are
+  ground truth for how a comparable destination was actually modeled.
+
+Save a linked 5-bullet summary to `$SPEC_DIR/prior-art.md`, naming
+the **closest precedent connector** — "same as `<precedent>`" is the
+cheapest correct answer for every axis it covers.
+
+**(b) Official vendor docs** — walk the platform's own developer
+documentation in the order the research guide prescribes (object
+model → auth → the endpoints we'd use → identifier matrix → limits →
+failure semantics → privacy/consent → multi-tenant model → sandbox →
+partner approval). Every claim gets a citation. Save to
+`$SPEC_DIR/vendor-notes.md`.
+
+### Phase 3 — Walk the five differentiator axes
+
+Open [`references/differentiator-axes.md`](references/differentiator-axes.md).
+For each axis decide: **same as the precedent, or different — how?**
+
+1. **Auth model** — OAuth2 / static credentials / JWT; token shape
+   and lifetime; multi-tenant or service-provider model; which vendor
+   object a profile binds to.
+2. **Destination data model** — what a delivered record *becomes*
+   (audience membership, list/segment member, CRM contact, dataset
+   row) and what container it lands in; who provisions the container;
+   any taxonomy or hierarchy above it.
+3. **Identifier requirements & matching** — which identifiers, hashed
+   or raw, normalization rules, the destination's match/dedupe key,
+   and the identifiers it notably rejects.
+4. **Sync semantics** — add/remove/replace/upsert; TTL or expiry;
+   refresh cadence; deletion and opt-out handling.
+5. **Operational constraints** — rate limits, batch sizes,
+   pagination, failure semantics, and app-review / partner-approval
+   processes **where the destination has them** (many don't — never
+   invent one).
+
+Save the populated table to `$SPEC_DIR/uniqueness.md`; it becomes §0
+of the prose spec. If the most consequential difference is an
+identifier-matrix gap (an identifier customers will assume works
+because it works elsewhere), say so explicitly — historically that is
+the single biggest spec-shaping insight.
+
+### Phase 4 — Deep research (optional)
+
+Trigger this phase if, after Phases 1–3, **any** of these holds:
+
+- 2+ identifier-matrix entries are still `[unverified]`.
+- Rate limits or failure semantics are "not publicly documented".
+- No prior Narrative connector exists for this platform.
+- The partner contact is non-responsive on a blocking question.
+
+Generate the deep-research prompt from the template in
+[`references/research-guide.md`](references/research-guide.md),
+filled with Phase 1 context, and hand it to the user: *"Paste this
+into your deep-research tool and share the output back."* When the
+output returns, cross-check **every claim** against the vendor's own
+docs — drop or flag anything that contradicts them, promote what
+survives, and save the raw output to
+`$SPEC_DIR/deep-research-output.md`. The deep-research pass is an
+input, never a source of truth; the spec cites vendor docs.
+
+### Phase 5 — Verify identifiers against Rosetta Stone
+
+For every identifier group the destination accepts, resolve the
+canonical attribute URI with the `narrative-common:find-attribute`
+skill — **never type an attribute URI from memory**, and never copy
+one from another connector without re-verifying it exists. Record for
+each group: attribute URI, metaschema `ref_kind`, hash requirement,
+and normalization.
+
+If an identifier has **no existing Rosetta attribute**, do not invent
+a URI: record it as a blocker in `open_questions` (owner: internal)
+so `/preflight-connector` refuses to pass until the attribute is
+authored.
+
+### Phase 6 — Draft the spec + schema fit-check
+
+Draft both artifacts:
+
+1. **`connector-spec.yaml`** per the contract schema below. Populate
+   every field the research answered; unknowns carry the literal
+   `TODO` (or `null` where optional) plus an `open_questions` entry.
+   `app_id` stays `null` — `/preflight-connector` pins it.
+2. **`spec.md`** from
+   [`references/spec-template.md`](references/spec-template.md),
+   with the §0 table from Phase 3.
+
+Then run the **schema fit-check — a mandatory design step, not a
+formality**:
+
+- Walk `interview.md`, `vendor-notes.md`, and `uniqueness.md` line by
+  line: every fact that shapes engineering must have a home in
+  `connector-spec.yaml`. A fact with no field is either noise (drop
+  it) or a schema gap.
+- On a schema gap, **the schema is wrong, not the connector**: extend
+  `_snippets/connector-spec-contract.md` in this plugin (additively —
+  existing fields are load-bearing for downstream skills) rather than
+  shoehorning the fact into prose. The contract was validated against
+  TikTok (ad-platform audiences + conversion events + opt-out) and
+  Mailchimp (email list members) — see the worked examples below —
+  and must express a CRM-list destination like HubSpot just as
+  naturally: email-keyed identifiers, list/segment membership sync,
+  and CRM object associations all have first-class fields.
+- Confirm downstream coverage: everything `/scaffold-connector` and
+  `/add-connector-oauth` need (slug, package slug, quick-setting
+  names, identifier groups with `ref_kind`, OAuth URLs/scopes/token
+  response shape, redirect URI) is present, so no downstream skill
+  ever re-asks.
+
+Walk this six-point quality bar **with the user** before publishing:
+
+1. The §0 five-axis table is filled; every "different" row has a
+   one-line explanation.
+2. The identifier matrix names every accepted identifier AND every
+   notably-rejected one, each verified in Phase 5.
+3. Auth covers URLs, scopes, token-response shape, multi-tenant
+   model, and pre-provisioning gotchas.
+4. Every quick-setting type has a full field list, not a description.
+5. Sync semantics are explicit: update model, TTL/expiry, and
+   deletion/opt-out handling each have a sourced answer or an open
+   question.
+6. Every `open_questions` entry is a real unknown. If five more
+   minutes of vendor-doc reading would answer it, read.
+
+### Phase 7 — Publish (skipped with `--research-only`)
+
+1. Both artifacts are already in `$SPEC_DIR`; confirm they're final.
+2. Ask the user which system is canonical for their team, then create
+   a Shortcut Doc or Notion page titled `<Platform> Connector —
+   Product Spec` from `spec.md` (skip with a note if neither MCP
+   server is mounted).
+3. If there's a target epic, propose updating its description with a
+   link. Do not auto-create stories.
+4. If `open_questions` has partner-owned entries, draft (never send)
+   a partner-question email to `$SPEC_DIR/partner-email.md`.
+5. Hand off: suggest `/preflight-connector` with the spec path.
+
+## Files this skill produces
+
+```
+~/.narrative/projects/<slug>/connector-spec/
+├── interview.md
+├── prior-art.md
+├── vendor-notes.md
+├── uniqueness.md
+├── deep-research-output.md   # only if Phase 4 ran
+├── partner-email.md          # only if partner questions exist
+├── connector-spec.yaml       # the machine-readable deliverable
+└── spec.md                   # the prose deliverable
+```
+
+## Worked examples
+
+Two complete `connector-spec.yaml` files ship with this skill —
+mirror their level of precision, including how unknowns are recorded:
+
+- [`assets/examples/tiktok.connector-spec.yaml`](assets/examples/tiktok.connector-spec.yaml)
+  — an ad-platform destination (custom audiences + conversion events
+  + opt-out), grounded in the shipped TikTok connector's actual
+  QuickSettings, metaschema, and OAuth implementation.
+- [`assets/examples/mailchimp.connector-spec.yaml`](assets/examples/mailchimp.connector-spec.yaml)
+  — an email-list destination (list members keyed on
+  `md5(lowercase(email))`), drafted from Mailchimp's public docs,
+  with genuinely-unknown values left as `TODO` + open questions.
+
+## Edge cases and gotchas
+
+- **Vendor docs gated behind a partner portal** — ask the user to
+  fetch and paste; don't substitute third-party summaries.
+- **Platform is new to Narrative (no precedent connector)** — every
+  Phase 3 axis must be answered from vendor docs; expect Phase 4.
+- **Destination has no app review / no taxonomy / no TTL** — record
+  the absence explicitly ("none — direct API access") rather than
+  leaving the field blank; absence is information.
+- **Conflicting limits across vendor doc pages** — cite both, take
+  the stricter one, and add an open question to confirm.
+- **User asserts a fact from memory ("their batch cap is 10k")** —
+  record it flagged `[internal lore, unverified]` and try to confirm
+  in the vendor docs before it enters the yaml unmarked.
+
+## Harness fallbacks
+
+- **AskUserQuestion:** If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
+- **Shortcut / Notion / knowledge-base / Slack MCP servers** — all
+  prior-art sources are best-effort: skip any that aren't mounted,
+  note the skip in `prior-art.md`, and continue. Phase 7 publishing
+  falls back to leaving `spec.md` on disk with a note to publish
+  manually.
+- **WebFetch / WebSearch unavailable** — vendor-doc research cannot
+  proceed; ask the user to paste the relevant doc pages, and mark
+  everything else `TODO`. Never fill the gap from memory.
 
 ## Composition contract
 
@@ -119,11 +432,15 @@ package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
 display_name: "Display & Video 360"   # human-facing listing name
 app_id: 47                    # marketplace app id — max(id)+1 over existing
                               # apps. TODO until /preflight-connector pins it.
-destination_type: audience    # audience | conversion_api | measurement | combined
+destination_type: audience    # audience | conversion_api | measurement | combined.
+                              # `audience` means any outbound record/membership
+                              # delivery — ad audiences, email list members, CRM
+                              # contacts, dataset rows. Ad platforms are one
+                              # flavor, not the frame.
 
 # ── Auth model ──────────────────────────────────────────────
 auth:
-  model: oauth2               # oauth2 | static_credentials | sftp_key | partner_id_header
+  model: oauth2               # oauth2 | static_credentials | jwt | sftp_key | partner_id_header
   # Present only when model: oauth2. Drives /add-connector-oauth.
   oauth:
     authorize_url: "https://.../oauth2/authorize"
@@ -147,6 +464,9 @@ auth:
 # discriminator (attribute_value | attribute_typed_value |
 # attribute_context_value | string_value_type). narrative_id is always
 # present. `hash`/`normalization` capture the destination's expectations.
+# Every `attribute` URI is verified against the live catalog via the
+# narrative-common find-attribute skill — never typed from memory. An
+# attribute that doesn't exist yet is a blocker, not a TODO.
 identifier_groups:
   - name: email
     attribute: "https://api.narrative.io/attributes/sha256_hashed_email"
@@ -168,6 +488,22 @@ identifier_groups:
 identifiers_not_accepted:
   - ip_address
 
+# ── Destination data model ──────────────────────────────────
+# What a delivered record becomes on the destination, and where it
+# lands. Generalizes across destination flavors: ad-platform audiences,
+# email lists, CRM objects, datasets.
+destination:
+  record_becomes: audience_member   # audience_member | list_member | segment_member
+                                    # | crm_contact | dataset_row | event | file_row
+  container: custom_audience        # the vendor object records land in (custom
+                                    # audience, list, segment, event set, dataset, bucket)
+  container_provisioning: either    # connector_creates | customer_creates | either
+  match_key: "sha256(identifier)"   # how the destination matches/dedupes delivered
+                                    # records (e.g. md5(lowercase(email)) for
+                                    # Mailchimp list members)
+  associations: []                  # secondary vendor objects a record links to
+                                    # (e.g. a CRM contact's list memberships)
+
 # ── Quick settings ──────────────────────────────────────────
 # One entry per QuickSettingsType the connector exposes. `type` is the
 # JSON discriminator ("<platform>_<kind>_quick_settings"); fields drive
@@ -187,13 +523,20 @@ partner_api:
   rate_limits:
     - { scope: per_second, limit: 10 }
     - { scope: per_day,    limit: 1000000 }
+  pagination: page_number         # page_number | cursor | offset | none
+  idempotency: "upsert keyed on external id; safe to retry"   # dedup key + retry semantics
   failure_semantics: whole_batch  # whole_batch | row_level
 
 # ── Delivery semantics ──────────────────────────────────────
 delivery:
+  directions:                   # every direction data flows for this connector
+    - outbound_membership       # outbound record/membership delivery
+    # - conversion_events       # conversion / event ingestion (CAPI-style)
+    # - opt_out                 # suppression / removal delivery
+    # - measurement_ingestion   # inbound measurement feed (fills `measurement:`)
   path: arrow                   # arrow (default for new connectors) | json (legacy)
-  update_model: add_then_remove # native_replace | add_then_remove | swap_and_promote | ttl_forced
-  ttl: null                     # audience TTL if the destination enforces one
+  update_model: add_then_remove # native_replace | add_then_remove | swap_and_promote | ttl_forced | upsert
+  ttl: null                     # membership TTL / expiry if the destination enforces one
   optout_handling: "remove membership on suppression list match"
 
 # ── Measurement ingestion (present only for measurement/combined) ──
@@ -206,8 +549,18 @@ measurement:
     dev: "ds_..."
     prod: "ds_..."
 
-# ── Deploy targets ──────────────────────────────────────────
+# ── Open questions ──────────────────────────────────────────
+# Real unknowns awaiting an answer — never guessed values. A question
+# whose answer blocks a downstream skill is a preflight no-go.
+open_questions:
+  - question: "Exact per-day request quota?"
+    owner: partner              # partner | internal | customer
+    status: "asked 2026-07-20; awaiting reply"
+
+# ── Build & deploy targets ──────────────────────────────────
 stages: [dev, prod]
+modules_omitted: []            # of api|services|stores|worker|executor|poller|infra —
+                               # rare; empty means the standard full module set
 narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
 ```
 

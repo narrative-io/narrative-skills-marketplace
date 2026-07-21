@@ -1,0 +1,131 @@
+# connector-spec.yaml — worked example: Mailchimp list members (ESP flavor)
+#
+# Drafted from Mailchimp's public developer docs
+# (https://mailchimp.com/developer/marketing/api/list-members/,
+# https://mailchimp.com/developer/marketing/guides/access-user-data-oauth-2/,
+# https://mailchimp.com/developer/marketing/docs/fundamentals/).
+# Demonstrates the schema on a non-ad destination: records become list
+# members keyed on the raw email address, with marketing-status
+# semantics instead of audience TTLs. Values the docs don't pin down
+# are TODO + an open question — never guessed.
+schema_version: 1
+
+# ── Identity ────────────────────────────────────────────────
+slug: mailchimp
+package_slug: mailchimp
+display_name: "Mailchimp"
+app_id: null                      # pinned by /preflight-connector
+destination_type: audience        # outbound list-membership delivery
+
+# ── Auth model ──────────────────────────────────────────────
+auth:
+  model: oauth2
+  oauth:
+    authorize_url: "https://login.mailchimp.com/oauth2/authorize"
+    token_url: "https://login.mailchimp.com/oauth2/token"
+    # Post-exchange metadata call returns { dc, api_endpoint }; the dc
+    # prefix becomes part of every API URL and must persist on the profile.
+    me_url: "https://login.mailchimp.com/oauth2/metadata"
+    redirect_uri: "https://mailchimp.narrativeconnectors.com/mailchimp/callback"
+    scopes: []                    # Mailchimp OAuth has no scope parameter
+    scope_encoding: text
+    token_response:
+      access_token: true          # non-expiring: "access tokens do not expire,
+                                  # so you don't need to use a refresh_token"
+      refresh_token: false
+      expires_in: false
+  account_binding: dc             # the account's data-center prefix
+                                  # (https://{dc}.api.mailchimp.com/3.0); target
+                                  # list chosen per-connection in quick settings
+
+# ── Identifier groups ───────────────────────────────────────
+# Mailchimp members are created from the RAW email address; the member
+# key is the MD5 of its lowercase form. A hashed-email-only dataset
+# cannot be delivered at all — the inverse of the ad-platform norm.
+identifier_groups:
+  - name: raw_email
+    attribute: "https://api.narrative.io/attributes/raw_email"
+    ref_kind: attribute_value
+    hash: none                    # destination requires the raw value
+    normalization: [lowercase, trim]
+identifiers_not_accepted:
+  - sha256_hashed_email           # cannot create a member from a hash
+  - hashed_email
+  - phone                         # merge field only — not a member key
+  - maid
+  - postal_address                # merge field only — not a member key
+
+# ── Destination data model ──────────────────────────────────
+destination:
+  record_becomes: list_member     # a contact with its own marketing status
+                                  # (subscribed | unsubscribed | cleaned |
+                                  # pending | transactional)
+  container: audience_list
+  container_provisioning: customer_creates  # lists pre-exist in the account;
+                                            # creating one via API has plan-limit
+                                            # and compliance implications
+  match_key: "subscriber_hash = md5(lowercase(email))"
+  associations: [tags, merge_fields, interest_categories]
+
+# ── Quick settings ──────────────────────────────────────────
+quick_settings:
+  - type: mailchimp_audience_quick_settings
+    parser: AudienceParser
+    fields:
+      - { name: list_id, type: string, required: true, purpose: "Target Mailchimp audience (list) id" }
+      - { name: status_if_new, type: string, required: true, purpose: "Marketing status for newly created members: subscribed | pending (pending triggers double opt-in)" }
+      - { name: historical_data_enabled, type: boolean, required: false, purpose: "Deliver pre-existing dataset rows, not just new ones" }
+
+# ── Partner delivery API ────────────────────────────────────
+partner_api:
+  # Base URL: https://{dc}.api.mailchimp.com/3.0
+  endpoints:
+    - { method: PUT,    path: "/lists/{list_id}/members/{subscriber_hash}", purpose: "add-or-update (upsert) one member" }
+    - { method: POST,   path: "/lists/{list_id}", purpose: "batch subscribe/unsubscribe, up to 500 members per call" }
+    - { method: POST,   path: "/batches", purpose: "bulk async operations (cap unconfirmed — see open_questions)" }
+    - { method: DELETE, path: "/lists/{list_id}/members/{subscriber_hash}", purpose: "archive member (removes from list, re-addable)" }
+    - { method: POST,   path: "/lists/{list_id}/members/{subscriber_hash}/actions/delete-permanent", purpose: "permanent delete — member can NEVER be re-added via API" }
+  batch_limit: 500                # members per batch subscribe/unsubscribe call
+  rate_limits:
+    - { scope: concurrent_connections, limit: 10 }  # documented; 429 beyond it
+    # No published per-second or per-day cap; 120-second timeout per call.
+    # Confirming practical throughput is an open question.
+  pagination: offset              # count/offset query params on collection GETs
+  idempotency: "PUT upsert keyed on subscriber_hash; safe to retry"
+  failure_semantics: row_level    # batch sub/unsub responds with per-member errors[]
+
+# ── Delivery semantics ──────────────────────────────────────
+delivery:
+  directions:
+    - outbound_membership
+    - opt_out
+  path: arrow
+  update_model: upsert            # PUT with status_if_new; membership persists
+                                  # until removed — no TTL, no re-delivery cadence
+  ttl: null
+  optout_handling: >-
+    TODO — suppression matches can be delivered as status=unsubscribed
+    (keeps the member, honors marketing opt-out) or as archive (removes
+    from the list). Permanent delete is ruled out: it blocks API
+    re-adds forever. Which operation, pending the compliance answer in
+    open_questions.
+
+# ── Open questions ──────────────────────────────────────────
+open_questions:
+  - question: "Max operations per /batches request, and practical throughput guidance for large lists?"
+    owner: partner
+    status: "ask Mailchimp partner support"
+  - question: "Can the API transition a member from unsubscribed back to subscribed, or does re-subscription always require double opt-in (status=pending)?"
+    owner: partner
+    status: "ask Mailchimp partner support"
+  - question: "Is there any per-day request quota beyond the 10-connection concurrency limit?"
+    owner: partner
+    status: "ask Mailchimp partner support"
+  - question: "Opt-out semantics: unsubscribe vs archive for suppression-list matches (compliance call)?"
+    owner: internal
+    status: "decide with legal/compliance before build"
+
+# ── Build & deploy targets ──────────────────────────────────
+stages: [dev, prod]
+modules_omitted: []
+narrative_db_path: "~/projects/narrative-db"
