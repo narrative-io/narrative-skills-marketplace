@@ -15,7 +15,6 @@
 | **Target epic** | <link or "—"> |
 | **Owner** | <name> |
 | **Tech lead** | <name> |
-| **Hard deadline** | <date or "—"> |
 
 ---
 
@@ -40,7 +39,7 @@
 
 <2–3 sentences.>
 
-*Initial use case: <starting customer + use case>*
+*Initial use case: <use case>*
 
 ## Goals
 
@@ -54,7 +53,7 @@
 
 ## Appetite
 
-<T-shirt size + reasoning. **Hard deadline:** <date or "None">.>
+<T-shirt size + reasoning.>
 
 ---
 

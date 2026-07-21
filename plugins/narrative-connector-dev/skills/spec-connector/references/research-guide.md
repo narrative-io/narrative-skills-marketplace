@@ -208,11 +208,9 @@ A UI the customer can see?
 GitHub issues on the official SDKs, Stack Overflow, practitioner
 forums. Top 3–5 recurring complaints from real integrators, cited.
 
-## Customer context
+## Use case context
 
-* Starting customer: <name + use case>
-* Identifiers the customer has: <list>
-* Hard customer constraint: <if any>
+* Use-case shape: <flows + directions from Phase 1>
 
 ## Output format
 

@@ -922,11 +922,11 @@
     },
     {
       "name": "spec-connector",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Research and author a connector spec for a new destination platform —\ninterview, prior-art recon, vendor-doc research, and a differentiator\nwalk across five axes (auth, destination data model, identifiers and\nmatching, sync semantics, operational constraints) — then emit the\nmachine-readable connector-spec.yaml the rest of the plugin builds\nfrom, plus a prose spec.md. Identifiers, rate limits, and data-removal\nsemantics are never guessed; unknowns become partner questions.\nUse when: \"spec out a connector for <platform>\", \"start a new\nconnector\", \"research the <platform> connector\", \"write the connector\nspec\", \"draft connector-spec.yaml\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/spec-connector/SKILL.md",
-      "compatibility": "Requires Bash, Read, Write, WebFetch, and WebSearch for vendor-doc research, plus the narrative-common find-attribute skill (narrative-mcp) for Rosetta attribute verification. Recommends AskUserQuestion (prose fallback documented in the body) and the Shortcut, Notion, narrative-knowledge-base, and Slack MCP servers for prior-art recon — all four degrade gracefully when absent.",
+      "compatibility": "Requires Bash, Read, Write, WebFetch, and WebSearch (or equivalent capabilities — these tools may be named differently across harnesses) for vendor-doc research, plus the narrative-common find-attribute skill (narrative-mcp) for Rosetta attribute verification. Recommends AskUserQuestion (prose fallback documented in the body), the narrative-knowledge-base MCP server for prior-art recon, and the Shortcut or Notion MCP servers for publishing the finished spec — all degrade gracefully when absent.",
       "requirements": {
         "requires": {
           "tools": [
@@ -948,10 +948,9 @@
             "narrative-connector-dev:preflight-connector"
           ],
           "mcp-servers": [
-            "shortcut",
-            "notion",
             "narrative-knowledge-base",
-            "slack"
+            "shortcut",
+            "notion"
           ]
         }
       },
@@ -964,12 +963,7 @@
         {
           "name": "--quick",
           "required": false,
-          "description": "Minimal interview: ask only the platform and use-case-shape questions, decide the rest autonomously, and surface only blocking unknowns."
-        },
-        {
-          "name": "--research-only",
-          "required": false,
-          "description": "Run interview, research, differentiator, and drafting phases, then stop. Skips the publish step (Phase 7)."
+          "description": "Minimal interaction: decide the research and differentiator calls autonomously and surface only blocking unknowns."
         }
       ]
     },

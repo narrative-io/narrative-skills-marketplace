@@ -14,14 +14,16 @@ description: |
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Requires Bash, Read, Write, WebFetch, and WebSearch for vendor-doc
-  research, plus the narrative-common find-attribute skill (narrative-mcp)
-  for Rosetta attribute verification. Recommends AskUserQuestion (prose
-  fallback documented in the body) and the Shortcut, Notion,
-  narrative-knowledge-base, and Slack MCP servers for prior-art recon —
-  all four degrade gracefully when absent.
+  Requires Bash, Read, Write, WebFetch, and WebSearch (or equivalent
+  capabilities — these tools may be named differently across harnesses)
+  for vendor-doc research, plus the narrative-common find-attribute skill
+  (narrative-mcp) for Rosetta attribute verification. Recommends
+  AskUserQuestion (prose fallback documented in the body), the
+  narrative-knowledge-base MCP server for prior-art recon, and the
+  Shortcut or Notion MCP servers for publishing the finished spec —
+  all degrade gracefully when absent.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   narrative:
     args:
       - name: "<platform>"
@@ -32,14 +34,8 @@ metadata:
       - name: "--quick"
         required: false
         description: >-
-          Minimal interview: ask only the platform and use-case-shape
-          questions, decide the rest autonomously, and surface only
-          blocking unknowns.
-      - name: "--research-only"
-        required: false
-        description: >-
-          Run interview, research, differentiator, and drafting phases,
-          then stop. Skips the publish step (Phase 7).
+          Minimal interaction: decide the research and differentiator
+          calls autonomously and surface only blocking unknowns.
     requires:
       tools:
         - Bash
@@ -55,10 +51,9 @@ metadata:
       skills:
         - narrative-connector-dev:preflight-connector
       mcp-servers:
+        - narrative-knowledge-base
         - shortcut
         - notion
-        - narrative-knowledge-base
-        - slack
 ---
 
 # Spec Connector
@@ -118,7 +113,6 @@ Two rules are non-negotiable and apply to every phase:
 |---|---|
 | `<platform>` | Destination platform to spec. If omitted, ask first. |
 | `--quick` | Minimal interview; autonomous decisions; surface only blocking unknowns. |
-| `--research-only` | Stop after Phase 6 (draft); skip publishing. |
 
 ## When to use
 
@@ -136,60 +130,53 @@ decomposition or any code. Do NOT use for:
 ### Phase 1 — Interview & setup
 
 ```bash
-SLUG=<platform-slug>            # lowercase, dashes ok; confirm in Q1
+SLUG=<platform-slug>            # lowercase, dashes ok; derived from the <platform> argument
 SPEC_DIR=~/.narrative/projects/$SLUG/connector-spec
 mkdir -p "$SPEC_DIR"
 ```
+
+Derive the connector slug from the `<platform>` argument (lowercase,
+dashes ok) plus the package slug (dashes dropped: `google-dv360` →
+`googledv360`). If the platform wasn't given, ask for it first.
 
 Read the sibling references before asking anything:
 [`references/research-guide.md`](references/research-guide.md),
 [`references/differentiator-axes.md`](references/differentiator-axes.md),
 and [`references/spec-template.md`](references/spec-template.md).
 
-Interview **one question at a time** (AskUserQuestion where available;
-see Harness fallbacks). Mirror each answer back before the next
-question. Skip any question the invocation already answered.
+Ask **one question** (AskUserQuestion where available; see Harness
+fallbacks), then mirror the answer back:
 
-1. **Platform & slug.** Which destination, and confirm the connector
-   slug (lowercase, dashes ok) plus the derived package slug (dashes
-   dropped: `google-dv360` → `googledv360`).
-2. **Use case shape.** What flows, in which directions? Outbound
-   record/membership delivery, conversion/event ingestion, opt-out,
-   measurement-feed ingestion — any combination. This fills
-   `destination_type` and `delivery.directions`.
-3. **Starting customer & deadline.** Who's the first user, and is
-   there a contractually-driven date?
-4. **Existing relationship.** Do we have an account, app, or partner
-   registration with this platform? A named contact?
-5. **Hardest part.** *"What do you suspect will be the hardest part
-   of this integration?"* — capture the user's intuition before
-   research sands it off; it usually points at the axis that will
-   diverge in Phase 3.
+- **Use case shape.** What flows, in which directions? Offer the
+  common shapes as selectable options — outbound record/membership
+  delivery, conversion/event ingestion, opt-out, measurement-feed
+  ingestion — and always include a free-form **Other** option so the
+  user can describe a flow that isn't listed. Any combination is
+  valid. This fills `destination_type` and `delivery.directions`.
 
-With `--quick`, ask only 1 and 2; decide the rest from context and
-say so. Save all answers to `$SPEC_DIR/interview.md`.
+Save the answer to `$SPEC_DIR/interview.md`.
 
 ### Phase 2 — Research
 
 Follow [`references/research-guide.md`](references/research-guide.md)
 in full. Two sub-phases, in order:
 
-**(a) Prior art** — what already exists at Narrative. Each source is
-optional; use what's mounted and note what was skipped:
+**(a) Prior art** — what already exists for this platform in your
+organization. Each source is optional; use what's available and note
+what was skipped:
 
-- Shortcut documents + epics search for the platform name.
-- Notion search for the platform name (specs live in both systems).
-- The Narrative knowledge base MCP server.
 - Rosetta Stone: run the `narrative-common:find-attribute` skill for
   any `<platform>_*` attributes and for each identifier the platform
   is likely to accept.
-- Slack `#p-connectors` for recent threads.
-- The narrative-connectors monorepo (if checked out): the closest
-  existing connector's metaschema, QuickSettings, and API client are
+- The closest existing connector in your own codebase, if you
+  maintain one: its metaschema, QuickSettings, and API client are
   ground truth for how a comparable destination was actually modeled.
+- Any existing specs, docs, or tickets for this platform in the
+  systems your team already uses.
+- The Narrative knowledge base MCP server, if mounted.
 
-Save a linked 5-bullet summary to `$SPEC_DIR/prior-art.md`, naming
-the **closest precedent connector** — "same as `<precedent>`" is the
+Save a linked summary to `$SPEC_DIR/prior-art.md`, naming the
+**closest precedent connector** — "same as `<precedent>`" is the
 cheapest correct answer for every axis it covers.
 
 **(b) Official vendor docs** — walk the platform's own developer
@@ -233,8 +220,7 @@ Trigger this phase if, after Phases 1–3, **any** of these holds:
 
 - 2+ identifier-matrix entries are still `[unverified]`.
 - Rate limits or failure semantics are "not publicly documented".
-- No prior Narrative connector exists for this platform.
-- The partner contact is non-responsive on a blocking question.
+- No prior connector exists for this platform in your catalog.
 
 Generate the deep-research prompt from the template in
 [`references/research-guide.md`](references/research-guide.md),
@@ -256,9 +242,12 @@ each group: attribute URI, metaschema `ref_kind`, hash requirement,
 and normalization.
 
 If an identifier has **no existing Rosetta attribute**, do not invent
-a URI: record it as a blocker in `open_questions` (owner: internal)
-so `/preflight-connector` refuses to pass until the attribute is
-authored.
+a URI — and do not create the attribute here. Authoring the attribute
+is out of scope for the spec; this skill only flags the gap. Record it
+as a blocker in `open_questions` (owner: internal) noting that the
+attribute must be created (via the `narrative_attribute_create` MCP
+tool) before the connector can ship, so `/preflight-connector` refuses
+to pass until it exists.
 
 ### Phase 6 — Draft the spec + schema fit-check
 
@@ -309,7 +298,7 @@ Walk this six-point quality bar **with the user** before publishing:
 6. Every `open_questions` entry is a real unknown. If five more
    minutes of vendor-doc reading would answer it, read.
 
-### Phase 7 — Publish (skipped with `--research-only`)
+### Phase 7 — Publish
 
 1. Both artifacts are already in `$SPEC_DIR`; confirm they're final.
 2. Ask the user which system is canonical for their team, then create
@@ -354,8 +343,9 @@ mirror their level of precision, including how unknowns are recorded:
 
 - **Vendor docs gated behind a partner portal** — ask the user to
   fetch and paste; don't substitute third-party summaries.
-- **Platform is new to Narrative (no precedent connector)** — every
-  Phase 3 axis must be answered from vendor docs; expect Phase 4.
+- **Platform is new to your connector catalog (no precedent
+  connector)** — every Phase 3 axis must be answered from vendor docs;
+  expect Phase 4.
 - **Destination has no app review / no taxonomy / no TTL** — record
   the absence explicitly ("none — direct API access") rather than
   leaving the field blank; absence is information.
@@ -368,11 +358,12 @@ mirror their level of precision, including how unknowns are recorded:
 ## Harness fallbacks
 
 - **AskUserQuestion:** {{SNIPPET:askuserquestion-fallback}}
-- **Shortcut / Notion / knowledge-base / Slack MCP servers** — all
-  prior-art sources are best-effort: skip any that aren't mounted,
-  note the skip in `prior-art.md`, and continue. Phase 7 publishing
-  falls back to leaving `spec.md` on disk with a note to publish
-  manually.
+- **knowledge-base MCP server** — a best-effort prior-art source:
+  skip it if it isn't mounted, note the skip in `prior-art.md`, and
+  continue.
+- **Shortcut / Notion MCP servers** — used only in Phase 7 to publish
+  the finished spec. If neither is mounted, fall back to leaving
+  `spec.md` on disk with a note to publish it manually.
 - **WebFetch / WebSearch unavailable** — vendor-doc research cannot
   proceed; ask the user to paste the relevant doc pages, and mark
   everything else `TODO`. Never fill the gap from memory.
