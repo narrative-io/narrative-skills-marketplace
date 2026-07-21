@@ -11,6 +11,44 @@ verified production deployment — stopping at every human gate along the way.
 > boundaries defined, with the phased implementation authored in
 > follow-up work. Each stub's `SKILL.md` says so at the top.
 
+## Entry paths
+
+Every connector build starts the same way, wherever the code will live:
+
+1. `/spec-connector` researches the destination platform and authors
+   `connector-spec.yaml`.
+2. `/preflight-connector` validates the spec and resolves blockers before
+   any code is generated.
+
+Scaffolding then depends on the state of the target repo.
+`/scaffold-connector` reads the spec's `target` block to decide, and asks
+when the block is absent:
+
+- **The repo already has a `connector-scaffold.yaml` manifest** — run
+  `/scaffold-connector`. It executes the manifest (`template-repo` mode);
+  there is nothing else to set up.
+- **The repo has connectors but no manifest** — two options. To onboard
+  the repo permanently, run
+  `/create-scaffold-manifest --reference <connector-dir>` once; it infers
+  the repo's conventions from that connector and saves the manifest, and
+  every later `/scaffold-connector` run reads the manifest. For a
+  one-off, run `/scaffold-connector` in `reference-clone` mode instead.
+  In that mode `/scaffold-connector` inspects an existing connector you
+  name, infers the repo's conventions from it, and confirms what it
+  inferred before generating.
+- **The repo is empty, or there is no repo yet** — run
+  `/scaffold-connector` in `greenfield` mode and pick a runtime profile,
+  such as `cloudflare-workers`. No manifest is involved; the profile
+  decides the project layout and how each component materializes.
+
+After scaffolding, the paths converge on the remaining phases of the
+[phase table](#phase-structure) below: implementation
+(`/define-connector-interface` through `/test-connector`), then
+infra / registration, frontend, and deploy / verify. `/build-connector`
+sequences all of it, stopping at the human gates described below. The
+three scaffold modes are described in more detail under
+[Scaffold targets](#scaffold-targets).
+
 ## The composition contract: `connector-spec.yaml`
 
 Skills do not pass state to each other directly. They share one
