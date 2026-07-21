@@ -762,7 +762,7 @@
     },
     {
       "name": "create-scaffold-manifest",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Author a repo's connector-scaffold.yaml — the manifest that teaches\n/scaffold-connector the repo's template, rename rules, component map,\nand build wiring. Two entry paths: infer the conventions from an\nexisting reference connector (repo archaeology with human\nconfirmation), or interview the user section by section when no clean\nexemplar exists. A per-repo, one-time onboarding job.\nUse when: \"create a scaffold manifest\", \"write connector-scaffold.yaml\",\n\"onboard my repo for connector scaffolding\", \"infer connector\nconventions from my repo\", \"teach the scaffolder our repo layout\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/create-scaffold-manifest/SKILL.md",
@@ -925,7 +925,7 @@
     },
     {
       "name": "scaffold-connector",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Generate the code skeleton for a new connector in whatever codebase\nhosts it, driven by connector-spec.yaml and a scaffold target: a\ntemplate repo carrying a connector-scaffold.yaml manifest, an existing\nconnector to clone conventions from, or a greenfield runtime profile\n(cloudflare-workers first). Derives the component set from the spec,\ncopies and renames, wires build files — every change a reviewable\nworking-tree diff.\nUse when: \"scaffold the <slug> connector\", \"generate the connector\nmodules\", \"stand up the connector project\", \"scaffold a connector in\nmy repo\", \"start a connector from scratch\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/scaffold-connector/SKILL.md",

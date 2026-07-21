@@ -15,6 +15,12 @@ single Cloudflare Worker can host the service API, the delivery
 executor, and the partner client in one deployable. The component set is
 what the spec demands; the unit layout is the target's business.
 
+This reference stays at derivation altitude: which components exist and
+when. How they behave at runtime (event intake, the work queue,
+idempotency layers, credentials, observability) and the axes along
+which real connectors vary are covered in
+[`reference-architecture.md`](reference-architecture.md).
+
 ## Components
 
 | Component | Responsibility | Generated when |

@@ -19,7 +19,7 @@ compatibility: >-
   Recommends AskUserQuestion (prose fallback documented in the body).
   Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
   narrative:
     args:
       - name: "<repo-path>"
@@ -139,7 +139,11 @@ manifest.
 question at a time, grounding each question in what the repo does
 show (even a fresh repo has a build tool and a language). Where the
 user is designing conventions rather than reporting them, propose a
-default from the manifest schema's example and let them adjust.
+default from the manifest schema's example and let them adjust; for
+layout decisions (how many units, what splits from what), the process
+topology and variation axes in
+[`../scaffold-connector/references/reference-architecture.md`](../scaffold-connector/references/reference-architecture.md)
+are the design guide.
 
 ### Phase 3 — Validate before writing
 
