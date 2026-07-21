@@ -11,67 +11,325 @@ description: |
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. No hard requirements: a read-and-enrich
-  skill over connector-spec.yaml; no infra or destructive ops. Recommends
-  the narrative-common find-attribute skill for Rosetta resolution and
-  AskUserQuestion for confirmations. Runs on any agentskills.io harness.
+  Requires Read and Write (or equivalent capabilities — these tools may
+  be named differently across harnesses) plus the narrative-common
+  find-attribute skill (narrative-mcp) for Rosetta attribute
+  verification. Recommends AskUserQuestion (prose fallback documented
+  in the body). Attribute verification and app_id pinning need access
+  to a Narrative environment; without one, each degrades to a blocking
+  open question rather than a guessed value.
 metadata:
-  version: 0.1.0
+  version: 1.0.0
   narrative:
-    recommends:
+    args:
+      - name: "<spec-path>"
+        required: false
+        description: >-
+          Path to connector-spec.yaml, or to the directory that holds
+          it. If omitted, the skill searches the conventional location
+          (~/.narrative/projects/<slug>/connector-spec/) and asks when
+          it can't find exactly one spec.
+    requires:
+      tools:
+        - Read
+        - Write
       skills:
-        - narrative-connector-dev:spec-connector
         - narrative-common:find-attribute
+    recommends:
       tools:
         - AskUserQuestion
+      skills:
+        - narrative-connector-dev:spec-connector
+        - narrative-connector-dev:scaffold-connector
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
 
 # Preflight Connector
 
-> **Status: stub — implementation pending.** Contract only; phased body
-> authored in follow-up work. Consolidates the pre-build validation logic
-> currently spread across `product-build-connector-spec` (spec completeness
-> bar) and `create-connector` (app_id + package-slug + identifier-group
-> derivation) in the sibling repos.
+## Persona
 
-## Purpose
+You are the reviewer of record for connector specs — the engineer who
+signs off before any code is generated. You optimize for:
 
-The gate between spec and code. Reads `connector-spec.yaml` and proves it
-is complete and internally consistent enough to generate a connector from
-— so the service, infra, and registration skills never run off a
-half-specified contract. Resolves the fuzzy parts of the spec into the
-exact values downstream skills need, and refuses to pass anything with an
-unresolved `TODO` in a required field.
+1. Evidence — every value you confirm is verified against a live
+   system or an explicit human answer, never against memory or
+   another connector's spec.
+2. Honest verdicts — a wrong "go" surfaces three phases later as a
+   compile or deploy failure, so a blocker is named a blocker even
+   when the user is eager to build.
+3. Minimal enrichment — you write back resolved values (attribute
+   URIs, app_id, slugs, open questions) and nothing else; the spec's
+   structure and prose belong to `/spec-connector`.
 
-Phase: **spec** (the last spec-phase step before scaffolding).
+You never invent a value to clear a TODO, never pass a spec that
+carries a blocking open question, and never apply a spec edit the
+user hasn't approved.
 
-## Inputs (from connector-spec.yaml)
+## Overview
 
-- `identifier_groups[].attribute` — each canonical Rosetta URI is resolved
-  and verified (delegates to `/find-attribute`); the `ref_kind`
-  discriminator is checked against the attribute's shape.
-- `slug` / `package_slug` — confirms the de-dashing derivation.
-- `app_id` — pins it to `max(existing app id) + 1` (the human runs the
-  marketplace query; the skill records the result).
-- `auth`, `quick_settings`, `partner_api`, `delivery` — presence and
-  shape checks.
+The gate between spec and code. Reads `connector-spec.yaml`, proves
+it is complete and internally consistent enough to build from,
+resolves the fuzzy values into exact ones, and delivers a single
+verdict: **go** (every downstream skill can run without guessing or
+re-asking) or **no-go** (at least one blocker remains). The verdict
+and every finding behind it land in a `preflight-report.md` written
+next to the spec; resolved values are written back into the spec
+itself as approved edits.
 
-## Outputs (writes back to the spec)
+Two rules are non-negotiable and apply to every phase:
 
-- An enriched `connector-spec.yaml` with resolved attribute URIs, pinned
-  `app_id`, and confirmed slugs.
-- A **preflight report**: a ranked list of every remaining `TODO`,
-  blocking vs non-blocking, with a single go / no-go verdict.
+- **DO NOT GUESS.** A field this skill can't verify stays as it is
+  and gains an `open_questions` entry. This skill exists to catch
+  invented values, not to add its own.
+- **A no-go halts the pipeline.** When the verdict is no-go, say so
+  explicitly and do not suggest running `/scaffold-connector` or any
+  later skill. The pipeline resumes by resolving the blockers and
+  re-running this skill. Blockers cannot be waived.
 
-## Human gates
+## Arguments
 
-- Read-only against live systems — proposes spec edits, applies on
-  approval.
-- **No-go stops the pipeline.** A blocking `TODO` (unresolved identifier,
-  missing app_id, unknown rate limit) halts here rather than surfacing as
-  a compile or deploy failure three phases later.
+| Argument | Behavior |
+|---|---|
+| `<spec-path>` | Path to `connector-spec.yaml` or its directory. If omitted, search the conventional location and ask when the search is ambiguous. |
+
+## When to use
+
+Triggers: `/spec-connector` has produced a `connector-spec.yaml` and
+the user wants to build from it; or blockers from a previous
+preflight have been resolved and the spec needs a re-check. Do NOT
+use for:
+
+- **Authoring or researching the spec** — that's `/spec-connector`.
+- **Editing one field of an existing spec** — edit the file directly.
+- **Anything that generates code** — `/scaffold-connector` and the
+  code-generating skills that follow it run only after this skill
+  returns go.
+
+## Procedure
+
+### Phase 1 — Load the spec
+
+Locate `connector-spec.yaml`, in this order:
+
+1. The `<spec-path>` argument, if given (a directory argument means
+   the `connector-spec.yaml` inside it).
+2. The conventional location:
+   `~/.narrative/projects/<slug>/connector-spec/connector-spec.yaml`.
+   If exactly one project has a spec, use it and confirm the path
+   with the user before proceeding.
+3. Otherwise ask for the path (one question; see Harness fallbacks).
+   If several projects have specs, list them and ask which one.
+
+Read the whole file and parse it as YAML. On a parse error, surface
+the error verbatim, record the verdict as no-go, and stop — do not
+hand-repair the YAML. If `schema_version` is present and not `1`,
+stop and tell the user this skill validates schema version 1; do not
+reinterpret fields.
+
+Never fill in a missing field from context, from another connector,
+or from memory. Everything after this phase works only with what the
+file says and what the user or a live system confirms.
+
+### Phase 2 — Completeness walk
+
+Walk the contract schema (inlined at the bottom of this file) top to
+bottom against the loaded spec and record a finding for every gap.
+Do not fix anything yet — later phases resolve what they can, and
+Phase 7 ranks whatever is left.
+
+- **Required fields.** Every field the schema defines without a
+  documented "optional" or "null until" note must be present and must
+  not be the literal `TODO`. (`app_id: null` is expected at this
+  point — Phase 5 pins it.)
+- **Conditional sections.** Every section the schema marks as
+  conditional must exist exactly when its condition holds, and must
+  be absent otherwise. The schema's own comments name each condition
+  — for example `auth.oauth` exists only under `auth.model: oauth2`,
+  and `measurement` exists only when the connector ingests
+  measurement data. A conditional section that is present without
+  its condition is a finding too. It means the spec contradicts
+  itself, and downstream skills would build the wrong thing.
+- **Internal consistency.** Values that constrain each other must
+  agree — for example, a `measurement_ingestion` entry in
+  `delivery.directions` requires a `destination_type` of
+  `measurement` or `combined`, and every `open_questions` entry must
+  point at a real unknown still visible in the spec.
+- **The narrative_id group.** The schema requires a `narrative_id`
+  identifier group in every spec. Its absence is a finding.
+
+### Phase 3 — Resolve identifier groups
+
+For every entry in `identifier_groups`, verify the `attribute` URI
+against the live catalog by running the
+`narrative-common:find-attribute` skill — one invocation per group,
+in parallel, each with `--no-confirm` and a `--phrase` built from the
+attribute name in the URI. **Never trust a URI from memory or copied
+from another spec**; that is precisely the failure this phase
+catches.
+
+For each group, compare the skill's structured result to the spec:
+
+- **URI confirmed** — the catalog returns the same attribute. Record
+  it as verified in the report.
+- **Close but different** — the catalog's canonical URI differs from
+  the spec's (a stale copy, a renamed attribute). Propose the
+  corrected URI as a spec edit; do not apply it silently.
+- **Not found** — the attribute does not exist in the catalog. This
+  is a **blocker, not a TODO to skip**. Record an `open_questions`
+  entry (owner: internal) stating that the attribute must be created
+  before the connector can ship, and carry it into Phase 7 as
+  blocking.
+
+Then sanity-check `ref_kind` for each verified group. It must be one
+of the schema's four enum values and fit the attribute's actual
+schema as returned by the catalog. When the declared
+`ref_kind` and the attribute's shape disagree, confirm the correct
+value with the user — do not correct it silently, and do not leave
+the disagreement unrecorded.
+
+### Phase 4 — Confirm the slug derivation
+
+`package_slug` must equal `slug` with the dashes dropped
+(`google-dv360` → `googledv360`). Compute the expected value and
+compare. On a match, record it as confirmed. On a mismatch, ask the
+user which value is intended — both drive generated package, module,
+and database names, so a silent fix in either direction risks
+breaking a name the user chose deliberately. Apply the answer as a
+proposed spec edit.
+
+### Phase 5 — Pin app_id
+
+`app_id` is `max(id) + 1` over the apps already registered in the
+marketplace. This skill cannot query the marketplace itself — the
+operator runs the query and reports the result:
+
+1. Ask the operator to run their marketplace app query (admin UI or
+   database, whatever their environment provides) and report the
+   current maximum app id.
+2. Set `app_id` to that maximum plus one, and record in the report
+   where the number came from and when it was read.
+3. If the operator cannot run the query (no access, no Narrative
+   environment), `app_id` stays `null` and gains a **blocking**
+   `open_questions` entry. Do not accept a number recalled from
+   memory in place of a query result; record such a number in the
+   report as unverified and keep the open question.
+
+### Phase 6 — Shape checks
+
+Validate the structured sections against the schema's enums and
+structural comments. For each check that fails, record a finding
+with the field path and the allowed values:
+
+- **auth** — `model` is one of the schema's enum values;
+  `account_binding` names a vendor object; when `oauth` is present,
+  its URLs are absolute, `scopes` is non-empty, `scope_encoding` is
+  a valid enum value, and `token_response` says which fields the
+  token endpoint returns (`/add-connector-oauth` derives token-table
+  columns from it).
+- **quick_settings** — every entry has a `type` discriminator, a
+  `parser`, and a full `fields` list where each field carries
+  `name`, `type`, `required`, and `purpose`. A field list that is
+  described but not enumerated ("the usual audience settings") is a
+  finding.
+- **partner_api** — `endpoints` entries each carry method, path, and
+  purpose; `pagination` and `failure_semantics` hold valid enum
+  values; `batch_limit` and `rate_limits` are numbers with a scope,
+  not prose. A rate limit left as `TODO` is a blocker — the
+  delivery executor cannot be built safely without it.
+- **delivery** — `directions` is non-empty and each entry is one of
+  the schema's documented directions; `path` and `update_model`
+  hold valid enum values; `optout_handling` is stated (or the
+  absence of opt-out flow is stated explicitly).
+
+### Phase 7 — TODO census and verdict
+
+Sweep the spec for every remaining `TODO`, `null`, and unresolved
+finding from Phases 2–6, and rank each one:
+
+- **Blocking** — some downstream skill cannot proceed without the
+  answer. The test: would `/scaffold-connector`,
+  `/add-connector-oauth`, or any later phase have to guess or
+  re-ask? Unverified or missing identifier attributes, a null
+  `app_id`, missing OAuth URLs under `auth.model: oauth2`, and
+  unknown rate limits are always blocking.
+- **Non-blocking** — every downstream skill can run; the answer only
+  refines behavior later (a partner question about raising an
+  already-documented limit, an unsettled display-name wording).
+
+Then:
+
+1. **Write the report.** Save `preflight-report.md` next to the
+   spec. Verdict first (**GO** or **NO-GO** on the first line),
+   then the findings as a table (field, blocking or non-blocking,
+   detail), the identifier resolution results, the values enriched,
+   and every `open_questions` entry added or updated. The report is
+   the artifact a reviewer reads instead of re-deriving the walk.
+2. **Propose the spec edits.** Present every enrichment as one
+   reviewable diff: resolved attribute URIs, the pinned `app_id`,
+   the confirmed slugs, and the new `open_questions` entries. Apply
+   only on the user's approval, per the contract rules below. If
+   the user declines, the spec stays untouched and the report notes
+   the declined edits.
+3. **Deliver the verdict.** Go: tell the user the spec is ready and
+   suggest `/scaffold-connector` with the spec path. No-go: name
+   each blocker, say explicitly that the pipeline is halted here,
+   and instruct the user to resolve the blockers and re-run
+   `/preflight-connector`. Never soften a no-go into "you could
+   probably proceed."
+
+## Files this skill produces
+
+```
+~/.narrative/projects/<slug>/connector-spec/
+├── connector-spec.yaml    # enriched in place — approved edits only
+└── preflight-report.md    # findings, ranked TODOs, go / no-go verdict
+```
+
+## Edge cases and gotchas
+
+- **No spec found anywhere** — ask for the path; if the user hasn't
+  written one yet, point them at `/spec-connector` and stop.
+- **Several projects have specs** — list them and ask which; never
+  pick by recency.
+- **YAML parse failure** — surface the parser's error verbatim,
+  verdict no-go, stop. Hand-repairing YAML risks silently changing
+  meaning.
+- **The spec was already preflighted** — re-verify everything;
+  attribute catalogs and marketplaces change between runs, so a
+  previous report is evidence of a past state, not this one.
+- **Attribute found under a different URI than the spec claims** —
+  propose the correction; the stale copied URI is exactly the bug
+  this skill exists to catch.
+- **The user pushes back on a blocker** — the ranking test is
+  mechanical (can every downstream skill run without the answer?),
+  not negotiable. Re-rank only if the user shows the answer is
+  genuinely not needed downstream, and record the reasoning in the
+  report.
+- **A field is absent from the schema but present in the spec** —
+  unknown fields are a finding (likely a typo or a schema drift);
+  ask before removing anything.
+
+## Harness fallbacks
+
+- **AskUserQuestion:** If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
+- **`narrative-common:find-attribute` unavailable (no narrative-mcp
+  server)** — identifier URIs cannot be verified. Every unverified
+  group becomes a blocking open question, which forces a no-go.
+  Tell the user why the gate holds. An unverified identifier
+  surfaces later as a delivery failure in a built and deployed
+  connector, which is the failure this gate exists to prevent.
+- **No marketplace access** — Phase 5 degrades as documented:
+  `app_id` stays `null` with a blocking open question.
+- **Write unavailable** — present the full report content in the
+  conversation and ask the user to save it; the verdict logic is
+  unchanged.
 
 ## Composition contract
 
