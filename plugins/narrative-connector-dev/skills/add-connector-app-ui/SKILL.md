@@ -84,6 +84,14 @@ field values.
   marked `TODO`, the skill stops and asks — it does not invent slugs,
   app ids, endpoints, rate limits, or Rosetta attribute URIs. (The
   "DO NOT GUESS" rule from `/spec-connector` holds for the whole plugin.)
+- **Blocking is skill-scoped.** An `open_questions` entry blocks only
+  the skills its `blocks` list names. Before doing anything else, a
+  skill checks the list: if any unanswered entry names it, it stops and
+  says which questions block it; entries scoped to other skills are
+  reported as context, never treated as a reason to stop or to hedge.
+  A skill whose own required fields carry real values runs, whatever
+  the overall preflight verdict says — the verdict summarizes the
+  per-skill picture, it is not a global gate.
 - **Write back what you learn.** A skill that resolves a value —
   `preflight-connector` pinning `app_id`, `add-connector-oauth`
   confirming the token-endpoint shape — writes it back so later phases
@@ -281,6 +289,33 @@ open_questions:
   - question: "Exact per-day request quota?"
     owner: partner              # partner | internal | customer
     status: "asked 2026-07-20; awaiting reply"
+    blocks: [implement-partner-client]   # which skills cannot run until this
+                                         # is answered. Skills not named here
+                                         # proceed. Empty/absent = advisory,
+                                         # blocks nothing.
+  # A question that can be answered empirically carries a `probe` block.
+  # /probe-partner-api executes the probe against a user-designated test
+  # account and writes back `observed`. The `class` field governs the
+  # gate: read_only probes run once the probe plan is approved,
+  # reversible_write probes need a designated disposable account, and
+  # account_hostile probes need per-probe opt-in.
+  - question: "Is X-RateLimit-Reset an epoch timestamp or seconds-until-reset?"
+    owner: partner
+    status: "probe before implementing the client"
+    blocks: [implement-partner-client]
+    probe:
+      class: read_only          # read_only | reversible_write | account_hostile
+      request: "GET /v3/marketing/lists?page_size=1, twice, a few seconds apart"
+      observe: "whether the header value tracks wall-clock time or counts down"
+    observed:                   # written back by /probe-partner-api
+      value: "delta seconds, counting down"
+      date: 2026-07-22
+      account: "vendor free-tier test account"
+      closes: true              # false keeps the question open with the
+                                # observation attached — right for rate
+                                # limits and anything with compliance
+                                # weight, where observed behavior is
+                                # evidence, not a vendor commitment
 
 # ── Scaffold target ─────────────────────────────────────────
 # Where connector code materializes. The rest of the spec says what the
