@@ -26,8 +26,8 @@ Generate a TypeScript Workers project at the path the user chooses:
 │   │   └── executor.ts
 │   ├── store/                # credential_store: token/credential persistence
 │   │   └── credentials.ts
-│   └── measurement/          # measurement_poller (only when the spec calls for it)
-│       └── poller.ts
+│   └── measurement/          # only when the spec calls for measurement_ingestion:
+│       └── poller.ts         #   poller.ts for bucket_inbox, receiver.ts for partner_webhook
 └── test/
     └── delivery.test.ts      # one seeded test per generated component
 ```
@@ -42,6 +42,7 @@ Generate a TypeScript Workers project at the path the user chooses:
 | `credential_store` | KV binding by default; D1 when `auth.oauth.token_response` implies relational shape (multi-account bindings, scope arrays). Declared in `wrangler.jsonc`. |
 | `background_worker` | Not a separate unit — the Queues consumer covers async delivery. |
 | `measurement_poller` | A [scheduled trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/) in the same Worker, reading the `measurement.inbox_prefix` source. |
+| `measurement_receiver` | A route on the Worker's `fetch` handler at `measurement.webhook.receiver_path`. Verifies the call per `auth.inbound` (signatures check against the raw body bytes, before any JSON parsing), persists the payload to R2 or a queue, and returns 2xx before any processing — the partner's retry clock only stops on the ack. |
 
 ### Choosing Cloudflare services
 

@@ -147,6 +147,17 @@ concurrently:
   asynchronously, extra loops poll the partner for job status. Connectors with
   short-lived partner tokens also run a token-refresh loop here.
 
+One intake source is not a loop. When the partner pushes events over HTTP
+instead of writing files (see [Variation axes](#variation-axes)), the
+connector exposes a receiver endpoint on its public HTTP surface. The
+receiver verifies the inbound call (a signature computed over the raw request
+body bytes, or a credential the connector issued to the partner), persists
+the raw payload, and returns success immediately. The partner retries
+unacknowledged posts on its own schedule, so acknowledgment must never wait
+on processing. A flush loop in the poller then turns the persisted payloads
+into work, deduplicating on the partner's per-event id because retries
+redeliver events that were already received.
+
 Whatever the source, intake converges on one path: resolve the affected
 connection and its settings, resolve the list of data files, then record a
 **command** and enqueue a **job** (described next).
@@ -362,6 +373,20 @@ lives on each row and the executor partitions rows by destination at delivery
 time. Per-row routing keeps connections minimal and lets customers drive
 routing from their own data, at the cost of per-partition dedup state.
 
+**Measurement intake: files pulled vs events pushed.**
+When the partner writes measurement files into an object store the platform
+owns, the ingestion inbox scanner covers intake, and the design work is the
+partition layout and the partner's write access. When the partner pushes
+events over HTTP, the connector needs the receiver path described under
+event intake, and three contracts must be pinned before build: how the
+inbound call is verified, how long the partner retries an unacknowledged
+post, and which payload field deduplicates redelivered events. Verification
+reverses the usual direction of trust: instead of holding the partner's
+credentials, the connector checks the partner's signature over the raw body
+bytes, or issues the partner a credential of its own. The retry window
+bounds how durable the persist-before-ack step must be. A pushed feed also
+needs public ingress for the receiver, which the pull shape never does.
+
 **Token lifecycle.**
 Long-lived partner tokens need only failure alerting on revocation.
 Short-lived refresh tokens force a proactive refresh loop, since waiting for a
@@ -372,7 +397,8 @@ documented rotation runbooks.
 Audience delivery is the baseline. Opt-outs reuse the same pipeline with a
 remove action plus the audit-log ingestion described above. Conversion events
 add per-row routing, event-age validation, and the layered dedup scheme.
-Measurement feeds add the inbound ingestion path. Each surface is a job type,
+Measurement feeds add the inbound intake path — pulled files or pushed
+events, per the measurement-intake axis above. Each surface is a job type,
 a settings schema in the interface catalog, and a set of status events; the
 pipeline machinery is shared.
 

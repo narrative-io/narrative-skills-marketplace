@@ -394,7 +394,10 @@ components:
   service_api: "{slug}-api"
   credential_store: "{slug}-stores"
   background_worker: "{slug}-worker"
-  measurement_poller: "{slug}-poller"   # generated only when the spec includes measurement_ingestion
+  measurement_poller: "{slug}-poller"   # measurement_ingestion with ingestion_mode: bucket_inbox
+  measurement_receiver: "{slug}-api"    # measurement_ingestion with ingestion_mode: partner_webhook.
+                                        # Often shares the service_api unit — the receiver is a route
+                                        # on the connector's public HTTP surface, not a loop.
 
 # ── Build wiring ────────────────────────────────────────────
 # Files outside the copied tree that need entries for the new units.
@@ -555,6 +558,30 @@ auth:
       access_token: true
       refresh_token: true
       expires_in: true
+  # Present only when model is NOT oauth2 (static_credentials | jwt |
+  # sftp_key | partner_id_header). Says what the customer supplies, how it
+  # is presented on the wire, and what the profile row stores — the
+  # static-credential equivalent of the `oauth` block.
+  credentials:
+    fields:                     # what the customer pastes into the profile form
+      - { name: api_key, type: string, secret: true, purpose: "Customer-minted API key" }
+    presentation: "Authorization: Bearer {api_key}"   # how it goes on the wire
+    required_scopes: []         # vendor-side permissions the credential must carry
+    verification_endpoint: null # a cheap call that proves the credential works
+    rotation: customer_managed  # customer_managed | narrative_managed | none
+  # Credentials WE issue to the PARTNER, for destinations that call us
+  # (webhook receivers, postback URLs). The inverse of the blocks above:
+  # here Narrative is the server being authenticated to. Omit when the
+  # partner never calls us.
+  inbound:
+    mechanisms: []              # signature_verification | oauth2_client_credentials
+                                # | shared_secret | mtls | none
+    signature:                  # present when mechanisms includes signature_verification
+      algorithm: null           # e.g. ecdsa_p256_sha256
+      headers: []               # the header names carrying signature + timestamp
+      signed_payload: null      # e.g. "timestamp + raw request body bytes"
+      key_source: null          # how we obtain the partner's public key
+    token_endpoint: null        # path WE host when the partner uses client-credentials
   # Which vendor object the profile binds to (advertiser / ad-account / dataset).
   account_binding: advertiser_id
 
@@ -626,7 +653,15 @@ partner_api:
     - { scope: per_day,    limit: 1000000 }
   pagination: page_number         # page_number | cursor | offset | none
   idempotency: "upsert keyed on external id; safe to retry"   # dedup key + retry semantics
-  failure_semantics: whole_batch  # whole_batch | row_level
+  failure_semantics: whole_batch  # whole_batch | row_level | async_job
+                                  # async_job: the write returns 202 + a job id and
+                                  # per-record outcomes are only available by polling
+                                  # a status endpoint — the delivery response means
+                                  # "queued", not "succeeded".
+  job_status:                     # required when failure_semantics: async_job
+    endpoint: null                # the status endpoint to poll
+    terminal_states: []           # which states end the poll
+    poll_guidance: null           # documented/observed cadence, or TODO
 
 # ── Delivery semantics ──────────────────────────────────────
 delivery:
@@ -642,10 +677,29 @@ delivery:
 
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
+  # How the feed reaches us. bucket_inbox: the partner writes files into an
+  # object-store inbox we own and a poll loop ingests them (the framework's
+  # MeasurementFeedIngestionProcessor). partner_webhook: the partner PUSHES
+  # events to an endpoint we expose — a receiver, not a poll loop, and the
+  # `partition_layout` / `inbox_prefix` / `partner_access` fields below do
+  # not apply. Defaults to bucket_inbox when omitted.
+  ingestion_mode: bucket_inbox  # bucket_inbox | partner_webhook
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
   inbox_prefix: "<object-store>/<slug>/inbox/"
   partner_access: bucket_policy  # | assumed_role | static_keys
-  host_app: poller              # which app runs the ingestion loop
+  host_app: poller              # which app runs the ingestion loop / receiver
+  # Present only when ingestion_mode: partner_webhook. Auth for the inbound
+  # call lives in `auth.inbound`; this block is the delivery contract.
+  webhook:
+    receiver_path: null         # the path we expose, e.g. "/<slug>/events"
+    provisioning: customer_creates  # connector_creates (we register the webhook
+                                    # via the partner's API) | customer_creates | either
+    payload: null               # shape of one POST, e.g. "JSON array of event objects"
+    dedupe_key: null            # the field that makes retries idempotent
+    retry_policy: null          # partner-side retry behavior + the response we must return
+    max_payload: null           # documented size cap, or TODO
+    buffering: null             # how received events reach the dataset (e.g. batch to
+                                # object store, then _NIO_COMMIT)
   dataset_ids:
     dev: "ds_..."
     prod: "ds_..."

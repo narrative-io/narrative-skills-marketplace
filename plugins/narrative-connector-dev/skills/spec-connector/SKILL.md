@@ -3,8 +3,9 @@ name: spec-connector
 description: |
   Research and author a connector spec for a new destination platform —
   interview, prior-art recon, vendor-doc research, and a differentiator
-  walk across five axes (auth, destination data model, identifiers and
-  matching, sync semantics, operational constraints) — then emit the
+  walk across six axes (auth, destination data model, identifiers and
+  matching, sync semantics, operational constraints, inbound
+  direction) — then emit the
   machine-readable connector-spec.yaml the rest of the plugin builds
   from, plus a prose spec.md. Identifiers, rate limits, and data-removal
   semantics are never guessed; unknowns become partner questions.
@@ -23,7 +24,7 @@ compatibility: >-
   Shortcut or Notion MCP servers for publishing the finished spec —
   all degrade gracefully when absent.
 metadata:
-  version: 1.3.0
+  version: 1.4.0
   narrative:
     args:
       - name: "<platform>"
@@ -182,7 +183,7 @@ failure semantics → privacy/consent → multi-tenant model → sandbox →
 partner approval). Every claim gets a citation. Save to
 `$SPEC_DIR/vendor-notes.md`.
 
-### Phase 3 — Walk the five differentiator axes
+### Phase 3 — Walk the six differentiator axes
 
 Open [`references/differentiator-axes.md`](references/differentiator-axes.md).
 For each axis decide: **same as the precedent, or different — how?**
@@ -203,6 +204,10 @@ For each axis decide: **same as the precedent, or different — how?**
    pagination, failure semantics, and app-review / partner-approval
    processes **where the destination has them** (many don't — never
    invent one).
+6. **Inbound direction** — whether the destination sends data back to
+   us at all, and if so whether it writes files we pull or pushes
+   events we receive; who authenticates to whom; the retry and dedupe
+   contract. "None" is a real answer — record it.
 
 Save the populated table to `$SPEC_DIR/uniqueness.md`; it becomes §0
 of the prose spec. If the most consequential difference is an
@@ -282,7 +287,7 @@ formality**:
 
 Walk this six-point quality bar **with the user** before publishing:
 
-1. The §0 five-axis table is filled; every "different" row has a
+1. The §0 six-axis table is filled; every "different" row has a
    one-line explanation.
 2. The identifier matrix names every accepted identifier AND every
    notably-rejected one, each verified in Phase 5.
@@ -441,6 +446,30 @@ auth:
       access_token: true
       refresh_token: true
       expires_in: true
+  # Present only when model is NOT oauth2 (static_credentials | jwt |
+  # sftp_key | partner_id_header). Says what the customer supplies, how it
+  # is presented on the wire, and what the profile row stores — the
+  # static-credential equivalent of the `oauth` block.
+  credentials:
+    fields:                     # what the customer pastes into the profile form
+      - { name: api_key, type: string, secret: true, purpose: "Customer-minted API key" }
+    presentation: "Authorization: Bearer {api_key}"   # how it goes on the wire
+    required_scopes: []         # vendor-side permissions the credential must carry
+    verification_endpoint: null # a cheap call that proves the credential works
+    rotation: customer_managed  # customer_managed | narrative_managed | none
+  # Credentials WE issue to the PARTNER, for destinations that call us
+  # (webhook receivers, postback URLs). The inverse of the blocks above:
+  # here Narrative is the server being authenticated to. Omit when the
+  # partner never calls us.
+  inbound:
+    mechanisms: []              # signature_verification | oauth2_client_credentials
+                                # | shared_secret | mtls | none
+    signature:                  # present when mechanisms includes signature_verification
+      algorithm: null           # e.g. ecdsa_p256_sha256
+      headers: []               # the header names carrying signature + timestamp
+      signed_payload: null      # e.g. "timestamp + raw request body bytes"
+      key_source: null          # how we obtain the partner's public key
+    token_endpoint: null        # path WE host when the partner uses client-credentials
   # Which vendor object the profile binds to (advertiser / ad-account / dataset).
   account_binding: advertiser_id
 
@@ -512,7 +541,15 @@ partner_api:
     - { scope: per_day,    limit: 1000000 }
   pagination: page_number         # page_number | cursor | offset | none
   idempotency: "upsert keyed on external id; safe to retry"   # dedup key + retry semantics
-  failure_semantics: whole_batch  # whole_batch | row_level
+  failure_semantics: whole_batch  # whole_batch | row_level | async_job
+                                  # async_job: the write returns 202 + a job id and
+                                  # per-record outcomes are only available by polling
+                                  # a status endpoint — the delivery response means
+                                  # "queued", not "succeeded".
+  job_status:                     # required when failure_semantics: async_job
+    endpoint: null                # the status endpoint to poll
+    terminal_states: []           # which states end the poll
+    poll_guidance: null           # documented/observed cadence, or TODO
 
 # ── Delivery semantics ──────────────────────────────────────
 delivery:
@@ -528,10 +565,29 @@ delivery:
 
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
+  # How the feed reaches us. bucket_inbox: the partner writes files into an
+  # object-store inbox we own and a poll loop ingests them (the framework's
+  # MeasurementFeedIngestionProcessor). partner_webhook: the partner PUSHES
+  # events to an endpoint we expose — a receiver, not a poll loop, and the
+  # `partition_layout` / `inbox_prefix` / `partner_access` fields below do
+  # not apply. Defaults to bucket_inbox when omitted.
+  ingestion_mode: bucket_inbox  # bucket_inbox | partner_webhook
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
   inbox_prefix: "<object-store>/<slug>/inbox/"
   partner_access: bucket_policy  # | assumed_role | static_keys
-  host_app: poller              # which app runs the ingestion loop
+  host_app: poller              # which app runs the ingestion loop / receiver
+  # Present only when ingestion_mode: partner_webhook. Auth for the inbound
+  # call lives in `auth.inbound`; this block is the delivery contract.
+  webhook:
+    receiver_path: null         # the path we expose, e.g. "/<slug>/events"
+    provisioning: customer_creates  # connector_creates (we register the webhook
+                                    # via the partner's API) | customer_creates | either
+    payload: null               # shape of one POST, e.g. "JSON array of event objects"
+    dedupe_key: null            # the field that makes retries idempotent
+    retry_policy: null          # partner-side retry behavior + the response we must return
+    max_payload: null           # documented size cap, or TODO
+    buffering: null             # how received events reach the dataset (e.g. batch to
+                                # object store, then _NIO_COMMIT)
   dataset_ids:
     dev: "ds_..."
     prod: "ds_..."
