@@ -889,7 +889,7 @@
     },
     {
       "name": "preflight-connector",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Validate and enrich a connector-spec.yaml before any code is generated —\nresolve every identifier group to a canonical Rosetta Stone attribute,\npin the marketplace app_id, confirm the package-slug derivation, and flag\nevery remaining TODO. Produces a go / no-go preflight report.\nUse when: \"preflight the connector spec\", \"is this connector spec ready\nto build\", \"validate connector-spec.yaml\", \"check the connector spec\nbefore scaffolding\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/preflight-connector/SKILL.md",
@@ -915,6 +915,40 @@
           "skills": [
             "narrative-connector-dev:spec-connector",
             "narrative-connector-dev:scaffold-connector"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "<spec-path>",
+          "required": false,
+          "description": "Path to connector-spec.yaml, or to the directory that holds it. If omitted, the skill searches the conventional location (~/.narrative/projects/<slug>/connector-spec/) and asks when it can't find exactly one spec."
+        }
+      ]
+    },
+    {
+      "name": "probe-partner-api",
+      "version": "1.0.0",
+      "description": "Answer a connector spec's empirically answerable open questions by\nprobing the destination API against a user-designated test account —\nheader semantics (is X-RateLimit-Reset an epoch or a countdown?),\npagination behavior, async-job status shapes, write semantics.\nProbes run under escalating gates by blast radius, every finding\ncarries the raw request/response evidence, and results write back to\nconnector-spec.yaml as observed values, never as documentation.\nUse when: \"probe the partner api\", \"smoke-test the destination api\",\n\"answer the open questions empirically\", \"test what X-RateLimit-Reset\nreturns\", \"check the api against a sandbox account\".\n(narrative-connector-dev)",
+      "plugin": "narrative-connector-dev",
+      "path": "plugins/narrative-connector-dev/skills/probe-partner-api/SKILL.md",
+      "compatibility": "Requires Bash (curl probes against the live vendor API), Read, and Write (or equivalent capabilities — these tools may be named differently across harnesses), plus network access to the destination API and a test-account credential the user supplies at runtime. Recommends AskUserQuestion (prose fallback documented in the body). Runs on any agentskills.io-compliant harness.",
+      "requirements": {
+        "requires": {
+          "tools": [
+            "Bash",
+            "Read",
+            "Write"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "skills": [
+            "narrative-connector-dev:spec-connector",
+            "narrative-connector-dev:preflight-connector",
+            "narrative-connector-dev:implement-partner-client"
           ]
         }
       },
@@ -1018,8 +1052,8 @@
     },
     {
       "name": "spec-connector",
-      "version": "1.3.0",
-      "description": "Research and author a connector spec for a new destination platform —\ninterview, prior-art recon, vendor-doc research, and a differentiator\nwalk across five axes (auth, destination data model, identifiers and\nmatching, sync semantics, operational constraints) — then emit the\nmachine-readable connector-spec.yaml the rest of the plugin builds\nfrom, plus a prose spec.md. Identifiers, rate limits, and data-removal\nsemantics are never guessed; unknowns become partner questions.\nUse when: \"spec out a connector for <platform>\", \"start a new\nconnector\", \"research the <platform> connector\", \"write the connector\nspec\", \"draft connector-spec.yaml\".\n(narrative-connector-dev)",
+      "version": "1.4.0",
+      "description": "Research and author a connector spec for a new destination platform —\ninterview, prior-art recon, vendor-doc research, and a differentiator\nwalk across six axes (auth, destination data model, identifiers and\nmatching, sync semantics, operational constraints, inbound\ndirection) — then emit the\nmachine-readable connector-spec.yaml the rest of the plugin builds\nfrom, plus a prose spec.md. Identifiers, rate limits, and data-removal\nsemantics are never guessed; unknowns become partner questions.\nUse when: \"spec out a connector for <platform>\", \"start a new\nconnector\", \"research the <platform> connector\", \"write the connector\nspec\", \"draft connector-spec.yaml\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/spec-connector/SKILL.md",
       "compatibility": "Requires Bash, Read, Write, WebFetch, and WebSearch (or equivalent capabilities — these tools may be named differently across harnesses) for vendor-doc research, plus the narrative-common find-attribute skill (narrative-mcp) for Rosetta attribute verification. Recommends AskUserQuestion (prose fallback documented in the body), the narrative-knowledge-base MCP server for prior-art recon, and the Shortcut or Notion MCP servers for publishing the finished spec — all degrade gracefully when absent.",

@@ -188,6 +188,7 @@ Build Narrative data connectors agentically — a spec-driven skill set that car
 | `/implement-delivery-executor` | "implement the delivery executor", "write the audience delivery path", "wire up the Arrow reader for the connector", "build the connector executor". |
 | `/implement-partner-client` | "implement the partner API client", "write the <platform> API client", "wire up the delivery endpoints", "handle the partner rate limits". |
 | `/preflight-connector` | "preflight the connector spec", "is this connector spec ready to build", "validate connector-spec.yaml", "check the connector spec before scaffolding". |
+| `/probe-partner-api` | "probe the partner api", "smoke-test the destination api", "answer the open questions empirically", "test what X-RateLimit-Reset returns", "check the api against a sandbox account". |
 | `/provision-connector-db` | "provision the connector database", "write the database migrations for the connector", "set up the connector database", "add the connector db infrastructure". |
 | `/register-connector-app` | "register the connector app", "bootstrap the marketplace app", "create the app row for the connector", "run the app registration for the connector". |
 | `/scaffold-connector` | "scaffold the <slug> connector", "generate the connector modules", "stand up the connector project", "scaffold a connector in my repo", "start a connector from scratch". |
