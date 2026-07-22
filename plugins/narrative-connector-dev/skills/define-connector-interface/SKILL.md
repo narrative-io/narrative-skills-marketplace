@@ -18,10 +18,11 @@ compatibility: >-
   these tools may be named differently across harnesses) for local
   codegen in the scaffold target's working tree. Reads
   connector-spec.yaml; no infra, DB, or registration side effects.
-  Recommends AskUserQuestion (prose fallback documented in the body).
+  The bundled schema validator needs Node 18+ or Bun. Recommends
+  AskUserQuestion (prose fallback documented in the body).
   Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   narrative:
     args:
       - name: "<spec-path>"
@@ -237,12 +238,17 @@ must stay in lockstep:
    optional in the type, not just the form.
 2. **The settings-form contract**: a JSON Schema per type with the
    same discriminator, the same field names and JSON Schema types,
-   and the same `required` set. Where the target's exemplar pairs
-   each schema with a UI schema, mirror that convention; where it
-   doesn't, the JSON Schema alone is the contract. In greenfield
-   mode the UI-schema convention is platform-facing and unpublished:
-   generate the JSON Schema, mark the UI-schema slot as a stub, and
-   record the open question.
+   and the same `required` set. The discriminator sits in the
+   schema's top-level `type` keyword as the block
+   `{"type": "string", "const": "<discriminator>", "default":
+   "<discriminator>", "readOnly": true}` — a platform quirk
+   documented with the full app-interface envelope in
+   [`references/interface-anatomy.md`](references/interface-anatomy.md).
+   Where the target's exemplar pairs each schema with a UI schema,
+   mirror that convention; where it doesn't, the JSON Schema alone
+   is the contract. In greenfield mode the UI-schema convention is
+   platform-facing and unpublished: generate the JSON Schema, mark
+   the UI-schema slot as a stub, and record the open question.
 
 The lockstep rule is the point of doing both here: a field present
 in the type but not the schema is invisible in the UI, and a field
@@ -252,11 +258,27 @@ never from each other's output.
 
 ### Phase 5 — Verify, write back, hand off
 
+- Run the bundled validator over every generated artifact:
+
+  ```bash
+  node scripts/validate-interface.mjs <record-schema.json> <form-contract.json> \
+      --spec <path>/connector-spec.yaml
+  ```
+
+  It checks the artifacts against the platform shapes in
+  [`references/interface-anatomy.md`](references/interface-anatomy.md)
+  — `$defs` fidelity, the `$ref` selection per `ref_kind`, the
+  acceptance policy, the discriminator block, UI-schema scopes — and,
+  with `--spec`,
+  cross-checks identifier groups and quick-settings fields against
+  the spec. Runs on Node 18 or newer, or Bun (the `--spec`
+  cross-check needs Bun for YAML parsing and is skipped with a note
+  otherwise). Fix every error it reports before handing off; treat
+  warnings as questions for the user.
 - Run the target's verify command when one is declared (manifest
-  `verify.command`, or the runtime profile's typecheck). Confirm the
-  record schemas parse as JSON. Report failures verbatim; a contract
-  that doesn't compile is a finding for the human, not something to
-  quietly patch.
+  `verify.command`, or the runtime profile's typecheck). Report
+  failures verbatim; a contract that doesn't compile is a finding
+  for the human, not something to quietly patch.
 - Leave every change as an uncommitted working-tree diff and show a
   summary of created and modified paths. Never overwrite an existing
   file without showing the diff first.
@@ -324,8 +346,11 @@ tools or generic Read / Bash / Write.
 
 - [`references/interface-anatomy.md`](references/interface-anatomy.md)
   — the portable contract artifacts, the full `ref_kind` mapping with
-  a passing dataset fragment per shape, and the per-language
-  realization table.
+  a passing dataset fragment per shape, the app-interface envelope,
+  and the per-language realization table.
+- [`scripts/validate-interface.mjs`](scripts/validate-interface.mjs)
+  — the Phase 5 validator; the reference's shapes as executable
+  assertions.
 
 ## Scaffold manifest schema
 

@@ -239,6 +239,75 @@ JSON Schema `"string"` → the language's string type; `integer` →
 the language's boolean. A field with `required: false` is optional
 on every surface, not just one.
 
+## The app interface envelope
+
+The platform consumes the whole contract through one payload per
+quick-settings type: the **app interface**, served by the connector
+at `GET /interfaces`. The shape below is confirmed against both ends
+of the wire — the platform's connector-framework service contract on
+the producing side and the platform frontend's consuming type on the
+rendering side:
+
+```json
+{
+    "id": "acme_audience_quick_settings",
+    "name": "acme_audience_quick_settings",
+    "metadata": {
+        "tags": ["acme", "audience"],
+        "refresh_schedule": { "min": null, "max": "P180D" }
+    },
+    "schema": {
+        "type": {
+            "type": "string",
+            "const": "acme_audience_quick_settings",
+            "default": "acme_audience_quick_settings",
+            "readOnly": true
+        },
+        "properties": {
+            "advertiser_id": { "type": "string" },
+            "membership_ttl_days": { "type": "integer" }
+        },
+        "required": ["advertiser_id"],
+        "uischema": { "type": "VerticalLayout", "elements": ["…"] }
+    },
+    "policy": { "name": "audience", "hash": 123456789, "…": "the record schema, verbatim" }
+}
+```
+
+Reading the envelope:
+
+- **`id` and `name` both carry the discriminator string** — the same
+  value the payload's `type` key carries on the wire.
+- **`schema` is the settings-form contract**, with two platform
+  quirks a generic JSON Schema validator won't expect. The top-level
+  `type` keyword is overloaded. Instead of JSON Schema's usual
+  `"object"`, it holds the discriminator block
+  `{"type": "string", "const": …, "default": …, "readOnly": true}`,
+  with `const` and `default` equal. And the UI schema, where one
+  exists, rides inside `schema.uischema` rather than as a separate
+  document. `required` and `anyOf` sit beside `properties` as normal.
+- **`policy` is the record schema**, deep-merged at serving time with
+  a `name` (the parser's name) and a `hash` (a content hash of the
+  schema file). The connector's own artifact is the record schema
+  file; the annotation is added by whatever serves the envelope.
+  `policy` is null for types with no record-ingesting parser.
+- **`metadata`** carries the type's `tags` and an optional
+  `refresh_schedule` whose bounds are ISO-8601 durations (`P180D`).
+- The platform adds an `app_id` field of its own when listing a
+  customer's installed interfaces; the connector never produces it.
+
+In a stack with a connector framework, the framework assembles this
+envelope from the artifacts this skill generates. The skill never
+hand-writes it. In greenfield mode the envelope shape is the one
+documented here, but the route that serves it stays behind the
+runtime profile's platform-contract gate.
+
+The bundled [`scripts/validate-interface.mjs`](../scripts/validate-interface.mjs)
+checks all of the above — record schemas, form contracts, and
+interface payloads, plus a `--spec` cross-check against
+`connector-spec.yaml` — and encodes this reference's shapes as
+executable assertions.
+
 ## Typical realizations per language
 
 How the portable terms usually land, per language. These rows are
