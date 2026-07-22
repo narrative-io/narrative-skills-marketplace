@@ -799,19 +799,39 @@
     },
     {
       "name": "define-connector-interface",
-      "version": "0.2.0",
-      "description": "Define the connector's data contract — the audience metaschema, the\nQuickSettingsType / ParserType enums and codecs, the identifier-group\nattribute metaschema with correct $ref kinds, and the collaboration\npolicy — all generated from connector-spec.yaml.\nUse when: \"define the connector interface\", \"generate the audience\nmetaschema\", \"wire up the quick settings types\", \"build the collaboration\npolicy for the connector\".\n(narrative-connector-dev)",
+      "version": "1.1.0",
+      "description": "Turn the spec's abstract declarations — identifier groups, quick\nsettings, and the destination data model — into the concrete data\ncontract the connector serializes against: the record schema with the\nright $ref shape per identifier group, the quick-settings type set\nwith its discriminators and parser bindings, and the settings-form\ncontract, written into whichever scaffold target /scaffold-connector\nproduced, in that target's own idiom.\nUse when: \"define the connector interface\", \"generate the audience\nmetaschema\", \"wire up the quick settings types\", \"generate the\nconnector's data contract\", \"build the record schema\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/define-connector-interface/SKILL.md",
-      "compatibility": "Stub — implementation pending. No hard requirements: local codegen of schema/codec files in the connector repo's working tree; no infra or destructive ops. Reads connector-spec.yaml. Recommends the narrative-common find-attribute skill. Runs on any agentskills.io-compliant harness.",
+      "compatibility": "Requires Bash, Read, Write, and Edit (or equivalent capabilities — these tools may be named differently across harnesses) for local codegen in the scaffold target's working tree. Reads connector-spec.yaml; no infra, DB, or registration side effects. The bundled schema validator needs Node 18+ or Bun. Recommends AskUserQuestion (prose fallback documented in the body). Runs on any agentskills.io-compliant harness.",
       "requirements": {
+        "requires": {
+          "tools": [
+            "Bash",
+            "Read",
+            "Write",
+            "Edit"
+          ]
+        },
         "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
           "skills": [
             "narrative-connector-dev:scaffold-connector",
-            "narrative-common:find-attribute"
+            "narrative-connector-dev:implement-partner-client",
+            "narrative-connector-dev:implement-delivery-executor",
+            "narrative-connector-dev:add-connector-app-ui"
           ]
         }
-      }
+      },
+      "args": [
+        {
+          "name": "<spec-path>",
+          "required": false,
+          "description": "Path to connector-spec.yaml. If omitted, the skill looks in the conventional location and asks when it can't find one."
+        }
+      ]
     },
     {
       "name": "deploy-connector",
