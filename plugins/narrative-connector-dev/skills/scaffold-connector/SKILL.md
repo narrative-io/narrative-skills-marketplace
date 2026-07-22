@@ -21,7 +21,7 @@ compatibility: >-
   fallback documented in the body). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 1.1.0
+  version: 1.1.2
   narrative:
     args:
       - name: "<spec-path>"
@@ -157,7 +157,8 @@ Per mode:
   [`references/reference-architecture.md`](references/reference-architecture.md):
   the runtime behavior each component must eventually implement, and
   the variation axes (delivery channel, partner semantics, process
-  topology, routing) to decide explicitly with the user. Follow the
+  topology, routing, app-UI hosting) to decide explicitly with the
+  user. Follow the
   profile's generation rules, including its rule for stubbing
   platform-facing endpoints whose contract isn't yet published (the
   profile's **platform-contract gate**).
@@ -192,7 +193,10 @@ Execute the plan:
    counterpart when one exists.
 4. Leave everything uncommitted. Show a summary of created and
    modified paths; never commit, and never overwrite an existing file
-   without showing the diff first.
+   without showing the diff first. Alongside the summary, propose the
+   checkpoint commit message from
+   [`references/git-conventions.md`](references/git-conventions.md)
+   so the user can review and commit before the next skill runs.
 
 ### Phase 5 — Verify and hand off
 
@@ -206,7 +210,9 @@ Execute the plan:
   `/create-scaffold-manifest`).
 - Summarize: components generated, units created, wiring applied,
   gaps marked (e.g. the greenfield platform-contract stubs).
-- Hand off: suggest `/define-connector-interface` next.
+- Hand off: suggest committing the reviewed scaffold
+  ([`references/git-conventions.md`](references/git-conventions.md)),
+  then `/define-connector-interface` next.
 
 ## Files this skill produces
 
