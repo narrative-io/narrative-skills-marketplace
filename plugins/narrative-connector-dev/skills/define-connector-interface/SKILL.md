@@ -22,7 +22,7 @@ compatibility: >-
   AskUserQuestion (prose fallback documented in the body).
   Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 1.1.1
+  version: 1.1.2
   narrative:
     args:
       - name: "<spec-path>"
@@ -89,7 +89,8 @@ the connector serializes against, written into the scaffold target
   in the target's language and serialization library.
 - **The settings-form contract** — the JSON Schema per quick-settings
   type that `/add-connector-app-ui` later renders the settings form
-  from, kept in lockstep with the types.
+  from (in the platform frontend or in the UI the connector serves
+  itself), kept in lockstep with the types.
 - **The acceptance policy** — the `required[]` / `anyOf[]` block
   inside the record schema stating which identifier groups a
   delivery must include.
@@ -125,8 +126,8 @@ contract. Do NOT use for:
   executor bodies belong to `/implement-partner-client` and
   `/implement-delivery-executor`.
 - **Building the settings form itself** — `/add-connector-app-ui`
-  renders it in the frontend; this skill only defines the contract
-  it renders from.
+  renders it, wherever the UI is hosted; this skill only defines the
+  contract it renders from.
 
 ## Procedure
 
@@ -456,6 +457,8 @@ components:
   measurement_receiver: "{slug}-api"    # measurement_ingestion with ingestion_mode: partner_webhook.
                                         # Often shares the service_api unit — the receiver is a route
                                         # on the connector's public HTTP surface, not a loop.
+  app_ui: "connectors/{slug}"           # in the frontend-role repo when the repos list has one;
+                                        # otherwise a ui unit the connector serves itself
 
 # ── Build wiring ────────────────────────────────────────────
 # Files outside the copied tree that need entries for the new units.

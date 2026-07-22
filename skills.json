@@ -659,11 +659,11 @@
     },
     {
       "name": "add-connector-app-ui",
-      "version": "0.2.0",
-      "description": "Build the connector's app UI in the frontend repo — the profile-creation\nflow (OAuth connect button or credential fields) and the quick-settings\nform — generated from the auth and quick_settings blocks of\nconnector-spec.yaml.\nUse when: \"build the connector app UI\", \"add the profile creation form\",\n\"wire up the quick settings form\", \"add the OAuth connect button for the\nconnector\".\n(narrative-connector-dev)",
+      "version": "0.3.0",
+      "description": "Build the connector's app UI — the profile-creation flow (OAuth connect\nbutton or credential fields) and the quick-settings form — generated\nfrom the auth and quick_settings blocks of connector-spec.yaml. The UI\nis part of the connector's surface: it lands in the platform frontend\nrepo when the scaffold target lists one, and otherwise in the ui unit\nthe connector serves itself.\nUse when: \"build the connector app UI\", \"add the profile creation form\",\n\"wire up the quick settings form\", \"add the OAuth connect button for the\nconnector\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/add-connector-app-ui/SKILL.md",
-      "compatibility": "Stub — implementation pending. No hard requirements: local UI code in the frontend repo's working tree, PR-reviewed; no infra or destructive ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant harness.",
+      "compatibility": "Stub — implementation pending. No hard requirements: local UI code in the target repo's working tree, PR-reviewed; no infra or destructive ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant harness.",
       "requirements": {
         "recommends": {
           "skills": [
@@ -799,7 +799,7 @@
     },
     {
       "name": "define-connector-interface",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "description": "Turn the spec's abstract declarations — identifier groups, quick\nsettings, and the destination data model — into the concrete data\ncontract the connector serializes against: the record schema with the\nright $ref shape per identifier group, the quick-settings type set\nwith its discriminators and parser bindings, and the settings-form\ncontract, written into whichever scaffold target /scaffold-connector\nproduced, in that target's own idiom.\nUse when: \"define the connector interface\", \"generate the audience\nmetaschema\", \"wire up the quick settings types\", \"generate the\nconnector's data contract\", \"build the record schema\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/define-connector-interface/SKILL.md",
@@ -999,7 +999,7 @@
     },
     {
       "name": "scaffold-connector",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "description": "Generate the code skeleton for a new connector in whatever codebase\nhosts it, driven by connector-spec.yaml and a scaffold target: a\ntemplate repo carrying a connector-scaffold.yaml manifest, an existing\nconnector to clone conventions from, or a greenfield runtime profile\n(cloudflare-workers first). Derives the component set from the spec,\ncopies and renames, wires build files — every change a reviewable\nworking-tree diff.\nUse when: \"scaffold the <slug> connector\", \"generate the connector\nmodules\", \"stand up the connector project\", \"scaffold a connector in\nmy repo\", \"start a connector from scratch\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/scaffold-connector/SKILL.md",

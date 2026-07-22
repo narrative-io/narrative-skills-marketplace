@@ -402,6 +402,8 @@ components:
   measurement_receiver: "{slug}-api"    # measurement_ingestion with ingestion_mode: partner_webhook.
                                         # Often shares the service_api unit — the receiver is a route
                                         # on the connector's public HTTP surface, not a loop.
+  app_ui: "connectors/{slug}"           # in the frontend-role repo when the repos list has one;
+                                        # otherwise a ui unit the connector serves itself
 
 # ── Build wiring ────────────────────────────────────────────
 # Files outside the copied tree that need entries for the new units.

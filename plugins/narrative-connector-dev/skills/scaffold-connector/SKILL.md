@@ -21,7 +21,7 @@ compatibility: >-
   fallback documented in the body). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 1.1.1
+  version: 1.1.2
   narrative:
     args:
       - name: "<spec-path>"
@@ -157,7 +157,8 @@ Per mode:
   [`references/reference-architecture.md`](references/reference-architecture.md):
   the runtime behavior each component must eventually implement, and
   the variation axes (delivery channel, partner semantics, process
-  topology, routing) to decide explicitly with the user. Follow the
+  topology, routing, app-UI hosting) to decide explicitly with the
+  user. Follow the
   profile's generation rules, including its rule for stubbing
   platform-facing endpoints whose contract isn't yet published (the
   profile's **platform-contract gate**).
