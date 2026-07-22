@@ -16,7 +16,7 @@ compatibility: >-
   at human gates. Reads the measurement block of connector-spec.yaml.
   Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.2.0
+  version: 0.2.1
   narrative:
     recommends:
       skills:
@@ -64,7 +64,11 @@ Phase: **service** (+ DB + infra + deploy-verify at gates).
 - **infrastructure apply** for the inbox bucket + partner access — gated at
   `/deploy-connector`.
 - Verify step uploads a sample file and watches for the
-  `writing commit file` success line.
+  `writing commit file` success line. Sample files carrying real
+  identifiers stay out of the repo.
+- Code changes land as uncommitted working-tree diffs; the human
+  commits at each checkpoint per
+  [`references/git-conventions.md`](references/git-conventions.md).
 
 ## Composition contract
 

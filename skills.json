@@ -690,7 +690,7 @@
     },
     {
       "name": "add-connector-oauth",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "description": "Add a third-party OAuth 2.0 authorization-code flow with encrypted\ntoken storage to a scaffolded connector — domains, stores, api client,\noauth service, callback + authorize routes, the token-table migration,\nand the encryption-key, access-policy, and secret-store plumbing — all\ndriven by the auth.oauth block of connector-spec.yaml.\nUse when: \"add OAuth to the connector\", \"wire up the <platform> OAuth\nflow\", \"the connector needs authorization-code auth\", \"add token storage\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/add-connector-oauth/SKILL.md",
@@ -709,7 +709,7 @@
     },
     {
       "name": "add-measurement-ingestion",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "description": "Wire the framework measurement-feed engine into a connector — scan a\npartner object-storage inbox, copy new files into a Narrative dataset\ningestion folder, write _NIO_COMMIT, and dedup so files are never copied\ntwice — driven by the measurement block of connector-spec.yaml.\nUse when: \"add measurement ingestion to the connector\", \"ingest the\npartner measurement feed\", \"wire up the object-storage inbox scan\", \"pull\nconversion feedback files\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/add-measurement-ingestion/SKILL.md",
@@ -762,7 +762,7 @@
     },
     {
       "name": "create-scaffold-manifest",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Author a repo's connector-scaffold.yaml — the manifest that teaches\n/scaffold-connector the repo's template, rename rules, component map,\nbuild wiring, and stack profile (languages, cloud services,\nlibraries, code idioms). Two entry paths: infer the conventions from\nan existing reference connector (repo archaeology with human\nconfirmation), or interview the user section by section when no clean\nexemplar exists. Handles connectors that span several repos (service\ncode, migrations, frontend) by exploring all of them in one run. A\nper-repo, one-time onboarding job.\nUse when: \"create a scaffold manifest\", \"write connector-scaffold.yaml\",\n\"onboard my repo for connector scaffolding\", \"infer connector\nconventions from my repo\", \"teach the scaffolder our repo layout\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/create-scaffold-manifest/SKILL.md",
@@ -799,7 +799,7 @@
     },
     {
       "name": "define-connector-interface",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Turn the spec's abstract declarations — identifier groups, quick\nsettings, and the destination data model — into the concrete data\ncontract the connector serializes against: the record schema with the\nright $ref shape per identifier group, the quick-settings type set\nwith its discriminators and parser bindings, and the settings-form\ncontract, written into whichever scaffold target /scaffold-connector\nproduced, in that target's own idiom.\nUse when: \"define the connector interface\", \"generate the audience\nmetaschema\", \"wire up the quick settings types\", \"generate the\nconnector's data contract\", \"build the record schema\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/define-connector-interface/SKILL.md",
@@ -856,7 +856,7 @@
     },
     {
       "name": "implement-delivery-executor",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "description": "Implement the audience-delivery executor on the Arrow Dataset path —\nfield parsers, narrative_id routing, batching, file-delivery metrics, and\nthe runtime config wiring — driven by the delivery block of\nconnector-spec.yaml.\nUse when: \"implement the delivery executor\", \"write the audience delivery\npath\", \"wire up the Arrow reader for the connector\", \"build the connector\nexecutor\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/implement-delivery-executor/SKILL.md",
@@ -873,7 +873,7 @@
     },
     {
       "name": "implement-partner-client",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "description": "Implement the connector's partner API client — request/response models,\nauth headers, pagination, rate-limit handling, retry/backoff, and error\nmapping — from the partner_api block of connector-spec.yaml.\nUse when: \"implement the partner API client\", \"write the <platform> API\nclient\", \"wire up the delivery endpoints\", \"handle the partner rate\nlimits\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/implement-partner-client/SKILL.md",
@@ -928,7 +928,7 @@
     },
     {
       "name": "probe-partner-api",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Answer a connector spec's empirically answerable open questions by\nprobing the destination API against a user-designated test account —\nheader semantics (is X-RateLimit-Reset an epoch or a countdown?),\npagination behavior, async-job status shapes, write semantics.\nProbes run under escalating gates by blast radius, every finding\ncarries the raw request/response evidence, and results write back to\nconnector-spec.yaml as observed values, never as documentation.\nUse when: \"probe the partner api\", \"smoke-test the destination api\",\n\"answer the open questions empirically\", \"test what X-RateLimit-Reset\nreturns\", \"check the api against a sandbox account\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/probe-partner-api/SKILL.md",
@@ -999,7 +999,7 @@
     },
     {
       "name": "scaffold-connector",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Generate the code skeleton for a new connector in whatever codebase\nhosts it, driven by connector-spec.yaml and a scaffold target: a\ntemplate repo carrying a connector-scaffold.yaml manifest, an existing\nconnector to clone conventions from, or a greenfield runtime profile\n(cloudflare-workers first). Derives the component set from the spec,\ncopies and renames, wires build files — every change a reviewable\nworking-tree diff.\nUse when: \"scaffold the <slug> connector\", \"generate the connector\nmodules\", \"stand up the connector project\", \"scaffold a connector in\nmy repo\", \"start a connector from scratch\".\n(narrative-connector-dev)",
       "plugin": "narrative-connector-dev",
       "path": "plugins/narrative-connector-dev/skills/scaffold-connector/SKILL.md",

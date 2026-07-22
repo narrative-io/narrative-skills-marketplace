@@ -13,6 +13,7 @@ Generate a TypeScript Workers project at the path the user chooses:
 
 ```
 <slug>-connector/
+├── .gitignore                # seeded first; see Generation rules
 ├── wrangler.jsonc            # worker name "<slug>-connector"; bindings below
 ├── package.json              # "type": "module"
 ├── tsconfig.json             # types: ["./worker-configuration.d.ts"]
@@ -67,6 +68,27 @@ fill in.
 | [Secrets](https://developers.cloudflare.com/workers/configuration/secrets/) | The connector's own credentials: OAuth client id/secret, static API keys. Set via `wrangler secret`, never committed and never stored beside per-account tokens. | Always. Every `auth.model` gives the connector at least one credential of its own. |
 
 ## Generation rules
+
+### Git hygiene
+
+- Write `.gitignore` before any other file, so the tree is clean from
+  the first commit:
+
+  ```
+  node_modules/
+  dist/
+  .wrangler/
+  .dev.vars*
+  .env*
+  *.local
+  .DS_Store
+  ```
+
+- `worker-configuration.d.ts` is generated but committed (see
+  Compatibility and runtime types below); never add it to
+  `.gitignore`.
+- The connector's own credentials go through `wrangler secret`; local
+  values live in `.dev.vars`, which the seed above keeps out of git.
 
 ### Language and module system
 

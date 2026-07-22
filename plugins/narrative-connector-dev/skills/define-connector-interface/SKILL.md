@@ -22,7 +22,7 @@ compatibility: >-
   AskUserQuestion (prose fallback documented in the body).
   Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 1.1.0
+  version: 1.1.1
   narrative:
     args:
       - name: "<spec-path>"
@@ -281,7 +281,9 @@ never from each other's output.
   for the human, not something to quietly patch.
 - Leave every change as an uncommitted working-tree diff and show a
   summary of created and modified paths. Never overwrite an existing
-  file without showing the diff first.
+  file without showing the diff first. Alongside the summary, propose
+  the checkpoint commit message from
+  [`references/git-conventions.md`](references/git-conventions.md).
 - Propose spec write-backs for anything this run resolved: an answer
   the user supplied mid-run (a corrected `ref_kind`, a filled field),
   and any `open_questions` entries added (combination policy,
@@ -351,6 +353,8 @@ tools or generic Read / Bash / Write.
 - [`scripts/validate-interface.mjs`](scripts/validate-interface.mjs)
   — the Phase 5 validator; the reference's shapes as executable
   assertions.
+- [`references/git-conventions.md`](references/git-conventions.md)
+  — the checkpoint commit rhythm and what never lands in git.
 
 ## Scaffold manifest schema
 
