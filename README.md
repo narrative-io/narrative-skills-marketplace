@@ -183,7 +183,7 @@ Build Narrative data connectors agentically — a spec-driven skill set that car
 | `/add-measurement-ingestion` | "add measurement ingestion to the connector", "ingest the partner measurement feed", "wire up the object-storage inbox scan", "pull conversion feedback files". |
 | `/build-connector` | "build a connector for <platform> end to end", "run the whole connector build", "orchestrate the connector from spec to deploy", "take the connector from spec to prod". |
 | `/create-scaffold-manifest` | "create a scaffold manifest", "write connector-scaffold.yaml", "onboard my repo for connector scaffolding", "infer connector conventions from my repo", "teach the scaffolder our repo layout". |
-| `/define-connector-interface` | "define the connector interface", "generate the audience metaschema", "wire up the quick settings types", "build the collaboration policy for the connector". |
+| `/define-connector-interface` | "define the connector interface", "generate the audience metaschema", "wire up the quick settings types", "generate the connector's data contract", "build the record schema". |
 | `/deploy-connector` | "deploy the connector", "quick-publish and apply to dev", "promote the connector to prod", "ship the connector image". |
 | `/implement-delivery-executor` | "implement the delivery executor", "write the audience delivery path", "wire up the Arrow reader for the connector", "build the connector executor". |
 | `/implement-partner-client` | "implement the partner API client", "write the <platform> API client", "wire up the delivery endpoints", "handle the partner rate limits". |
