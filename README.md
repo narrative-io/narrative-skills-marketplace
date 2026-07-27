@@ -151,6 +151,7 @@ Common Narrative workflows backed by the narrative-mcp server — starting with 
 | `/find-attribute` | "find the X attribute", "what's the graph-edge attribute ID", "look up the email Rosetta Stone attribute", "search the attribute catalog for Y", "which attribute has SOURCE_ID + TARGET_ID + IS_DIRECTED". |
 | `/generate-rosetta-stone-mappings` | "map this dataset to Rosetta Stone", "suggest normalized attributes for dataset N", "evaluate the mappings on dataset N", "why is this mapping low confidence", "fix this expression", "improve this NQL mapping expression". |
 | `/profile-dataset` | "profile dataset N", "what does dataset N look like", "coverage and quality of <dataset>", "what id types does N emit", "null rates / cardinality for <dataset>", "is this dataset's stats fresh". |
+| `/right-size-compute-pool` | "which compute pool should I use", "what size compute pool do I need", "my job is too slow", "No space left on device", "job stuck in Pending", "right-size my compute pool", "do I need a bigger cluster". |
 | `/write-nql` | "write an NQL query for X", "query this dataset", "validate this NQL", "run NQL against dataset <id>", "how many rows match Y", "show me the top N records from <dataset>". |
 
 ### `narrative-identity`
