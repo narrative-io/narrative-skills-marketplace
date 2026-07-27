@@ -96,12 +96,71 @@ Three responses, in order of preference:
    fact. The chain cannot see per-job overrides, so the inference is
    wrong exactly when it matters.
 
+### `jobs_search(dataset_id=...)` misses read-from-source workloads
+
+`dataset_id` matches jobs whose `input` references that id. A
+`materialize-view` job's input carries the dataset it **writes** — so
+searching by the *source* dataset of a planned build returns nothing
+relevant, even when the company has a rich history of exactly the job
+shape you need.
+
+This bites precisely on one of the skill's own triggers: "I'm about to
+build a big MV — what should it run on?" The source id is structurally
+the wrong key there.
+
+Search `data_plane_id` plus `type` instead:
+
+```
+narrative_jobs_search(data_plane_id=<dpId>, type="materialize-view",
+  per_page=10)
+```
+
+Do not conclude "no history, uncalibrated" until **both** searches come
+back empty. Declaring the recommendation uncalibrated when the
+calibrating runs were one call away is the expensive version of this
+mistake.
+
 ### No job history at all
 
 A dataset that has never been built has no durations to calibrate
-against. Say the recommendation is uncalibrated, lean on the byte
-estimate and the interview, and make the escalation path prominent —
-one real run is worth more than any refinement of the guess.
+against — but confirm that with both searches above before you say it.
+Then say the recommendation is uncalibrated, lean on the byte estimate
+and the interview, and make the escalation path prominent — one real run
+is worth more than any refinement of the guess.
+
+---
+
+## Batch and hand-over
+
+### Cold start × job count ignored on a batch
+
+Sizing a fan-out the way you'd size one job is the most expensive mistake
+available here, because it charges real money for a change that recovers
+less than a free one would.
+
+Steps on a pool run FIFO at concurrency 1, so a batch of N jobs costs
+`N × per-job duration` plus one cold start per cluster boot. At ~6 minutes
+a boot, 100 jobs that each boot fresh burn ~10 hours in cluster startup —
+routinely more than the total compute, and more than any rung on the
+ladder can recover. Delete that first by submitting back-to-back and
+raising `idle_timeout_seconds` to cover gaps between waves; only then
+consider size.
+
+The inverse error also exists: because execution is serial, a wider pool
+genuinely can lower *total* cost on a batch (cost is rate × time). Don't
+reflexively refuse a size step on a batch in the name of thrift — do the
+arithmetic.
+
+### Recommending a create without checking `manage_compute_pools`
+
+Creating or editing a pool needs the `manage_compute_pools` permission on
+the data plane collaborator. A user without it can see the pool list and
+will hit a wall at the save button.
+
+Say up front that applying the change may need whoever administers the
+account. Pool creation may additionally be gated on the company's credit
+limit — a refusal there is a billing decision, not a sizing error, so do
+not respond by recommending a smaller size.
 
 ---
 

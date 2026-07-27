@@ -587,8 +587,8 @@
     },
     {
       "name": "right-size-compute-pool",
-      "version": "0.1.0",
-      "description": "Recommend a compute pool for a Narrative workload: the shared\nalways-on pool or a private one, and if private, which size and\nwhether to use a `_storage` variant. Reads the target dataset's size,\nrefresh cadence, and job history, asks what the data can't tell it\n(deadline, cadence, errors), then names a pool, the config level to\nset it at, and the assumptions behind it. Advises only — never creates\nor resizes a pool.\nUse when: \"which compute pool should I use\", \"what size compute pool\ndo I need\", \"my job is too slow\", \"No space left on device\", \"job\nstuck in Pending\", \"right-size my compute pool\", \"do I need a bigger\ncluster\".\n(narrative-common)",
+      "version": "0.3.0",
+      "description": "Recommend a compute pool for a Narrative workload: the shared\nalways-on pool or a private one, and if private, which size and\nwhether to use a `_storage` variant. Reads the target dataset's size,\nrefresh cadence, and job history, asks what the data can't tell it\n(deadline, cadence, errors), then names a pool, the settings to create\nit with, and the assumptions behind it. Advises only — never creates\nor resizes a pool.\nUse when: \"which compute pool should I use\", \"what size compute pool\ndo I need\", \"my job is too slow\", \"No space left on device\", \"job\nstuck in Pending\", \"right-size my compute pool\", \"do I need a bigger\ncluster\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/right-size-compute-pool/SKILL.md",
       "compatibility": "Requires the narrative-mcp MCP server (no MCP → cannot inspect data planes, pools, or datasets). Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md) and the narrative-knowledge-base MCP server for published compute-pool docs. Advice-only — makes no mutating calls. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
@@ -628,29 +628,29 @@
           "name": "--dataset",
           "value": "<id>",
           "required": false,
-          "description": "The dataset or materialized view the workload runs against, by numeric id. The skill reads its stats, view definition, refresh schedule, and data plane from this."
+          "description": "The dataset or MV the workload runs against, by numeric id. Source of stats, view definition, refresh schedule, and data plane."
         },
         {
           "name": "--job",
           "value": "<id>",
           "required": false,
-          "description": "A job id that was too slow or failed. The skill derives its duration and input flags, and resolves the dataset from it."
+          "description": "A job id that was too slow or failed. Source of duration and input flags; resolves the dataset."
         },
         {
           "name": "--pool",
           "value": "<id>",
           "required": false,
-          "description": "Evaluate a specific existing pool as the candidate rather than searching the plane's pools. Use when the user already has a pool in mind."
+          "description": "Evaluate a specific existing pool as the incumbent rather than searching the plane's pools."
         },
         {
           "name": "--quick",
           "required": false,
-          "description": "Skip the interview. Recommend from MCP evidence alone, with every unfilled gap stated as an explicit assumption. For automation or when the user says \"just tell me\"."
+          "description": "Skip the interview. Recommend from MCP evidence alone, with every unfilled gap stated as an explicit assumption."
         },
         {
           "name": "<free-text tail>",
           "required": false,
-          "description": "The workload in the user's words — deadline, cadence, the verbatim error, or \"cheapest that works\". Steers the shared-vs-private call and the size adjustments."
+          "description": "The workload in the user's words — deadline, cadence, verbatim error, or cost posture. Steers shared-vs-private and the size adjustments."
         }
       ]
     },

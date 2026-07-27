@@ -184,6 +184,14 @@ The shared always-on pool runs with a **1-hour**
 and invisible through MCP. It is the main reason to rule the shared pool
 out.
 
+**`idle_timeout_seconds` is also the throughput lever for batch
+submission.** Its cost framing above assumes one job; for a fan-out, the
+timeout decides whether job N+1 reuses a booted cluster or pays cold
+start again. Keeping a cluster alive between waves of a batch is usually
+far cheaper than re-booting per job — at ~6 minutes a boot, 100 jobs is
+~10 hours of cluster time that a raised timeout simply deletes. This is
+the one context where a high idle timeout is the economical choice.
+
 ---
 
 ## 6. The in-flight cluster cap

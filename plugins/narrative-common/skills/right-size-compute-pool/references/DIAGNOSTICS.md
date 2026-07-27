@@ -1,6 +1,6 @@
 # Diagnosing what a job actually needs
 
-Read this in Phase 4 when interpreting job history, and in Phase 7 when
+Read this in Phase 4 when interpreting job history, and in Phase 8 when
 mapping a reported symptom to a fix. The core idea: **the symptom tells
 you which resource is binding**, and only one of the three possible
 answers is "a bigger pool."
