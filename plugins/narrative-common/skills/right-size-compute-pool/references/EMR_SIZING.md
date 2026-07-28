@@ -138,6 +138,26 @@ Each rung doubles at the ceiling. Three wrinkles worth surfacing:
 
 ---
 
+## 3b. Starting bands
+
+Where sizing **starts**, against the byte figure chosen in the skill's
+evidence phase. These are a floor, not an answer — the headroom rule and
+the overspend guardrail in the skill turn a band into a recommendation.
+
+| Input (compressed) | Floor |
+| --- | --- |
+| < 1 GB | Shared always-on, if the job is genuinely seconds-to-minutes |
+| 1–10 GB | `x_small` private |
+| 10–100 GB | `large` — the first real step up |
+| 100–500 GB | `x_large` – `2x_large` |
+| 500 GB – 2 TB | `2x_large` – `4x_large` |
+| > 2 TB, or very wide rows | `4x_large` – `6x_large` |
+
+The bands are calibration parameters, not measurements. One real run at a
+known size is worth more than any refinement of them.
+
+---
+
 ## 4. `_storage` variants
 
 Every size has a sibling: `x_small_storage` through `6x_large_storage`.
@@ -152,9 +172,20 @@ refreshes over very wide datasets.
 
 **Why it exists:** sizing was in practice being driven by disk rather
 than memory, with pools being stepped up a full size purely to get more
-scratch space. The `_storage` variants make that a ~25% sideways move
-instead of a 100% vertical one. Reach for them first on any disk
-symptom.
+scratch space.
+
+**Why to reach for it first on a disk symptom:** it targets the failure
+you actually observed. Running out of scratch space is fixed by giving
+the job local NVMe, and the storage variant does that while holding
+memory, node count, and every other characteristic of the job's profile
+constant — so the next run differs from the failed one in exactly the
+dimension that failed. A size step changes several things at once and
+only incidentally relieves disk.
+
+It is also the cheaper move — roughly a 25% premium against 100% for a
+size step. Treat that as the secondary argument: the figure comes from
+on-demand list prices, not measurement, since real rates come from a bid
+provider at runtime. The failure-mode match is the primary reason.
 
 The variant is encoded in the size enum itself, not a separate flag — so
 switching to `_storage` is a size change, and §5's replacement caveat
