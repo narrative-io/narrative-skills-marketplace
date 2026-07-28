@@ -22,7 +22,7 @@ compatibility: >-
   Advice-only — makes no mutating calls. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.4.1
+  version: 0.4.2
   narrative:
     args:
       - name: "--dataset"
@@ -340,8 +340,8 @@ cluster, so it never waits for a slot against the in-flight cluster cap.
 
 ### 7. Decide: one job or many — mandatory
 
-Settle the job count before sizing. **Steps on a pool run FIFO at
-concurrency 1** — one job at a time, no overlap — so a batch costs
+Settle the job count before sizing. **A pool runs one job at a time, in
+submission order** — queued jobs wait, they don't overlap — so a batch costs
 `job count × per-job duration + cold start per cluster boot`.
 
 Cold start is the part you can delete for free. At ~6 minutes a boot, 100

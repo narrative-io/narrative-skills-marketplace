@@ -138,8 +138,8 @@ Sizing a fan-out the way you'd size one job is the most expensive mistake
 available here, because it charges real money for a change that recovers
 less than a free one would.
 
-Steps on a pool run FIFO at concurrency 1, so a batch of N jobs costs
-`N × per-job duration` plus one cold start per cluster boot. At ~6 minutes
+A pool runs one job at a time in submission order, so a batch of N jobs
+costs `N × per-job duration` plus one cold start per cluster boot. At ~6 minutes
 a boot, 100 jobs that each boot fresh burn ~10 hours in cluster startup —
 routinely more than the total compute, and more than any rung on the
 ladder can recover. Delete that first by submitting back-to-back and
