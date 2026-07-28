@@ -22,7 +22,7 @@ compatibility: >-
   Advice-only — makes no mutating calls. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.4.0
+  version: 0.4.1
   narrative:
     args:
       - name: "--dataset"
@@ -372,10 +372,8 @@ That band is the **floor, not the answer**. Then apply, in this order:
 
 1. **Never recommend `small` or `medium` as a step up from `x_small`.** All
    three provision the same 64 GiB of worker memory and the same executor
-   capacity, so the step is a no-op at the same cost — `large` is the first
-   genuine increase. Highest-value rule here. **Tied to current fleet
-   composition** (verified against `ComputePoolHardware.scala`); sc-59367 is
-   open work to give `x_small` a real rung below `medium`, so re-verify.
+   capacity, so the step is a no-op at the same cost. `large` is the first
+   genuine increase. Highest-value rule here.
 2. **On any history of `No space left on device`, go sideways to `_storage`
    before up a size.** Same memory, same node count, local NVMe instead of
    EBS — it removes the failure you actually hit without changing anything

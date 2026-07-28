@@ -78,17 +78,10 @@ This is the single highest-value rule in this reference. A naive reading
 of the provisioned-memory column in §1 produces exactly the wrong
 conclusion, because it counts the driver's node as usable capacity.
 
-Two caveats on scope:
-
-- The same one-node reservation applies to the managed-scaling tiers, so
-  `x_large` is nearer ~224 GiB of executor memory than 256 GiB. But the
-  measured analysis was specific to the fixed tiers — treat the
-  scaling-tier figure as **estimated** and don't over-claim it.
-- If `maximizeResourceAllocation` is ever set to `false`, `x_small`
-  becomes genuinely one node and the ladder gains a real bottom rung.
-  If a user reports `x_small` behaving differently from `medium`,
-  believe them over this table and say the configuration may have
-  changed.
+One caveat on scope: the same one-node reservation applies to the
+managed-scaling tiers, so `x_large` is nearer ~224 GiB of executor memory
+than 256 GiB. The measured analysis was specific to the fixed tiers, so
+treat the scaling-tier figure as **estimated** and don't over-claim it.
 
 ### A related failure mode
 

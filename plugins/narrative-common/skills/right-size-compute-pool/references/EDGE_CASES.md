@@ -195,9 +195,8 @@ always reserved for the Spark driver. The step is a no-op at the same
 cost. `large` is the first genuine increase. See
 [`EMR_SIZING.md`](EMR_SIZING.md) §2.
 
-Corollary: if a user reports that `x_small` and `medium` behave
-*differently* for them, believe them over the table and note that the
-allocator configuration may have changed.
+Treat this as settled. It is not a guess to hedge or re-derive — if a
+recommendation lands on `small` or `medium`, the recommendation is wrong.
 
 ### A resize silently resets timeouts
 
