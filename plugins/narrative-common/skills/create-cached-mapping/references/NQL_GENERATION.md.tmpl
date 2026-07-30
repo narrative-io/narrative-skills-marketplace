@@ -1,0 +1,104 @@
+# Generating the waterfall NQL
+
+The mechanics of turning the phase-4 configuration into a validated
+query: prompt construction, enum validation arms, view naming, and the
+two-pass validation the cache's late arrival forces.
+
+Read this in phase 5, alongside
+[`../assets/templates/waterfall-skeleton.sql`](../assets/templates/waterfall-skeleton.sql)
+(what to substitute into) and [`WATERFALL_NQL.md`](WATERFALL_NQL.md)
+(why each CTE exists, and the per-combination diffs).
+
+## Building the prompt
+
+The prompt is a **column** produced in `llm_in`, never an inline
+expression — `AI_COMPLETE` rejects the latter outright. Build it with
+`CONCAT('<static instruction>', t.input_0)` and put everything static in
+the literal.
+
+The instruction needs five things, in this order:
+
+1. What the value is and what to turn it into ("normalize a free-text
+   dog breed entry to a fixed canonical vocabulary").
+2. **Every enum value, verbatim** — exact casing, accents, parentheses.
+   This is the single highest-leverage part of the prompt: a model shown
+   the vocabulary answers in it, and an answer outside it becomes the
+   fallback.
+3. "Return EXACTLY one value from this list, copied
+   character-for-character, and NOTHING else."
+4. When to use the special members — the catch-all and the
+   unidentifiable case, named explicitly.
+5. The label the key is concatenated onto, ending in a trailing space:
+   `... Entry: `.
+
+Pass `'{"temperature":0}'` as the model parameters. Determinism matters
+more than variety here: the same messy key should resolve the same way
+across refreshes, or the cache becomes a record of which day a value
+happened to be seen.
+
+A long enum makes a long literal. That is fine — the cost is paid per
+call regardless, and truncating the list to save prompt tokens trades a
+known small cost for silent misclassification.
+
+## Generating the enum validation arms
+
+One `CASE` arm per allowed value, matching on `UPPER(TRIM(llm.llm_raw))`
+and returning the value verbatim:
+
+```sql
+WHEN UPPER(TRIM(llm.llm_raw)) = 'MIXED BREED' THEN 'Mixed Breed'
+```
+
+Generate the arms from **the attribute's enum**. Not from a classifier's
+class lookup — that omits any enum member the model wasn't trained on,
+which is how a correct "Mixed Breed" was silently coerced to "Unknown"
+in the original demo. The lookup dataset's only job is translating the
+classifier's numeric class index into a name.
+
+`UPPER(TRIM(...))` absorbs the two variations models actually produce:
+surrounding whitespace and inconsistent casing. It will not absorb
+"Standard Poodle" for "Poodle", and it shouldn't — see the near-miss
+note in [`WATERFALL_NQL.md`](WATERFALL_NQL.md).
+
+The final arm before `ELSE NULL` is the fallback: any row that reached
+the LLM and matched no enum value. Keep `ELSE NULL` distinct from it —
+NULL means "no tier answered this key" (cut by the row cap), while the
+fallback means "the LLM answered and the answer was unusable." Collapsing
+them loses the ability to tell an unfilled cache from a failing prompt.
+
+## Naming the resolved view
+
+{{SNIPPET:mv-display-name-and-description}}
+
+For a resolved view specifically, the description should name the source
+dataset, the tiers in play with their thresholds, and the fact that
+already-cached keys are excluded — that last clause is what tells a
+future reader why the view's row count is smaller than the source's
+distinct count.
+
+## Validating in two passes
+
+The cache does not exist until the mapping is created in phase 7, but the
+`keys` anti-join references it by name. That splits validation:
+
+| Pass | When | What is validated |
+|---|---|---|
+| 1 | Phase 5 | The whole query **with the `keys` anti-join omitted** — every tier, the prompt column, the `QUALIFY` cap, the enum arms. |
+| 2 | Phase 7 | The complete query, anti-join included, against the real cache name. |
+
+Pass 1 covers where mistakes actually live. Pass 2 exists because the
+anti-join is the one clause the two versions differ by, and it touches a
+dataset that did not exist when pass 1 ran. Do not skip it.
+
+This skill **generates** its NQL rather than macro-substituting an
+external artifact, so the auto-fix path applies: read the error, correct
+the query, re-validate.
+
+{{SNIPPET:validate-nql}}
+
+## Do not run the query to check it
+
+`narrative_nql_validate` compiles without executing. `narrative_nql_run`
+executes — and for this query, executing means paying for classifier and
+LLM calls across the whole fall-through set. Never substitute one for the
+other, and never "just try it" to see whether it works.
