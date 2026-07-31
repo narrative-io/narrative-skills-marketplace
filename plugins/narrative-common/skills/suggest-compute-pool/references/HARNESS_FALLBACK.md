@@ -11,24 +11,27 @@ than measured ones, say so in the output.
 This skill cannot inspect data planes, compute pools, datasets, or job
 history without the server. Everything in Phases 1–4 is unreachable, and
 that includes the two facts the recommendation depends on most: the
-provider type and the dataset's byte counts. Say so explicitly before
-offering anything.
+provider type and how many rows the job processes. Say so explicitly
+before offering anything.
 
 The degraded mode is interview-only:
 
 - Ask which provider the data plane uses (AWS or Snowflake). Without it
   you cannot pick a branch, and the two share no sizing logic — if the
   user doesn't know, stop rather than guessing.
-- Ask for the dataset's approximate compressed size, whether the job is
-  a full build or an incremental refresh, the cadence, the deadline, and
-  the verbatim error if it is failing.
+- **Ask for the query, or a description of it.** Without MCP this is the
+  richest single thing you can get: it names the datasets and access
+  rules involved, the joins, and the group keys, all in one answer.
+- Ask for the approximate **row count** of each source, whether the job
+  is a full build or an incremental refresh, the cadence, the deadline,
+  and how long anything similar took before.
 - Ask which pools already exist on the plane, by id and size. You cannot
   enumerate them, so a recommendation to "use the shared always-on pool"
   is unverifiable — describe it by its properties (`always_on`,
   `idle_timeout_seconds: -1`) and let the user confirm it exists.
-- Apply the ladder in [`EMR_SIZING.md`](EMR_SIZING.md) normally. It is
-  self-contained and needs no MCP.
-- Label the whole recommendation **unverified**: no byte count was read,
+- Apply the bands in [`POOL_SIZES.md`](POOL_SIZES.md) §3b normally. They
+  are self-contained and need no MCP.
+- Label the whole recommendation **unverified**: no row count was read,
   no pool list was enumerated, no job duration was measured. State every
   input as "you told me" rather than "I measured."
 
@@ -40,7 +43,7 @@ the plane themselves.
 
 Only the published-docs cross-check is lost. The size ladder, cost
 multipliers, timeout semantics, and resolution chain in
-[`EMR_SIZING.md`](EMR_SIZING.md) are self-contained, so the
+[`POOL_SIZES.md`](POOL_SIZES.md) are self-contained, so the
 recommendation is unaffected. Skip the cross-check silently — this one
 does not need to be surfaced to the user.
 

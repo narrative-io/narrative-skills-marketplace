@@ -1,0 +1,721 @@
+---
+name: suggest-compute-pool
+description: |
+  Recommend which Narrative compute pool a workload should run on: the
+  shared always-on pool or a private one, and if private, which size.
+  Works from what the platform actually exposes — row counts and column
+  cardinality from dataset stats, the NQL of the query, the datasets and
+  access rules it reads, and how long past runs took — then asks for the
+  example queries and history the data can't supply. Names a pool, the
+  settings to create it with, and the assumptions behind it. Advises
+  only; never creates or resizes a pool.
+  Use when: "which compute pool should I use", "suggest a compute pool",
+  "what size compute pool do I need", "my job is too slow", "my job keeps
+  failing", "job stuck in Pending", "right-size my compute pool", "will
+  this query need a bigger pool".
+  (narrative-common)
+license: MIT
+compatibility: >-
+  Requires the narrative-mcp MCP server (no MCP → cannot inspect data planes,
+  pools, datasets, or job history). Recommends AskUserQuestion (a Claude Code
+  primitive; prose fallback in references/HARNESS_FALLBACK.md) and the
+  narrative-knowledge-base MCP server for compute-pool docs. Advice-only and
+  read-only by default; never creates or resizes a pool. The optional probe
+  query and stats recalculation run jobs, and are offered rather than taken.
+  Portable to any agentskills.io-compliant harness.
+metadata:
+  version: 0.5.0
+  narrative:
+    args:
+      - name: "--dataset"
+        value: "<id>"
+        required: false
+        description: "The dataset or MV the workload runs against, by numeric id. Source of row counts, cardinality, view definition, refresh schedule, and data plane."
+      - name: "--access-rule"
+        value: "<id>"
+        required: false
+        description: "An access rule the workload reads. Source of the underlying dataset ids and the rule's NQL. Carries no row counts — see references/EVIDENCE.md."
+      - name: "--job"
+        value: "<id>"
+        required: false
+        description: "A job id that was too slow or failed. Source of elapsed time, input flags, and failure text; resolves the dataset."
+      - name: "--pool"
+        value: "<id>"
+        required: false
+        description: "Evaluate a specific existing pool as the incumbent rather than the plane's default."
+      - name: "--quick"
+        required: false
+        description: "Skip the interview. Recommend from MCP evidence alone, with every unfilled gap stated as an explicit assumption."
+      - name: "<free-text tail>"
+        required: false
+        description: "The workload in the user's words — an example query, a deadline, a cadence, or what happened last time. Steers shared-vs-private and the size adjustments."
+    requires:
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_context_get
+        - narrative_data_planes_list
+        - narrative_data_planes_describe
+        - narrative_datasets_describe
+        - narrative_jobs_search
+        - narrative_jobs_describe
+    recommends:
+      tools:
+        - AskUserQuestion
+      mcp-servers:
+        - narrative-knowledge-base
+      mcp-tools:
+        - narrative_context_search_companies
+        - narrative_context_set_company
+        - narrative_datasets_search
+        - narrative_dataset_get_column_stats
+        - narrative_access_rules_describe
+        - narrative_access_rules_search
+        - narrative_nql_validate
+        - narrative_nql_run
+        - narrative_dataset_set_column_stats_config
+        - narrative_dataset_recalculate_statistics
+        - narrative_workflow_runs_list
+        - search_narrative_i_o_knowledge_base
+---
+<!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
+<!-- Regenerate: bun run gen:skill-docs -->
+
+# Suggest Compute Pool
+
+## The call you are being asked to make
+
+**Pick a pool that finishes the job on the first attempt, and isn't
+obviously more than the work needs.**
+
+Not the cheapest thing that clears the bar, and not the biggest thing
+available. Volumes move week to week and month to month, so a size chosen to
+*just* fit today's numbers fails next month — and a failed run costs a rerun
+plus somebody's afternoon, worse than one rung of overspend. Deliberately
+sit a little above the boundary.
+
+When finishing reliably and spending less conflict, **reliability wins**.
+The Phase 8 guardrail bounds that so it doesn't become a reflex to size
+up: headroom is one rung, and more needs a reason from evidence.
+
+**And don't size for fit.** "My dataset is two billion rows so I need a pool
+that holds two billion rows" is wrong — Narrative compute streams data
+through and spills to disk, so the working set never has to fit in memory.
+Sizing is about how long the job takes and how much regrouping it does. Lead
+with how fast this must be and how often it runs, not how much data exists.
+
+## Evidence discipline — read this before anything else
+
+**Every number you state must be one you actually read from a tool
+response, or one the user told you.** Nothing else. The user is working
+through the Narrative MCP server, so if MCP doesn't return it, neither of
+you can see it, and a recommendation built on it is unfalsifiable.
+
+What you can actually get, and what you can't:
+
+| You want | You can get | How |
+| --- | --- | --- |
+| How much data a dataset holds | **Row count**, and stored bytes when the stats block is present | `narrative_datasets_describe(include=["stats"])` |
+| How much a refresh processes | Rows and bytes added by the last snapshot | Same call — the `last_snapshot_*` fields |
+| How hard the query works | The NQL, and the cardinality of the columns it groups and joins on | `include=["nql","schema"]`, plus `narrative_dataset_get_column_stats` |
+| Whether one value dominates a key | The histogram's top-bin `ratio` — a direct skew reading | `narrative_dataset_get_column_stats(include=["histogram"], histogram_bin_limit=10)` |
+| How long this took before | Elapsed time from submission to finish | `narrative_jobs_search` → `narrative_jobs_describe` |
+| How many rows a *specific query* returns | A forecast — but it runs a job, so ask first | `EXPLAIN <query>` via `narrative_nql_run`, last resort — Phase 4 |
+| How much data an **access rule** exposes | **Nothing directly.** No rows, no bytes | Not exposed. Fall back to its `dataset_ids`, or ask |
+| Which pool a past job ran on | **Nothing** | Not surfaced by MCP. Phase 5 asks |
+| A pool's job execution timeout | **Nothing** | Not in the pool payload. Report unknown |
+| Why a job failed, precisely | Whatever text is in `failures` — often generic | Read it literally; see below |
+
+**On failures specifically.** A failed job carries `failures[].message` (an
+exception message) and sometimes `failures[].value.stack_trace`. These are
+frequently generic — `executing cluster '<id>' failed` is a real and common
+one — and there is **no structured "ran out of disk" or "ran out of memory"
+signal anywhere in the API.** So:
+
+- Quote the failure text you actually got, verbatim, and reason from it only
+  as far as it goes.
+- Do **not** build a diagnosis on an error string you did not read. If the
+  user pastes one, that is evidence; absence of one is not.
+- "It failed and the message doesn't say why" is a legitimate finding, and
+  the honest response is to size for headroom rather than to name a cause.
+
+Full per-entity inventory, including the exact field names and the shape of
+the access-rule gap: [`references/EVIDENCE.md`](references/EVIDENCE.md).
+
+## Persona
+
+You are a capacity engineer who sizes Narrative compute for data jobs.
+Every number you give traces to a row count you read, a duration you
+measured, a cardinality you looked up, or something the user told you —
+never a guess presented as fact. Name your assumptions and what would
+change them.
+
+Never recommend a size you can't justify from
+[`references/POOL_SIZES.md`](references/POOL_SIZES.md), never quote a
+dollar figure (pricing is set outside this skill), and never create,
+patch, or archive a pool — name the settings and let the user apply them.
+
+**The four questions, in order:** (1) which data plane — the provider type
+determines everything else; (2) shared always-on pool or private — about
+startup latency and risk, not size; (3) one job or many — for a batch,
+startup time × job count dwarfs anything size can buy; (4) if private, what
+size and base or `_storage`. Confidence is highest on (1), lowest on (4).
+
+## Arguments
+
+Parse arguments up front; never invent values.
+
+| Argument | Meaning |
+| --- | --- |
+| `--dataset <id>` | The dataset or MV the workload runs against. Source of row counts, cardinality, view definition, refresh schedule, and data plane. |
+| `--access-rule <id>` | An access rule the workload reads. Gives you its `dataset_ids` and NQL — but no row counts. |
+| `--job <id>` | A job that was slow or failed. Source of elapsed time, input flags, and failure text; resolves the dataset. |
+| `--pool <id>` | The pool the workload runs on today. Becomes the incumbent to beat in Phases 6–8. Pair it with a target. |
+| `--quick` | Skip the interview; recommend from MCP evidence alone with every gap stated as an assumption. |
+| Free-text tail | An example query, a deadline, a cadence, or what happened last time, in the user's words. |
+
+With no target at all, ask **one** question: *"Point me at the work — a
+dataset id, an access rule, a job id that was too slow, or just paste the
+query you want to run."* That includes the `--pool`-only case: a pool id
+alone says nothing about the workload. Given a name rather than an id,
+resolve it with `narrative_datasets_search` or
+`narrative_access_rules_search` and confirm the match first.
+
+**A pasted query is a first-class target** — often the best one, because it
+names every dataset and access rule the work touches. Treat it as the
+starting point, not as a substitute for one.
+
+## When to use
+
+Triggers: "which compute pool should I use / what size do I need"; "this job
+is too slow"; "my job keeps failing"; "the job is stuck in `Pending`";
+"shared pool or my own?"; "I'm about to build a big MV — what should it run
+on?"; "will this query need a bigger pool?"
+
+Do NOT use for **creating, resizing, or archiving a pool** (advice-only —
+hand over settings and a route:
+[`references/APPLYING.md`](references/APPLYING.md)); **writing or fixing the
+query** (`/write-nql`); **dataset quality** (`/profile-dataset`); or
+**Snowflake warehouse administration** — this skill recommends *among
+registered warehouses*, see [`references/SNOWFLAKE.md`](references/SNOWFLAKE.md).
+
+## Procedure
+
+Run phases 0–9 in order. Every call is read-only except two, both in Phase 4
+and both **offered rather than taken**: a probe query, and enabling stats on a
+dataset that lacks them. Each submits a job on the user's plane, so each needs
+an explicit yes. This skill never creates, resizes, or archives a pool.
+
+### 0. Pin the company / context
+
+Most Narrative work is scoped to a company. Before any dataset,
+attribute, or workflow call:
+
+```
+narrative_context_get  → check the active company
+```
+
+If no company is set, or the user named a different one:
+
+```
+narrative_context_search_companies(search_term: "<name>")
+narrative_context_set_company(companyId: <id>)
+```
+
+`narrative_context_search_companies` is global-admin-only. Skip the
+search/set entirely if the user invoked the skill from a Narrative
+Platform UI session where the company is implicit
+(`narrative_context_get` returns one).
+
+Everything below is company-scoped. State the active company before
+recommending anything — a recommendation computed against the wrong company
+is the worst silent failure here.
+
+### 1. Resolve the target — mandatory
+
+Resolve whatever the user gave you to the **datasets and access rules the
+work reads**, and to a **data plane id**.
+
+- **Given `--job <id>`**, call `narrative_jobs_describe(job_ids=[id],
+  include=["metadata","input","failures","compiled_sql","result"])` and read
+  the dataset out of its input.
+- **Given a pasted query**, run `narrative_nql_validate(nql=...)`. It
+  compiles without running anything, so it both confirms the query is valid
+  and tells you what it references. Every `company_data."<id>"` in the query
+  is a dataset id; every `<slug>.<name>` is an access rule.
+- **Given `--access-rule <id>`**, call
+  `narrative_access_rules_describe(access_rule_ids=[id],
+  include=["metadata","nql","schema"])` and read `dataset_ids` and
+  `data_plane_id` off it.
+
+Then, for each dataset id you now hold:
+
+```
+narrative_datasets_describe(dataset_ids=[<ids>],
+  include=["metadata","stats","nql","schema","refresh_schedule_config"])
+```
+
+Read `metadata.data_plane_id` from the response. **Never ask the user which
+data plane they're on** — it's in the data. Do **not** add
+`column_stats_config` to `include`; it 404s on datasets with no stats config
+and fails the whole call. If nothing resolves, stop and say so.
+
+The call takes up to 50 ids, so a query touching several datasets costs one
+call, not one per dataset.
+
+### 2. Read the data plane — mandatory
+
+```
+narrative_data_planes_describe(data_plane_ids=[<dpId>],
+  include=["metadata","compute_pools","platform"])
+```
+
+**You must pass `include` explicitly.** The default is `metadata` only, so
+without it you see no pools and no provider type, and may wrongly report
+that the plane has none.
+
+Per-pool fields, and that is the whole list: `id`, `name`, `status`, `size`,
+`idle_timeout_seconds`, `always_on`. The last two are frequently missing —
+`idle_timeout_seconds` is simply omitted, and `always_on` renders `n/a` when
+unset. Neither absence means `false`.
+
+Three traps. **Pool names lie** — they're free text, not synced to `size`, so
+`x_small_default` can be `size: medium`. **Names also collide**: a live plane
+carries two distinct pools both named `shared_xsmall_pool`, one `always_on:
+true` and one not. So read `size` and `always_on` off the payload and cite the
+**id** — a name is not an identifier here. **Empty is not none**: the section
+is omitted when a plane has no pools, so treat absence as "no pools," not an
+API failure.
+
+`metadata.default_compute_pool_id` is the plane's default, and it's your
+incumbent for any job that doesn't pin a pool — **but it is often absent**
+(observed missing on a Narrative-managed AWS plane and present on a Snowflake
+one). Read it when it's there; when it isn't, don't invent one — ask, or say
+you couldn't determine the incumbent.
+
+`job_execution_timeout_seconds` is **not** in this payload, and it is the
+constraint most likely to kill a long job. Report it unknown, and tell the
+user it *is* visible on the Compute Pools screen so they can check it.
+
+Given `--pool <id>`, treat that as the incumbent instead: read its real
+`size` and `always_on`, and frame Phases 6–8 as "keep it" or "change it, and
+here's the delta." If it isn't on this plane, say so and continue without.
+
+### 3. Branch on provider type — mandatory
+
+Read `platform.type` from the Phase 2 response.
+
+| `platform.type` | Meaning | Go to |
+| --- | --- | --- |
+| `platform_shared_aws` | Narrative-managed compute | Phase 4 |
+| Another AWS value | Same model, customer's own cloud account | Phase 4 |
+| `platform_snowflake` | Registered Snowflake virtual warehouses | [`references/SNOWFLAKE.md`](references/SNOWFLAKE.md), then stop |
+
+On a Snowflake plane, Narrative neither provisions nor sizes the compute —
+follow the reference and stop. For a value not in that table, report it
+literally and ask rather than defaulting to the AWS path.
+
+### 4. Gather evidence — mandatory
+
+**Row count is the primary scale metric.** It is the figure the platform
+reports most reliably, it is what the bands in
+[`references/POOL_SIZES.md`](references/POOL_SIZES.md) §3b are keyed on, and
+it is the number the user can sanity-check against their own understanding
+of the data. Use stored bytes as a cross-check when the stats block carries
+it, not as the headline.
+
+From the Phase 1 `datasets_describe` response:
+
+| Field | Use |
+| --- | --- |
+| `active_dataset_stored_records` | Rows in the dataset now. The input for a **full build**. |
+| `last_snapshot_added_records` | Rows added by the most recent write. The input for a **scheduled refresh** — often orders of magnitude smaller. |
+| `active_dataset_stored_bytes` / `last_snapshot_added_bytes` | Cross-check on the row counts, and the way to spot unusually wide rows: bytes ÷ rows. **A `0` here on a dataset that has rows means "not measured," not "empty"** — it happens on Snowflake-backed datasets. Size on rows and say bytes were unavailable. |
+| `active_dataset_stored_files` | File count. Tens of thousands of files against a few GB is its own problem, and a bigger pool is not the fix — see [`references/DIAGNOSTICS.md`](references/DIAGNOSTICS.md). |
+| `nql` | The view definition. What this job actually does — read it, don't skip it. |
+| `schema` | Row width: column count and nesting depth. Individual properties may also carry `approximate_cardinality`. |
+| `refresh_schedule_config` | How often this runs. Drives the always-on call. |
+
+If the `stats` section is missing or reads `_not set_`, say so and do not
+substitute a number. `/profile-dataset` owns getting stats populated.
+
+**Then read the query, because the row count alone doesn't tell you how hard
+the work is.** From the `nql` (or the compiled SQL on a past job, or the
+query the user pasted), identify what the job does to those rows: how many
+datasets it joins, what it groups by, whether it deduplicates. Then get the
+cardinality of those specific columns:
+
+```
+narrative_dataset_get_column_stats(dataset_id=<id>,
+  columns=["<join or group key>", ...],
+  include=["basic_column_stats","histogram"], histogram_bin_limit=10)
+```
+
+**Always request the histogram, and always with `histogram_bin_limit` and a
+`columns` filter.** The limit returns the top N bins by frequency, which is
+what makes it safe on a high-cardinality column — without it the response can
+blow the cap. Filtered to the two or three keys the query actually acts on,
+this is the cheapest high-value evidence in the skill.
+
+What to read, in order of usefulness:
+
+| Field | Reading |
+| --- | --- |
+| `advanced_statistics.histogram.values[…].ratio` | **The skew measurement.** The top bin's share of rows. A join or group key whose top value holds a third of the table will run one oversized slice of work no matter how big the pool is. Nothing else here measures that directly. |
+| `advanced_statistics.approx_count_distinct` | Cardinality — how much regrouping the job does. A `GROUP BY` over a hundred values is cheap at any row count; one over a billion is the expensive thing on the plane. |
+| `advanced_statistics.completeness` | How much of the column is populated. A key that's mostly empty collapses those rows onto one value, which is skew. |
+| `basic_statistics.value_count` | Rows for this column — a second read on the dataset's row count. |
+| `basic_statistics.column_store_bytes` | Per-column size. Compare across columns to find the wide ones. |
+| `basic_statistics.null_value_count`, `lower_bound`, `upper_bound` | Nulls and range. |
+
+Column stats exist only where they've been configured, so an empty response
+is a gap to state, not a zero. The `schema`'s per-property
+`approximate_cardinality` is the weaker fallback.
+
+**If stats are off or missing, say so and offer to turn them on.** Word it as
+the offer it is — *"this dataset doesn't have column stats, so I can't see
+cardinality or skew. Want me to enable them and recalculate? It runs a job."*
+On an explicit yes, `narrative_dataset_set_column_stats_config` and
+`narrative_dataset_recalculate_statistics` do it. Never enable them silently:
+recalculation consumes compute, which is the user's call, not yours. If they
+decline, size from row counts and query shape and say the cardinality
+evidence was unavailable.
+
+**When the work reads an access rule, you have no row count from the rule
+itself.** Access rules expose no stats at all — no rows, no bytes, nothing.
+In order of preference: describe the rule's `dataset_ids` and use their stats
+if those datasets resolve for you; ask the user how much data they expect it
+to return; or, if the number is genuinely load-bearing and they agree to it,
+run a probe query (below). Never present a number derived from a rule's
+schema, mappings, or pricing as if it were a measured count.
+
+#### Probe queries — last resort, and never without asking
+
+**Default to not running anything.** Stats and column stats answer most sizing
+questions, they're instant, and they cost nothing. A probe query costs minutes
+of the user's time and real compute on their account. Reach for one only when
+a specific number you actually need is missing and no read-only call can
+supply it — in practice that means a query reading an access rule whose
+`dataset_ids` you can't resolve.
+
+When you do need one, **ask first, in plain terms**: what you want to run, why
+the read-only evidence wasn't enough, and that it runs a job on their plane.
+If they decline, say the figure was unavailable and size from what you have.
+Never run one to be thorough.
+
+The probe is an `EXPLAIN` forecast:
+
+```
+narrative_nql_run(nql="EXPLAIN <the query>", data_plane_id=<dpId>,
+  compute_pool_id=<the shared always-on pool>)
+→ poll narrative_jobs_describe(job_ids=[<id>], include=["metadata","result"])
+```
+
+**Always pin `compute_pool_id` to the shared always-on pool.** Find it by
+listing planes, taking the one with `platform.type: platform_shared_aws` in
+region `us-east-1` — the Narrative shared plane, present in every account —
+and picking its pool with `always_on: true` and `idle_timeout_seconds: -1`.
+Discover it by those properties rather than trusting a remembered id; on the
+environment checked it was pool `d1b5a48f-…` on plane `f79cbdae-…`.
+
+This matters more than it sounds. That pool has a cluster already running.
+**Any other pool spends about 8 minutes starting one** — measured: the same
+forecast took **1m30s** on the always-on pool and **6m56s** unpinned, and
+routine stats jobs on that plane run 6m38s–8m05s end to end for trivial work.
+Same answer either way; the difference is pure waiting.
+
+Reading the result — it is **nested**, not a flat `{rows, cost}`:
+
+```json
+{ "success": { "result": { "Forecast": { "cost": 0, "rows": 151 } } } }
+```
+
+Read `success.result.Forecast.rows`. Three cautions:
+
+- **`rows` is the output count, not the volume scanned.** A query that reads
+  ten billion rows and returns a thousand is expensive despite a tiny
+  forecast. Read it alongside the source row counts, never instead of them.
+  On an unfiltered single-source query it just reproduces that dataset's row
+  count, which is why it's only worth running for filtered, joined, and
+  access-rule cases.
+- **`cost` is a data-acquisition figure, not compute cost.** It reads `0` on
+  your own data. Report `rows`; leave `cost` out of a sizing recommendation.
+- **If it errors or the job fails, drop it.** Say the forecast was
+  unavailable and size from row counts and query shape. Don't retry in a loop.
+
+#### Pull job history
+
+Run **both** searches — they answer different questions:
+
+```
+narrative_jobs_search(dataset_id=<id>, per_page=10)
+narrative_jobs_search(data_plane_id=<dpId>, type="materialize-view",
+  per_page=10)
+narrative_jobs_describe(job_ids=[...],
+  include=["metadata","input","compiled_sql","failures","result"])
+```
+
+`jobs_search(dataset_id=...)` matches jobs whose `input` references that id
+— and a `materialize-view` job's input references the dataset it **writes**,
+not the source it reads. So when sizing a build that reads an existing
+dataset, the source id returns nothing and the second search finds the
+history.
+
+**Elapsed time is `ended_at − created_at`, and that is submission to finish
+— it includes queue wait and cluster startup, not just the work.** MCP does
+not expose the execution window on its own. Say "took 22 minutes end to
+end," not "ran for 22 minutes," and remember that on a cold private pool
+5–10 of those minutes bought you nothing.
+
+On a `materialize-view` job, `input` carries sizing signal: `first_run`,
+`merge`, `partitions`, `compiled_select` — see
+[`references/DIAGNOSTICS.md`](references/DIAGNOSTICS.md) §1.
+
+**Measure the variance, not just the level.** Compare row counts and
+elapsed times across the runs you just fetched. A workload whose recent runs
+sit in a narrow range can be sized close to its numbers; one that swings by
+multiples needs the Phase 8 headroom rule. Report the spread — it is the
+evidence for how much margin you left, and it's already in the data.
+
+**Look for a warm/cold pair.** Two runs of a similar job where one is
+dramatically faster. If the fast one started within `idle_timeout_seconds`
+of the previous job ending, it ran on an already-running cluster, and the
+gap *measures* startup overhead against actual work. That often inverts the
+recommendation: if startup dominates, the answer is scheduling, not a bigger
+pool.
+
+**Known gap:** jobs don't expose which pool they ran on, so you cannot
+correlate "this took 22 minutes" with "…on a `medium` pool" — Phase 5 asks
+directly. Never infer the pool from the resolution chain. If **both**
+searches come back empty, say the recommendation is uncalibrated.
+
+### 5. Ask what the data can't tell you
+
+Ask for **real objects, never hypotheticals**; **skip anything Phases 1–4
+answered**; one `AskUserQuestion` at a time, never batched. In priority
+order, stopping when you can decide:
+
+1. **What are you actually running?** If they haven't given you a query,
+   ask for one — an example query, or a description of the queries this
+   will run. It resolves the datasets, the joins, and the group keys in one
+   answer, and it is the highest-information question in this list.
+2. **What's happening today?** Not built / slow / failing? If failing, ask
+   for whatever the platform showed them — but expect it to be thin, and
+   don't press for a diagnosis they don't have.
+3. **Which pool did it run on?** MCP can't tell you (Phase 4). If they
+   don't know, the plane default from Phase 2 is the likely answer — say
+   you're assuming it.
+4. **Have you run something like this before, and how long did it take?**
+   One remembered duration calibrates more than any estimate you can
+   derive.
+5. **How much does the volume move?** Steady, or swinging month to month?
+   (Skip if Phase 4's spread told you.)
+6. **How many jobs is this?** One, or a batch? Ask early — it changes the
+   shared-vs-private call and whether size matters at all (Phase 7).
+7. **Is anyone waiting?** Human-in-the-loop, or overnight batch? The real
+   shared-vs-private axis.
+8. **Deadline** — "must finish within X."
+9. **Cadence** — one-off, scheduled, interactive? (Skip if
+   `refresh_schedule_config` answered it.)
+10. **Cost ceiling** — a budget this must stay under? Ask only if you're
+    landing more than one rung up; the default already balances this.
+
+Under `--quick`, ask none of these; state each unfilled gap as an explicit
+assumption in the Phase 9 output. If the user declines or says "just tell
+me," treat it as `--quick` from then on and do not re-ask.
+
+### 6. Decide: shared or private
+
+Find the always-on shared pool in the Phase 2 payload by its properties —
+`always_on: true` with `idle_timeout_seconds: -1` — not by a hardcoded id
+or name.
+
+Recommend the **shared always-on pool** only when *all* hold: the job is
+genuinely small — seconds to a few minutes, not "probably under an hour,"
+because the 1-hour cap is invisible and a workload that grows into it gets
+cancelled with no explanation; no SLA requirement, since it is explicitly
+best-effort; a human is waiting, so startup time dominates the wait; and it
+is **one job or a handful**, never a large batch on a pool shared with every
+other company on the plane. Otherwise recommend a **private** pool.
+
+If the estimate is anywhere near an hour, or the volume moves at all, that
+is a private pool. "Fits today" is not a reason to use a pool that silently
+kills whatever stops fitting.
+
+**Why shared is attractive despite being small:** starting a private pool's
+cluster takes about **8 minutes**. For a 30-second job that turns a 10-minute
+wait into seconds; for a 4-hour job it's noise. It also already has a
+running cluster, so it never waits for a slot against the in-flight cluster
+cap.
+
+**Access:** it carries a collaborator access list. A permission error means
+"not available to you," not a bug — fall through to private.
+
+### 7. Decide: one job or many — mandatory
+
+Settle the job count before sizing. **A pool runs one job at a time, in
+submission order** — queued jobs wait, they don't overlap — so a batch costs
+`job count × per-job duration + startup per cluster launch`.
+
+Startup is the part you can delete for free. At ~6 minutes a launch, 100
+jobs is ~10 hours of cluster time if each starts fresh. Two fixes, neither a
+resize: **submit back-to-back** so every job after the first lands on the
+running cluster, and **raise `idle_timeout_seconds`** to cover gaps if the
+user submits in waves (up to `604800`). That is the one case where a *high*
+idle timeout is the cheap answer, and it is a setting on the pool — see
+[`references/APPLYING.md`](references/APPLYING.md).
+
+Because execution is serial, a size step can *lower* total cost here: cost
+is rate × time, and a wider pool cuts the time. Doubling the rate to cut
+duration by two-thirds is cheaper overall as well as more reliable — the
+rare case where both goals point the same way.
+
+A batch also multiplies query-shape waste, paid once per job. If every job
+re-reads the same source, say so — collapsing that beats any pool change,
+and belongs to `/write-nql`.
+
+### 8. Decide: size and storage variant
+
+Only for private pools on an AWS plane. Take the starting band for your
+Phase 4 row count from
+[`references/POOL_SIZES.md`](references/POOL_SIZES.md) §3b — which also
+carries the full ladder and the relative cost multipliers.
+
+That band is the **floor, not the answer**. Then apply, in this order:
+
+1. **Never recommend `small` or `medium` as a step up from `x_small`.** All
+   three give the job the same usable capacity, so the step is a no-op at
+   the same cost. `large` is the first genuine increase. Highest-value rule
+   here.
+2. **Take one rung of headroom** when the row count sits in the top third
+   of its band, when recent runs swing by multiples (Phase 4), or when a
+   failure means a human has to notice and rerun. Apply this by default,
+   not as an exception — it is what separates finishing first time from
+   finishing eventually.
+3. **Adjust up** for `merge: true`, joins across three or more datasets,
+   high `approx_count_distinct` on a group or join key, a hard deadline, or
+   a serial batch (Phase 7).
+4. **Consider `_storage` when the job does a lot of regrouping over a lot
+   of rows** — wide joins, big `GROUP BY` or `DISTINCT` on a
+   high-cardinality key. Same capacity, local SSD instead of network
+   storage, ~25% premium against 100% for a size step, so it is the cheaper
+   thing to try first. If the user has failure text that mentions disk or
+   device, that settles it — but you will usually be reasoning from query
+   shape, because the platform doesn't report the cause.
+5. **For a high file count relative to row count**, recommend compaction,
+   not a bigger pool. See
+   [`references/DIAGNOSTICS.md`](references/DIAGNOSTICS.md).
+
+**The overspend guardrail.** Headroom is *one* rung. More than that needs a
+reason drawn from evidence — a measured rerun, a deadline, observed variance
+— not caution. Never `always_on` above `large` without stating the standing
+idle cost out loud. If you cannot name what a bigger pool buys, it doesn't
+buy anything.
+
+An incumbent already at or above where this lands is a "keep it" — say so
+plainly. But an incumbent sitting *at* the floor with volume that moves is
+not a keep; that is what rule 2 exists for.
+
+### 9. Render the recommendation — mandatory
+
+Lead with the recommendation, then the reasoning, then what to change. Close
+with confidence and the assumptions — and **say what headroom you left and
+why**, since that is the part the user is trusting you on. A rerun is a
+fallback, not the plan: don't present this as a first guess to be corrected
+by a failure. Offer to re-size if reality disagrees; don't design for it.
+
+**Show your evidence as numbers the user can check.** "Dataset 41837 is
+171k rows; the largest of your last five refreshes added 4.2k" is
+checkable. "This is a small dataset" is not. Where you had no number, say
+which one was missing rather than papering over it.
+
+Make it **applicable**, not just correct. Per
+[`references/APPLYING.md`](references/APPLYING.md): which pool, or the
+settings to create one (including **both** timeouts, which default
+silently); which **level** to point the job at; and whether the user may
+need `manage_compute_pools`. Prefer the UI route unless they're scripting.
+
+Warn when applicable: **`always_on` above `large`** commits the user to
+standing idle cost for as long as the pool exists; **a resize replaces the
+provider block wholesale**, silently resetting both timeouts to defaults;
+**the first run on a new private pool** waits about 8 minutes for the cluster;
+**`Pending` may be the in-flight cluster cap**, not a hang; and **the shared
+pool's 1-hour cap is invisible via MCP** — if the estimate is near it, say
+the estimate is the weak link. Worked examples of the output shape:
+[`references/APPLYING.md`](references/APPLYING.md) §7.
+
+## Before you finalize
+
+Three references to check, every time:
+
+- [`EVIDENCE.md`](references/EVIDENCE.md) — the per-entity inventory of what
+  MCP does and doesn't expose. Check every figure in your output against
+  it; if a number isn't sourced there or in the user's own words, cut it.
+- [`COMMON_CASES.md`](references/COMMON_CASES.md) — worked shapes for
+  interactive queries, slow refreshes, first builds, swinging volume,
+  `Pending`, bulk fan-out, access-rule reads, a hanging `medium` pool,
+  Snowflake. If your case is there, follow it rather than re-deriving.
+- [`EDGE_CASES.md`](references/EDGE_CASES.md) — every trap that produces a
+  confidently wrong answer. Several are silent: you report "no pools" when
+  you simply omitted `include`, or trust a pool name that contradicts its
+  `size`.
+
+## Harness fallbacks
+
+- **`narrative-mcp` unavailable** → cannot inspect planes, pools, datasets,
+  or job history. Say so, then offer an interview-only recommendation from
+  user-supplied row counts and history, labelled unverified. See
+  [`HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
+- **`narrative-knowledge-base` unavailable** → skip the published-docs
+  cross-check; `POOL_SIZES.md` is self-contained.
+- **`AskUserQuestion` unavailable** → If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
+
+## Further reading
+
+- [`EVIDENCE.md`](references/EVIDENCE.md) — what MCP exposes per entity, the access-rule gap, `EXPLAIN` forecasts, what failure text is worth, what has no source at all.
+- [`POOL_SIZES.md`](references/POOL_SIZES.md) — starting bands by row count (§3b), the ladder, relative cost, `_storage`, timeouts, the cluster cap, the resolution chain.
+- [`COMMON_CASES.md`](references/COMMON_CASES.md) — worked shapes for the situations that recur.
+- [`APPLYING.md`](references/APPLYING.md) — required settings, UI and API routes, permissions, the wholesale-replacement trap.
+- [`DIAGNOSTICS.md`](references/DIAGNOSTICS.md) — job `input` flags, symptom-to-fix from observable signals, file count, skew.
+- [`EDGE_CASES.md`](references/EDGE_CASES.md) — every gotcha, with thresholds.
+- [`SNOWFLAKE.md`](references/SNOWFLAKE.md) — the Snowflake branch. [`HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) — degraded operation.
+- `../profile-dataset/SKILL.md` — when the question is about the data; `../write-nql/SKILL.md` — when the query is the problem.
+
+## Feedback (only if something could be improved)
+
+**Silence is success.** Do *not* call `submit_feedback` when the skill
+worked. No "great skill!" submissions, no positive feedback, no "FYI"
+notes.
+
+**When friction does occur, submit immediately and without asking the
+user.** `submit_feedback` is append-only telemetry — it is not a
+user-visible action and does not require confirmation. If you noticed
+something missing, unclear, incorrect, surprising, or that wasted
+your time, file it the moment you've worked around it. Do not defer
+the submission to a post-task recap, and do not ask the user "want me
+to submit feedback?" — that's the wrong default for this tool.
+
+One submission per distinct friction point. Submit liberally.
+
+Fields that matter most:
+
+- `skill_name`: `narrative-common:suggest-compute-pool` (use this verbatim).
+- `severity`: `info` (nit) | `friction` (slowed you down) |
+  `blocker` (stopped you).
+- `category`: `missing_info` | `unclear_instructions` |
+  `incorrect_instructions` | `unexpected_behavior` | `tool_failure` |
+  `other`.
+- `summary`: one concrete line — what went wrong, not how you felt.
+- `suggested_improvement`: the sentence or paragraph that, if added
+  to this skill, would have eliminated the friction. **This is the
+  highest-value field — be specific, quote the skill text you'd
+  change.**
+
+Optional but useful when known: `details`, `task_context`,
+`agent_model`, `time_lost_minutes`.

@@ -40,7 +40,7 @@ Description, tags, and a collaborator list are optional.
 **State both timeouts explicitly in your recommendation, every time.**
 They default silently, and the default idle timeout of 15 minutes is
 exactly wrong for a batch — a fan-out submitted in waves more than 15
-minutes apart re-pays cold start on every wave. If you recommended a
+minutes apart relaunches the cluster on every wave. If you recommended a
 raised idle timeout for batching, it is a *setting on the pool*, not
 advice the user applies separately.
 
@@ -86,7 +86,7 @@ Naming the pool is not enough — say which **level** to set it at. A job
 lands on the first level present, fixed when the job is created: per-job,
 then the dataset's default, then the company's per-plane default, then
 the plane default. The full chain and when to use each is in
-[`EMR_SIZING.md`](EMR_SIZING.md) §8.
+[`POOL_SIZES.md`](POOL_SIZES.md) §8.
 
 Getting this wrong is a quiet failure: the user creates a correctly-sized
 pool, never points anything at it, and reports that the recommendation
@@ -94,32 +94,65 @@ did nothing.
 
 ## 7. Worked examples of the output shape
 
+Note what these have in common: every figure is one that came back from a
+tool, and every gap is named rather than filled in.
+
 Pointing at something that already exists — nothing to create:
 
 > **Use the shared always-on pool** (`<pool-id>`, `shared_xsmall_pool`).
 >
-> Dataset 41837 is 171k records / 3.4 MB compressed. This finishes well
-> under a minute, inside the 1-hour cap, and skips the 5–10 minute cold
-> start of your own pool. Point this job at it per-job; nothing to create.
+> Dataset 41837 holds 171k rows, and the view is a single filter over one
+> source — no joins, no `GROUP BY`. This finishes well under a minute,
+> inside the pool's 1-hour cap, and skips the ~8 minutes your own pool
+> spends launching a cluster. Point this job at it per-job; nothing to
+> create.
 >
-> *Confidence: high. Assumed ~5x in-memory expansion and no joins beyond
-> the view definition. If it runs long or fails, send me the error.*
+> *Confidence: high. No job history for this dataset, so the duration is
+> inferred from the row count rather than measured. If it runs long or
+> fails, send me what you see.*
 
 Recommending a new pool — settings plus route, UI first:
 
-> **Create a `large` pool** for this batch; your existing pool
-> (`<pool-id>`) is `medium`, which has the same executor capacity as
-> `x_small`, so it is not a step up.
+> **Create a `large` pool** for this batch. Your plane's default
+> (`<pool-id>`) is `medium`, which gives a job the same usable capacity as
+> `x_small`, so it isn't a step up from what you have.
+>
+> The source is 340M rows and the view joins three datasets on `user_id`,
+> which column stats put at ~180M distinct values — that regrouping is the
+> expensive part, not the row count on its own.
 >
 > On the Compute Pools screen for your data plane, create a pool with:
-> size `large`, idle timeout `3600` (covers gaps between waves so you pay
-> cold start once, not 125 times), job execution timeout `14400`. Then set
-> it as the company default so all 125 builds pick it up.
+> size `large`, idle timeout `3600` (covers gaps between waves, so you
+> launch one cluster instead of 125), job execution timeout `14400`. Then
+> set it as the company default so all 125 builds pick it up.
 >
 > Applying this needs `manage_compute_pools` — if you don't have it, ask
 > whoever administers the account.
 >
 > *Confidence: medium on the size, high on the idle timeout. Per-job
-> duration is uncalibrated — the run I measured was against a 3.4 MB test
-> dataset, not the 8.9 GB source. Send me the first real run and I'll
+> duration is uncalibrated: the only runs in your history were against a
+> 171k-row test dataset, not this source. I don't know which pool those
+> ran on — MCP doesn't report it. Send me the first real run and I'll
 > re-size.*
+
+A case where the honest answer is partly "I can't see that":
+
+> **Keep your `x_large` pool** (`<pool-id>`) and try `x_large_storage`
+> instead of stepping up.
+>
+> The job failed twice. Both failures say `executing cluster '<id>'
+> failed`, which doesn't name a cause — the platform doesn't report which
+> resource ran short, so I'm reasoning from the query rather than the
+> error. It's a four-way join with a `DISTINCT` over a key with ~2B
+> distinct values, which is the shape that runs out of scratch space.
+> `_storage` is the same capacity on local SSD at about a quarter the cost
+> of a size step, so it's the cheaper thing to rule out first.
+>
+> Re-send `idle_timeout_seconds` and `job_execution_timeout_seconds` with
+> the change — a size edit replaces the whole provider block and resets
+> both to defaults otherwise. I can't read your current
+> `job_execution_timeout_seconds`; it isn't in the API. Check it on the
+> Compute Pools screen before you save.
+>
+> *Confidence: medium. If `_storage` fails the same way, that rules out
+> scratch space and `2x_large` is the next move.*
