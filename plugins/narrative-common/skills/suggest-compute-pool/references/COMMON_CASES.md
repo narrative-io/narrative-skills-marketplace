@@ -7,6 +7,9 @@ independent rules.
 
 | Case | Evidence you'd have | Recommendation | Confidence |
 | --- | --- | --- | --- |
+| Account review, established account | Job history on the plane, populated stats, pools somebody already chose | Group the history by type and dataset, size each group, then compare against what's configured. Most reviews end in "keep what you have, add one" — say that rather than finding something to change. Name the pools nothing routes to. | Medium-high |
+| Account review, brand-new account | No job history, often no stats, default pools only | There is nothing to measure. Recommend the *shape* — how many pools, shared vs private, which workloads would share one — and list what somebody has to tell you before a size means anything. Don't emit a size off defaults. | Low, and say so |
+| Account review, one workload dominates | One dataset or job type accounts for most of the history | Size for that one, then check whether the rest fit underneath it. A single heavy nightly build plus light interactive work is two pools, not one. | Medium |
 | Sample or interactive query, small dataset | Row count in the low millions or less, human waiting, no refresh schedule | Shared always-on, per-job. Avoiding the ~8 minute cluster launch is the whole argument. Only when the job is genuinely seconds-to-minutes. | High |
 | Scheduled refresh, currently slow | `refresh_schedule_config` set, `first_run: false`, `merge: true` | Size on the largest recent `last_snapshot_added_records`, then take a rung for headroom — this runs unattended, so a failure waits for someone to notice. `merge: true` also argues for `_storage`. Set as **dataset default**. | Medium |
 | First build of a large MV | `first_run: true`, or no job history at all | Size against `active_dataset_stored_records` of the sources plus a rung; a first build has nothing to calibrate against. Set **per-job** so steady-state refreshes stay on the smaller pool. | Low-medium |

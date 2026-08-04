@@ -112,27 +112,35 @@ Each rung doubles at the ceiling. Three wrinkles worth surfacing:
 
 ## 3b. Starting bands
 
-Where sizing **starts**, keyed on the row count chosen in the skill's
-evidence phase — `active_dataset_stored_records` for a full build,
-`last_snapshot_added_records` for an incremental refresh. These are a floor,
-not an answer: the headroom rule and the overspend guardrail in the skill
-turn a band into a recommendation.
+Where sizing **starts**. **Read the bytes column first** — it is the more
+reliable of the two, for the reason below. Use `active_dataset_stored_bytes`
+for a full build and `last_snapshot_added_bytes` for an incremental refresh,
+with the row counts as a cross-check. These are a floor, not an answer: the
+headroom rule and the overspend guardrail in the skill turn a band into a
+recommendation.
 
-| Rows processed | Compressed bytes, roughly | Floor |
+| Compressed bytes processed | Rows, roughly | Floor |
 | --- | --- | --- |
-| < ~5 million | < 1 GB | Shared always-on, if the job is genuinely seconds-to-minutes |
-| ~5–50 million | 1–10 GB | `x_small` private |
-| ~50–500 million | 10–100 GB | `large` — the first real step up |
-| ~500 million – 2.5 billion | 100–500 GB | `x_large` – `2x_large` |
-| ~2.5–10 billion | 500 GB – 2 TB | `2x_large` – `4x_large` |
-| > ~10 billion, or very wide rows | > 2 TB | `4x_large` – `6x_large` |
+| < 1 GB | < ~30 million | Shared always-on, if the job is genuinely seconds-to-minutes |
+| 1–10 GB | ~30–300 million | `x_small` private |
+| 10–100 GB | ~300 million – 3 billion | `large` — the first real step up |
+| 100–500 GB | ~3–17 billion | `x_large` – `2x_large` |
+| 500 GB – 2 TB | ~17–70 billion | `2x_large` – `4x_large` |
+| > 2 TB | > ~70 billion | `4x_large` – `6x_large` |
 
-**The bands are calibration parameters, not measurements.** The row column
-and the byte column are the same bands under an assumed ~200 compressed
-bytes per row, which is a middling figure for Narrative's nested schemas.
-Use whichever you actually read — rows if the stats block gave you rows,
-bytes if it gave you bytes — and if the two disagree by more than a band,
-trust bytes and say the rows are unusually wide or unusually narrow.
+**Bytes lead because the row column is the derived one.** The two columns are
+the same bands under an assumed **~30 compressed bytes per row**. That figure
+comes from four production accounts, whose real workloads measured 20.6, 25,
+32, and ~67 bytes per row — Narrative's nested schemas compress much harder
+than they look. An earlier version of this table assumed ~200 bytes/row and
+was wrong by 3–10× against every account it was checked on, which shifts a
+recommendation by about a full band.
+
+So: **size on bytes when the stats block gives you bytes.** Fall back to rows
+only when it doesn't — `active_dataset_stored_bytes` reads `0` on some
+Snowflake-backed datasets even when rows are present — and say you sized on
+rows because bytes were unavailable. If the two columns disagree by more than
+a band, bytes win, and note that the rows are unusually wide or narrow.
 
 Row counts alone don't settle it. **Adjust off the band for what the query
 does**, per the skill's Phase 8: joins across three or more datasets, a high

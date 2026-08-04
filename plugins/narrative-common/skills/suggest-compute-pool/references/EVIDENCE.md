@@ -167,9 +167,15 @@ rule applies before your query ever sees the data.
 ```
 narrative_jobs_search(dataset_id=<id>, per_page=10)
 narrative_jobs_search(data_plane_id=<dpId>, type="materialize-view", per_page=10)
-narrative_jobs_describe(job_ids=[...],
-  include=["metadata","input","compiled_sql","failures","result"])
+narrative_jobs_describe(job_ids=[<ids>], include=["metadata","failures","result"])
+narrative_jobs_describe(job_ids=[<one id>], include=["input"])
 ```
+
+**`input` needs its own call, one job at a time.** It carries `compiled_select`
+inline — 88 KB on a real materialize-view job — so `include=["input"]` for four
+jobs blew the response cap. Never pair it with `compiled_sql` either; that field
+is already inside `input`. `metadata`, `failures`, and `result` are small and
+batch fine up to the 50-id limit.
 
 ### `metadata`
 
@@ -197,10 +203,18 @@ See [`DIAGNOSTICS.md`](DIAGNOSTICS.md) §1.
 A list of `{message, timestamp, value}`. `message` is an exception message;
 `value` sometimes carries a `stack_trace`.
 
-**These are frequently generic.** `executing cluster '<id>' failed` is a real
-and common message, and it says nothing about which resource ran short.
-There is **no structured out-of-disk or out-of-memory signal anywhere in the
-API** — not a code, not a category, not a flag.
+**Most often the list is empty.** On three separate accounts, every job with
+`state: failed` rendered `failures: _none_` and `result: _not set_` — no
+message, no trace, nothing. Treat a populated `failures` as the exception.
+
+**When it is populated it's frequently generic.** `executing cluster '<id>'
+failed` is a real and common message, and it says nothing about which resource
+ran short. There is **no structured out-of-disk or out-of-memory signal anywhere
+in the API** — not a code, not a category, not a flag.
+
+None of this blocks a sizing recommendation. A failed run with no stated cause
+is a reason to take the Phase 8 headroom rung, not a reason to investigate —
+debugging why a job failed is a different job than deciding what pool it needs.
 
 So:
 

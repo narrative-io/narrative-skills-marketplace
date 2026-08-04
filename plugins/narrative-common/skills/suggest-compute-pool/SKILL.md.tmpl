@@ -5,8 +5,8 @@ description: |
   workloads it runs, and recommend the set it should have. Built for the
   two moments it comes up: an account being configured for the first time,
   and a new batch of workloads coming online on an existing one. Works
-  from what the platform exposes — the pools already configured, row
-  counts and cardinality from dataset stats, each workload's NQL, and how
+  from what the platform exposes — the pools already configured, stored
+  volumes and cardinality from dataset stats, each workload's NQL, and how
   long past runs took — then asks for what the data can't supply. Names
   the pools, the settings to create them with, which workloads run where,
   and its assumptions. Runs unattended for a per-account sweep. Advises
@@ -26,7 +26,7 @@ compatibility: >-
   query and stats recalculation run jobs, and are offered rather than taken.
   Portable to any agentskills.io-compliant harness.
 metadata:
-  version: 0.6.0
+  version: 0.7.0
   narrative:
     args:
       - name: "--plane"
@@ -101,8 +101,11 @@ Two moments raise it, and they carry opposite evidence:
 | An account being configured for the first time | No job history, often no stats. Whatever pools came by default. | Interview-driven. The figures are the user's, and every gap is a stated assumption. |
 | A new batch of workloads coming online on an existing account | Job history, populated stats, pools somebody already chose. | Evidence-driven. Read first; ask only what the data can't answer. |
 
-Phase 1 tells you which one you're in: a plane with no job history and only
-default pools is the first, anything else is the second.
+Phase 1 tells you which one you're in. The test is **recent, recurring** history,
+not history at all: a handful of runs spread over years is a third case — the
+account is dormant, and sizing off those runs would be meaningless. There you
+size against the data the account holds, say the recommendation is uncalibrated,
+and ask what the data is for. Every account still gets a size.
 
 A single workload — "which pool should this job run on?" — is the same
 question with one item in scope, not a different skill. And with `--plane` plus
@@ -301,8 +304,8 @@ Resolve whatever the user gave you to the **datasets and access rules the
 work reads**, and to a **data plane id**.
 
 - **Given `--job <id>`**, call `narrative_jobs_describe(job_ids=[id],
-  include=["metadata","input","failures","compiled_sql","result"])` and read
-  the dataset out of its input.
+  include=["input"])` and read the dataset out of it. Keep `input` in a call of
+  its own — see the note under "Pull job history" in Phase 4.
 - **Given a pasted query**, run `narrative_nql_validate(nql=...)`. It
   compiles without running anything, so it both confirms the query is valid
   and tells you what it references. Every `company_data."<id>"` in the query
@@ -320,12 +323,17 @@ narrative_datasets_describe(dataset_ids=[<ids>],
 ```
 
 Read `metadata.data_plane_id` from the response. **Never ask the user which
-data plane they're on** — it's in the data. Do **not** add
-`column_stats_config` to `include`; it 404s on datasets with no stats config
-and fails the whole call. If nothing resolves, stop and say so.
+data plane they're on** — it's in the data. If nothing resolves, stop and say so.
 
 The call takes up to 50 ids, so a query touching several datasets costs one
-call, not one per dataset.
+call, not one per dataset — but **any single id that 404s fails the entire
+call**, returning nothing for the ids that would have resolved. Deleted and
+foreign datasets both do this, and a job's `input` can name a dataset that no
+longer exists. When a batch 404s, re-issue it one id at a time rather than
+concluding the datasets are unavailable.
+
+Do **not** add `column_stats_config` to `include`; it 404s on datasets with no
+stats config and takes the whole call with it.
 
 ### 2. Read the data plane — mandatory
 
@@ -334,22 +342,34 @@ narrative_data_planes_describe(data_plane_ids=[<dpId>],
   include=["metadata","compute_pools","platform"])
 ```
 
-**You must pass `include` explicitly.** The default is `metadata` only, so
-without it you see no pools and no provider type, and may wrongly report
-that the plane has none.
+**Use `describe`, not `list`, and pass `include` explicitly.** Two separate
+traps stacked here. The default `include` is `metadata` only, so without it you
+see no pools and no provider type. And `narrative_data_planes_list` can return
+**no `compute_pools` section at all** for a plane that has them, even when asked
+for it — observed on a plane where `describe` then returned three pools. Never
+conclude "this plane has no pools" from `list`.
 
 Per-pool fields, and that is the whole list: `id`, `name`, `status`, `size`,
 `idle_timeout_seconds`, `always_on`. The last two are frequently missing —
 `idle_timeout_seconds` is simply omitted, and `always_on` renders `n/a` when
 unset. Neither absence means `false`.
 
-Three traps. **Pool names lie** — they're free text, not synced to `size`, so
-`x_small_default` can be `size: medium`. **Names also collide**: a live plane
-carries two distinct pools both named `shared_xsmall_pool`, one `always_on:
-true` and one not. So read `size` and `always_on` off the payload and cite the
-**id** — a name is not an identifier here. **Empty is not none**: the section
-is omitted when a plane has no pools, so treat absence as "no pools," not an
-API failure.
+**The pool list is what *this company* can see, not what exists on the plane.**
+On a shared plane each company sees its own pools plus whatever it collaborates
+on, so the same plane returns different pools for different companies — and each
+company gets its own `medium_default` / `2x_large_default` with a distinct id.
+Two consequences: never carry a pool id between companies, and don't assume any
+particular pool is present. The shared always-on pool is visible to some
+companies and simply absent for others.
+
+Three naming traps. **Pool names lie** — they're free text, not synced to
+`size`, so `x_small_default` can be `size: medium`. **Names collide** — one
+plane carries two distinct pools both named `shared_xsmall_pool`, and
+`medium_default` names a different pool in every account. **A name saying
+"default" means nothing** — `2x_large_default` appears on planes with no
+`default_compute_pool_id` set at all. Read `size` and `always_on` off the
+payload and cite the **id**. **Empty is not none**: the section is omitted when
+a plane has no pools, so treat absence as "no pools," not an API failure.
 
 `metadata.default_compute_pool_id` is the plane's default, and it's your
 incumbent for any job that doesn't pin a pool — **but it is often absent**
@@ -381,20 +401,35 @@ literally and ask rather than defaulting to the AWS path.
 
 ### 4. Gather evidence — mandatory
 
-**Row count is the primary scale metric.** It is the figure the platform
-reports most reliably, it is what the bands in
-[`references/POOL_SIZES.md`](references/POOL_SIZES.md) §3b are keyed on, and
-it is the number the user can sanity-check against their own understanding
-of the data. Use stored bytes as a cross-check when the stats block carries
-it, not as the headline.
+**Stored bytes are the primary scale metric, not row count.** The bands in
+[`references/POOL_SIZES.md`](references/POOL_SIZES.md) §3b lead with bytes
+because Narrative's nested schemas compress to around 30 bytes a row — four
+production accounts measured 20.6 to 67 — so a row count converted through any
+assumed width is the less trustworthy number. Read bytes, cross-check against
+rows, and fall back to rows only when bytes aren't reported.
+
+**`merge` decides *which* figure you size on.** This is the single biggest
+lever in the phase and it is not a nudge — on a real workload the two answers
+differed by 63×. Read it off the job's `input` (Phase 1) or infer it from the
+view's NQL:
+
+| `merge` | What the job does | Size on |
+| --- | --- | --- |
+| `true` | Merges new rows into the existing table | `last_snapshot_added_bytes` — the increment |
+| `false` | Replaces the table's contents wholesale | `active_dataset_stored_bytes` — the whole thing |
+| `false`, but the source is read through `delta()` | Replaces the output, but only reads rows that arrived since the last run | The increment again. Check the compiled SQL's bound on `nio_last_modified_at` to confirm the window is real |
+
+Getting this backwards is how you recommend `6x_large` for a job that needs
+`x_large`, or the reverse. If you can't establish `merge` for the workload, say
+so and size on the larger figure.
 
 From the Phase 1 `datasets_describe` response:
 
 | Field | Use |
 | --- | --- |
-| `active_dataset_stored_records` | Rows in the dataset now. The input for a **full build**. |
-| `last_snapshot_added_records` | Rows added by the most recent write. The input for a **scheduled refresh** — often orders of magnitude smaller. |
-| `active_dataset_stored_bytes` / `last_snapshot_added_bytes` | Cross-check on the row counts, and the way to spot unusually wide rows: bytes ÷ rows. **A `0` here on a dataset that has rows means "not measured," not "empty"** — it happens on Snowflake-backed datasets. Size on rows and say bytes were unavailable. |
+| `active_dataset_stored_bytes` | Bytes in the dataset now. The input for a **full build**. |
+| `last_snapshot_added_bytes` | Bytes added by the most recent write. The input for an **incremental refresh** — often orders of magnitude smaller. |
+| `active_dataset_stored_records` / `last_snapshot_added_records` | Cross-check on the byte figures, and the way to spot unusually wide or narrow rows: bytes ÷ rows against the ~30 in §3b. **A `0` in the byte fields on a dataset that has rows means "not measured," not "empty"** — it happens on Snowflake-backed datasets. Size on rows there and say bytes were unavailable. |
 | `active_dataset_stored_files` | File count. Tens of thousands of files against a few GB is its own problem, and a bigger pool is not the fix — see [`references/DIAGNOSTICS.md`](references/DIAGNOSTICS.md). |
 | `nql` | The view definition. What this job actually does — read it, don't skip it. |
 | `schema` | Row width: column count and nesting depth. Individual properties may also carry `approximate_cardinality`. |
@@ -475,12 +510,14 @@ narrative_nql_run(nql="EXPLAIN <the query>", data_plane_id=<dpId>,
 → poll narrative_jobs_describe(job_ids=[<id>], include=["metadata","result"])
 ```
 
-**Always pin `compute_pool_id` to the shared always-on pool.** Find it by
-listing planes, taking the one with `platform.type: platform_shared_aws` in
-region `us-east-1` — the Narrative shared plane, present in every account —
-and picking its pool with `always_on: true` and `idle_timeout_seconds: -1`.
-Discover it by those properties rather than trusting a remembered id; on the
-environment checked it was pool `d1b5a48f-…` on plane `f79cbdae-…`.
+**Pin `compute_pool_id` to the shared always-on pool when this company has
+one.** Find it in the Phase 2 payload by its properties — `always_on: true`
+with `idle_timeout_seconds: -1` — never by a remembered id.
+
+**It is not always there.** Pool visibility is per-company (Phase 2), so the
+shared pool is present for some accounts and absent for others on the very same
+plane. When it's absent, either pin the smallest pool the company does have, or
+skip the probe and say the forecast wasn't worth a cold cluster start.
 
 This matters more than it sounds. That pool has a cluster already running.
 **Any other pool spends about 8 minutes starting one** — measured: the same
@@ -515,9 +552,13 @@ Run **both** searches — they answer different questions:
 narrative_jobs_search(dataset_id=<id>, per_page=10)
 narrative_jobs_search(data_plane_id=<dpId>, type="materialize-view",
   per_page=10)
-narrative_jobs_describe(job_ids=[...],
-  include=["metadata","input","compiled_sql","failures","result"])
+narrative_jobs_describe(job_ids=[<one id>], include=["input"])
 ```
+
+**Fetch `input` one job at a time, and never alongside `compiled_sql`.** The
+`input` payload already contains the compiled SQL — on a real workload it ran
+88 KB for a single job, and four jobs in one call blew the response cap
+outright. `metadata` and `failures` are cheap and can be batched; `input` can't.
 
 `jobs_search(dataset_id=...)` matches jobs whose `input` references that id
 — and a `materialize-view` job's input references the dataset it **writes**,
@@ -535,11 +576,36 @@ On a `materialize-view` job, `input` carries sizing signal: `first_run`,
 `merge`, `partitions`, `compiled_select` — see
 [`references/DIAGNOSTICS.md`](references/DIAGNOSTICS.md) §1.
 
-**Measure the variance, not just the level.** Compare row counts and
-elapsed times across the runs you just fetched. A workload whose recent runs
-sit in a narrow range can be sized close to its numbers; one that swings by
-multiples needs the Phase 8 headroom rule. Report the spread — it is the
-evidence for how much margin you left, and it's already in the data.
+**Calibrate on the runs that did work.** Before a duration counts as evidence,
+check that the run actually processed rows. Scheduled jobs frequently run more
+often than their source updates, and a run with nothing to read still takes
+around six minutes of fixed overhead — so a history full of them makes a
+workload look far lighter than it is. Two tells, both free:
+
+- The delta window in the compiled SQL has **equal bounds** — `> T AND <= T`
+  matches nothing by construction. Real work has a lower bound behind the upper.
+- The dataset's `last_snapshot_added_records` is **0** while a run just finished.
+
+On a live account, five of six daily runs read an empty window; averaging all
+six gave "about six minutes, `medium` is fine" when the one real run took 15–38
+minutes. Drop the empty ones and say how many you dropped.
+
+**The same applies to stale history.** Runs from months ago, or a handful spread
+over years, don't calibrate anything. Say the recommendation is uncalibrated and
+size from the data volumes instead — but still give a size. "This account is
+dormant so there's nothing to recommend" is not an answer; the account still
+holds data, and the question is whether its pools fit that data.
+
+**Watch what dominates the history.** Group by `type` before you read
+durations. An account whose jobs are 97% `datasets_calculate_column_stats` will
+mislead you badly if you size off the aggregate — the handful of
+`materialize-view` jobs are the ones that need the capacity.
+
+**Then measure the variance, not just the level.** Across the runs that
+survived the filter above, compare volumes and elapsed times. A workload whose
+recent runs sit in a narrow range can be sized close to its numbers; one that
+swings by multiples needs the Phase 8 headroom rule. Report the spread — it is
+the evidence for how much margin you left.
 
 **Look for a warm/cold pair.** Two runs of a similar job where one is
 dramatically faster. If the fast one started within `idle_timeout_seconds`
@@ -598,7 +664,9 @@ to tell you before a size means anything.
 
 Find the always-on shared pool in the Phase 2 payload by its properties —
 `always_on: true` with `idle_timeout_seconds: -1` — not by a hardcoded id
-or name.
+or name. **If no pool matches, this company doesn't have one** (Phase 2), and
+shared isn't an option to weigh: go straight to private, and note that small
+interactive work has nowhere cheap to land.
 
 Recommend the **shared always-on pool** only when *all* hold: the job is
 genuinely small — seconds to a few minutes, not "probably under an hour,"
@@ -618,8 +686,10 @@ wait into seconds; for a 4-hour job it's noise. It also already has a
 running cluster, so it never waits for a slot against the in-flight cluster
 cap.
 
-**Access:** it carries a collaborator access list. A permission error means
-"not available to you," not a bug — fall through to private.
+**Access:** it carries a collaborator access list, and the usual signal that
+you're not on it is the pool being **missing from Phase 2's payload** rather
+than an error. A permission error means the same thing — "not available to
+you," not a bug. Either way, fall through to private.
 
 ### 7. Decide: one job or many — mandatory
 
@@ -709,6 +779,13 @@ Then the per-pool settings, per
 setup is already right — "keep all three, nothing to change" is a valid and
 useful outcome, and an account review that always finds something to buy is
 not worth running.
+
+**Always land on a size.** Every account runs its work on pools, so every review
+owes an answer about them. Thin evidence lowers your confidence; it does not
+excuse you from the question. In particular, a dormant account is not exempt —
+size against the data it holds, say the recommendation is uncalibrated because
+nothing recent has run, and ask what the data is for. "There's nothing to
+recommend here" is a non-answer.
 
 **Under `--quick`, the output is the whole deliverable** — nobody is going to
 answer a follow-up. List every assumption as its own line, mark anything the
