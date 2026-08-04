@@ -1,18 +1,20 @@
 ---
 name: suggest-compute-pool
 description: |
-  Recommend which Narrative compute pool a workload should run on: the
-  shared always-on pool or a private one, and if private, which size.
-  Works from what the platform actually exposes — row counts and column
-  cardinality from dataset stats, the NQL of the query, the datasets and
-  access rules it reads, and how long past runs took — then asks for the
-  example queries and history the data can't supply. Names a pool, the
-  settings to create it with, and the assumptions behind it. Advises
+  Work out whether an account has the right compute pools for the
+  workloads it runs, and recommend the set it should have. Built for the
+  two moments it comes up: an account being configured for the first time,
+  and a new batch of workloads coming online on an existing one. Works
+  from what the platform exposes — the pools already configured, row
+  counts and cardinality from dataset stats, each workload's NQL, and how
+  long past runs took — then asks for what the data can't supply. Names
+  the pools, the settings to create them with, which workloads run where,
+  and its assumptions. Runs unattended for a per-account sweep. Advises
   only; never creates or resizes a pool.
-  Use when: "which compute pool should I use", "suggest a compute pool",
-  "what size compute pool do I need", "my job is too slow", "my job keeps
-  failing", "job stuck in Pending", "right-size my compute pool", "will
-  this query need a bigger pool".
+  Use when: "are our compute pools set up right", "we're onboarding an
+  account — what pools does it need", "we're bringing new workloads
+  online", "which compute pool should I use", "what size compute pool do I
+  need", "my job is too slow", "job stuck in Pending".
   (narrative-common)
 license: MIT
 compatibility: >-
@@ -24,9 +26,13 @@ compatibility: >-
   query and stats recalculation run jobs, and are offered rather than taken.
   Portable to any agentskills.io-compliant harness.
 metadata:
-  version: 0.5.0
+  version: 0.6.0
   narrative:
     args:
+      - name: "--plane"
+        value: "<id>"
+        required: false
+        description: "Review every workload on this data plane against the pools it has configured. The account-level entry point, and what an unattended sweep passes alongside --quick."
       - name: "--dataset"
         value: "<id>"
         required: false
@@ -83,10 +89,44 @@ metadata:
 
 # Suggest Compute Pool
 
+## What this is for
+
+**Working out which compute pools an account should have configured, given the
+workloads it runs.** Every workload runs on a pool, so the question is never
+*whether* one is needed — it is whether the pools configured today fit the
+work, and what to add or change if they don't.
+
+Two moments raise it, and they carry opposite evidence:
+
+| Moment | What you have | How to work |
+| --- | --- | --- |
+| An account being configured for the first time | No job history, often no stats. Whatever pools came by default. | Interview-driven. The figures are the user's, and every gap is a stated assumption. |
+| A new batch of workloads coming online on an existing account | Job history, populated stats, pools somebody already chose. | Evidence-driven. Read first; ask only what the data can't answer. |
+
+Phase 1 tells you which one you're in: a plane with no job history and only
+default pools is the first, anything else is the second.
+
+A single workload — "which pool should this job run on?" — is the same
+question with one item in scope, not a different skill. And with `--plane` plus
+`--quick` this runs unattended, no questions asked, for a per-account sweep.
+
+**Does:** inventories the pools an account has; works out what its workloads
+need; says which to keep, which to add, and which are the wrong size. Sizes
+AWS pools and picks the `_storage` variant. Names the settings to create with.
+
+**Doesn't:** create, resize, or archive anything — it hands over settings and a
+route ([`references/APPLYING.md`](references/APPLYING.md)). Doesn't write or fix
+queries (`/write-nql`), assess data quality (`/profile-dataset`), or administer
+Snowflake warehouses — on a Snowflake plane it recommends *among* registered
+warehouses ([`references/SNOWFLAKE.md`](references/SNOWFLAKE.md)).
+
+Two calls can submit jobs — an `EXPLAIN` probe, and enabling column stats on a
+dataset that lacks them — and both are offered rather than taken.
+
 ## The call you are being asked to make
 
-**Pick a pool that finishes the job on the first attempt, and isn't
-obviously more than the work needs.**
+For each workload in scope: **pick a pool that finishes the job on the first
+attempt, and isn't obviously more than the work needs.**
 
 Not the cheapest thing that clears the bar, and not the biggest thing
 available. Volumes move week to week and month to month, so a size chosen to
@@ -103,6 +143,14 @@ that holds two billion rows" is wrong — Narrative compute streams data
 through and spills to disk, so the working set never has to fit in memory.
 Sizing is about how long the job takes and how much regrouping it does. Lead
 with how fast this must be and how often it runs, not how much data exists.
+
+Across the account, the call is **the smallest set of pools that covers the
+workloads.** A pool per job is as wrong as one pool for everything. A pool runs
+one job at a time (Phase 7), so sharing one is free when workloads don't
+overlap in time — better than free, since the second job lands on a warm
+cluster and skips the ~8-minute start. Recommend a separate pool when
+workloads run concurrently, when one carries a deadline another would block, or
+when one needs a size the rest don't justify.
 
 ## Evidence discipline — read this before anything else
 
@@ -155,11 +203,12 @@ Never recommend a size you can't justify from
 dollar figure (pricing is set outside this skill), and never create,
 patch, or archive a pool — name the settings and let the user apply them.
 
-**The four questions, in order:** (1) which data plane — the provider type
-determines everything else; (2) shared always-on pool or private — about
-startup latency and risk, not size; (3) one job or many — for a batch,
-startup time × job count dwarfs anything size can buy; (4) if private, what
-size and base or `_storage`. Confidence is highest on (1), lowest on (4).
+**The five questions, in order:** (1) which data plane — the provider type
+determines everything else; (2) which workloads are in scope, and which of them
+share a shape; (3) shared always-on pool or private — about startup latency and
+risk, not size; (4) one job or many — for a batch, startup time × job count
+dwarfs anything size can buy; (5) if private, what size and base or `_storage`.
+Confidence is highest on (1), lowest on (5).
 
 ## Arguments
 
@@ -167,6 +216,7 @@ Parse arguments up front; never invent values.
 
 | Argument | Meaning |
 | --- | --- |
+| `--plane <id>` | Review every workload on this plane against the pools it has configured. The account-level entry point; with `--quick`, the unattended sweep. |
 | `--dataset <id>` | The dataset or MV the workload runs against. Source of row counts, cardinality, view definition, refresh schedule, and data plane. |
 | `--access-rule <id>` | An access rule the workload reads. Gives you its `dataset_ids` and NQL — but no row counts. |
 | `--job <id>` | A job that was slow or failed. Source of elapsed time, input flags, and failure text; resolves the dataset. |
@@ -174,12 +224,13 @@ Parse arguments up front; never invent values.
 | `--quick` | Skip the interview; recommend from MCP evidence alone with every gap stated as an assumption. |
 | Free-text tail | An example query, a deadline, a cadence, or what happened last time, in the user's words. |
 
-With no target at all, ask **one** question: *"Point me at the work — a
-dataset id, an access rule, a job id that was too slow, or just paste the
-query you want to run."* That includes the `--pool`-only case: a pool id
-alone says nothing about the workload. Given a name rather than an id,
-resolve it with `narrative_datasets_search` or
-`narrative_access_rules_search` and confirm the match first.
+With no argument at all, ask **one** question: *"Reviewing the whole account's
+pools, or sizing one workload? For the account I need a data plane id; for one
+workload, a dataset id, an access rule, a job that was too slow, or the query
+itself."* That includes the `--pool`-only case: a pool id alone says nothing
+about the work it has to serve. Given a name rather than an id, resolve it with
+`narrative_datasets_search` or `narrative_access_rules_search` and confirm the
+match first.
 
 **A pasted query is a first-class target** — often the best one, because it
 names every dataset and access rule the work touches. Treat it as the
@@ -187,26 +238,30 @@ starting point, not as a substitute for one.
 
 ## When to use
 
-Triggers: "which compute pool should I use / what size do I need"; "this job
-is too slow"; "my job keeps failing"; "the job is stuck in `Pending`";
-"shared pool or my own?"; "I'm about to build a big MV — what should it run
-on?"; "will this query need a bigger pool?"
+Account-level: "are our compute pools set up right?"; "we're onboarding an
+account — what pools should it have?"; "we're bringing a new set of workloads
+online, is the current setup going to hold?"
 
-Do NOT use for **creating, resizing, or archiving a pool** (advice-only —
-hand over settings and a route:
-[`references/APPLYING.md`](references/APPLYING.md)); **writing or fixing the
-query** (`/write-nql`); **dataset quality** (`/profile-dataset`); or
-**Snowflake warehouse administration** — this skill recommends *among
-registered warehouses*, see [`references/SNOWFLAKE.md`](references/SNOWFLAKE.md).
+One workload: "which compute pool should I use / what size do I need?"; "this
+job is too slow"; "my job keeps failing"; "the job is stuck in `Pending`";
+"shared pool or my own?"; "I'm about to build a big MV — what should it run
+on?"
+
+The boundaries are in [What this is for](#what-this-is-for) above.
 
 ## Procedure
 
-Run phases 0–9 in order. Every call is read-only except two, both in Phase 4
-and both **offered rather than taken**: a probe query, and enabling stats on a
-dataset that lacks them. Each submits a job on the user's plane, so each needs
-an explicit yes. This skill never creates, resizes, or archives a pool.
+Run phases 0–9 in order. Phases 0–3 and 9 run once for the whole review;
+phases 4–8 run per workload, or per group of workloads that share a shape.
 
-### 0. Pin the company / context
+Every call is read-only except two, both in Phase 4 and both **offered rather
+than taken**: a probe query, and enabling stats on a dataset that lacks them.
+Each submits a job on the user's plane, so each needs an explicit yes. Under
+`--quick` neither is offered at all — an unattended run has nobody to ask, so it
+states the gap and sizes without it. This skill never creates, resizes, or
+archives a pool.
+
+### 0. Confirm the company
 
 Most Narrative work is scoped to a company. Before any dataset,
 attribute, or workflow call:
@@ -227,11 +282,39 @@ search/set entirely if the user invoked the skill from a Narrative
 Platform UI session where the company is implicit
 (`narrative_context_get` returns one).
 
-Everything below is company-scoped. State the active company before
-recommending anything — a recommendation computed against the wrong company
-is the worst silent failure here.
+For most users the company is already set and there is nothing to do here —
+switching it is a Narrative-admin path. Either way, state which company you are
+working against before recommending anything; a recommendation computed against
+the wrong one is the worst silent failure here.
 
-### 1. Resolve the target — mandatory
+### 1. Resolve the scope — mandatory
+
+Work out **which workloads are in scope** and **which data plane** they run on.
+
+#### The account (`--plane <id>`, or a question about the setup as a whole)
+
+The workloads are whatever the plane actually runs. Enumerate them:
+
+```
+narrative_jobs_search(data_plane_id=<dpId>, per_page=50)
+```
+
+Group the results by `type` and by the dataset in each `input`. That is your
+workload inventory, and the shapes that repeat are what the pools have to
+serve. Then add the scheduled work that may not appear in the window: a dataset
+whose `refresh_schedule_config` is set is a recurring workload whether or not it
+ran recently.
+
+Then treat each distinct workload as a target below, and size it. Don't size
+all of them one at a time if the inventory is long — group by shape (same type,
+similar row counts, same cadence), size each group once, and say which
+workloads are in it.
+
+**If both come back empty, this is a new account.** Say so, skip to Phase 5,
+and build the recommendation from the interview — there is no history to read
+and no point pretending otherwise.
+
+#### One workload
 
 Resolve whatever the user gave you to the **datasets and access rules the
 work reads**, and to a **data plane id**.
@@ -524,6 +607,12 @@ Under `--quick`, ask none of these; state each unfilled gap as an explicit
 assumption in the Phase 9 output. If the user declines or says "just tell
 me," treat it as `--quick` from then on and do not re-ask.
 
+**`--quick` on a new account has almost nothing to work from** — no history, no
+stats, and nobody to interview. Say that outright rather than producing a
+confident-looking size out of defaults. The useful output there is the shape of
+the setup (how many pools, shared vs private) plus a list of what somebody has
+to tell you before a size means anything.
+
 ### 6. Decide: shared or private
 
 Find the always-on shared pool in the Phase 2 payload by its properties —
@@ -623,6 +712,26 @@ with confidence and the assumptions — and **say what headroom you left and
 why**, since that is the part the user is trusting you on. A rerun is a
 fallback, not the plan: don't present this as a first guess to be corrected
 by a failure. Offer to re-size if reality disagrees; don't design for it.
+
+**For an account review, the answer is a pool set, not a paragraph.** Give the
+pools the account should end up with, each tagged with what to do about it, and
+say which workloads land on each:
+
+| Pool | Action | Workloads | Why |
+| --- | --- | --- | --- |
+| `<id>` (`large`) | keep | nightly MV refresh, 2 others | handles the largest at 40% headroom |
+| new `large_storage` | add | the 3-way join build | wide regrouping, no pool for it today |
+| `<id>` (`medium`) | retire | — | nothing routes here; `x_small` covers what it did |
+
+Then the per-pool settings, per
+[`references/APPLYING.md`](references/APPLYING.md). Say plainly when the current
+setup is already right — "keep all three, nothing to change" is a valid and
+useful outcome, and an account review that always finds something to buy is
+not worth running.
+
+**Under `--quick`, the output is the whole deliverable** — nobody is going to
+answer a follow-up. List every assumption as its own line, mark anything the
+evidence couldn't settle, and don't ask questions in the text.
 
 **Show your evidence as numbers the user can check.** "Dataset 41837 is
 171k rows; the largest of your last five refreshes added 4.2k" is

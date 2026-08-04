@@ -587,8 +587,8 @@
     },
     {
       "name": "suggest-compute-pool",
-      "version": "0.5.0",
-      "description": "Recommend which Narrative compute pool a workload should run on: the\nshared always-on pool or a private one, and if private, which size.\nWorks from what the platform actually exposes — row counts and column\ncardinality from dataset stats, the NQL of the query, the datasets and\naccess rules it reads, and how long past runs took — then asks for the\nexample queries and history the data can't supply. Names a pool, the\nsettings to create it with, and the assumptions behind it. Advises\nonly; never creates or resizes a pool.\nUse when: \"which compute pool should I use\", \"suggest a compute pool\",\n\"what size compute pool do I need\", \"my job is too slow\", \"my job keeps\nfailing\", \"job stuck in Pending\", \"right-size my compute pool\", \"will\nthis query need a bigger pool\".\n(narrative-common)",
+      "version": "0.6.0",
+      "description": "Work out whether an account has the right compute pools for the\nworkloads it runs, and recommend the set it should have. Built for the\ntwo moments it comes up: an account being configured for the first time,\nand a new batch of workloads coming online on an existing one. Works\nfrom what the platform exposes — the pools already configured, row\ncounts and cardinality from dataset stats, each workload's NQL, and how\nlong past runs took — then asks for what the data can't supply. Names\nthe pools, the settings to create them with, which workloads run where,\nand its assumptions. Runs unattended for a per-account sweep. Advises\nonly; never creates or resizes a pool.\nUse when: \"are our compute pools set up right\", \"we're onboarding an\naccount — what pools does it need\", \"we're bringing new workloads\nonline\", \"which compute pool should I use\", \"what size compute pool do I\nneed\", \"my job is too slow\", \"job stuck in Pending\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/suggest-compute-pool/SKILL.md",
       "compatibility": "Requires the narrative-mcp MCP server (no MCP → cannot inspect data planes, pools, datasets, or job history). Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md) and the narrative-knowledge-base MCP server for compute-pool docs. Advice-only and read-only by default; never creates or resizes a pool. The optional probe query and stats recalculation run jobs, and are offered rather than taken. Portable to any agentskills.io-compliant harness.",
@@ -630,6 +630,12 @@
         }
       },
       "args": [
+        {
+          "name": "--plane",
+          "value": "<id>",
+          "required": false,
+          "description": "Review every workload on this data plane against the pools it has configured. The account-level entry point, and what an unattended sweep passes alongside --quick."
+        },
         {
           "name": "--dataset",
           "value": "<id>",
