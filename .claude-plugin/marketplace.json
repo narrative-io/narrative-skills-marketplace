@@ -31,6 +31,15 @@
         "name": "Narrative I/O"
       },
       "source": "./plugins/narrative-audience"
+    },
+    {
+      "name": "narrative-ml",
+      "description": "Machine-learning workflows backed by the narrative-mcp server — building labeled training datasets that map source data onto Rosetta Stone attribute classes, ready for Classifier Studio.",
+      "version": "2026.06.0",
+      "author": {
+        "name": "Narrative I/O"
+      },
+      "source": "./plugins/narrative-ml"
     }
   ]
 }
