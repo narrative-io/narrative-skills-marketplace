@@ -707,15 +707,8 @@ narrative_workflow_runs_list(workflow_id=workflowId)
 Terminal states are `completed`, `failed`, and `terminated`; any other
 status means it is still going.
 
-A run itself cannot be waited on — only jobs can. If you have
-`job_monitor` / `wait_for`, you can wait on the jobs the run enqueued
-instead of re-checking the run: list them with
-`narrative_jobs_search(workflow_run_id=runId)`, register each with
-`job_monitor`, and wait on the handles (up to 8 at once). Two caveats
-make this a second step rather than the first: the jobs exist only once
-the run has enqueued them, so an empty search on a run that just
-started means "not yet"; and a run can still be wrapping up after its
-jobs finish, so confirm the run's own status before reporting success.
+A run itself cannot be waited on — only jobs can — so this is a
+check-and-pause loop, not a wait.
 
 Narrative async work is slow: it rarely finishes in under ~30s, the
 **median is roughly 5 minutes**, and large or cold-pool work can run
