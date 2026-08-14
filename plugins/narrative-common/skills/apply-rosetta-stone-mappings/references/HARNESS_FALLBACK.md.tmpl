@@ -42,6 +42,10 @@ not part of this skill's compatibility surface.
 | `narrative_workflows_create` | A 4xx is a validator error — fix the spec and re-submit (see [`EDGE_CASES.md`](EDGE_CASES.md) for the common root causes). A 5xx or network error is transport — retry once, then surface. |
 | `narrative_workflow_runs_list` | Retry once per poll. If it keeps failing, stop polling and tell the user the workflow was submitted (give them the `workflow_id`) but the run state is unknown. |
 
+## Waiting tools not available
+
+{{SNIPPET:waiting-tools-fallback}}
+
 ## `AskUserQuestion` not available
 
 {{SNIPPET:askuserquestion-fallback}}
