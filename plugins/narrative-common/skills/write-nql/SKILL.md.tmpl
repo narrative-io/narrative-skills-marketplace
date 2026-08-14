@@ -17,7 +17,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.6
+  version: 0.5.7
   narrative:
     args:
       - name: "--run"
@@ -56,7 +56,9 @@ metadata:
         - narrative_datasets_search
         - narrative_datasets_describe
         - narrative_nql_validate
-        - narrative_nql_run
+        - narrative_nql_execute
+        - narrative_workflow_runs_list
+        - narrative_jobs_search
         - narrative_jobs_describe
     recommends:
       tools:
@@ -227,7 +229,7 @@ What to extract:
   if the user is about to query a stale or tiny dataset.
 - **Data plane**: the dataset's `data_plane_id` (or equivalent plane
   field) from the metadata block. You'll pass this to
-  `narrative_nql_run` and `narrative_nql_get_job` in step 8 —
+  `narrative_nql_validate` and `narrative_nql_execute` in step 8 —
   omitting it falls back to the company default plane, which is
   usually wrong on multi-plane tenants. If the describe response
   doesn't surface a plane field for this tenant, call
@@ -358,7 +360,7 @@ back to step 4 with their feedback.
 
 Before submitting, wrap your validated `SELECT` in `CREATE MATERIALIZED
 VIEW` — a bare `SELECT` is not a runnable form against
-`narrative_nql_run`, even when it passes validation. Use the smallest
+`narrative_nql_execute`, even when it passes validation. Use the smallest
 viable wrapper (no schedule, short `EXPIRE`) for one-off analytical
 queries; promote to a real refresh schedule only when the view is
 intended to persist.
@@ -369,7 +371,7 @@ Derive the `DISPLAY_NAME` and `DESCRIPTION` from the question you framed
 in step 2 and the plain-English explanation from step 6.
 
 ```
-narrative_nql_run(
+narrative_nql_execute(
   query: '
     CREATE MATERIALIZED VIEW "wn_<short_slug>_<yyyymmddhhmm>"
     DISPLAY_NAME = ''<Human-Readable Title — Not The Unique Name>''
@@ -383,7 +385,7 @@ narrative_nql_run(
 ```
 
 **Do not add a `BUDGET` clause to the default wrapper.** The validator
-accepts `BUDGET … USD`, but `narrative_nql_run` returns HTTP 500 when
+accepts `BUDGET … USD`, but `narrative_nql_execute` returns HTTP 500 when
 the query reads the user's own data (`company_data.<id>`). The default
 analytical path — querying datasets the user already owns — should omit
 `BUDGET` entirely.
@@ -401,13 +403,14 @@ In either case, query the Narrative knowledge base
 `query_docs_filesystem_narrative_i_o_knowledge_base`) for the current
 `BUDGET` syntax before submitting. Do not hardcode `BUDGET 5 USD`.
 
-Pass the same `data_plane_id` to validate, run, and get_job (rule
-detailed in the async snippet above).
+Pass the same `data_plane_id` to validate and execute (rule detailed
+in the async snippet above).
 
-Then poll `narrative_jobs_describe(job_ids: ["<job_id>"])` per the
-cadence above. While polling, tell the user what's happening once
-("Submitted job `<id>`; polling for completion…") — don't spam status
-updates on every poll.
+`narrative_nql_execute` hands back a workflow and a run, not rows:
+follow the run, then the job underneath it, per the async snippet
+above. Tell the user what's happening once ("Submitted run `<id>`;
+following it to completion…") — don't spam status updates on every
+check.
 
 On terminal state:
 

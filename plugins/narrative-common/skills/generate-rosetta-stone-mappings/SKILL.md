@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.2
+  version: 0.5.3
   narrative:
     args:
       - name: "<free-text>"
@@ -40,7 +40,8 @@ metadata:
         - narrative_datasets_describe
         - narrative_attributes_describe
         - narrative_nql_validate
-        - narrative_nql_run
+        - narrative_nql_execute
+        - narrative_jobs_search
         - narrative_jobs_describe
     recommends:
       skills:
@@ -96,7 +97,7 @@ Map columns from a Narrative source dataset to Rosetta Stone attributes
 via progressive calls to the `narrative-mcp` server. Fetch only the
 schema slice, sample rows, column stats, and attribute definitions you
 need for each decision, and validate every expression with
-`narrative_nql_validate` (and optionally `narrative_nql_run`) before
+`narrative_nql_validate` (and optionally `narrative_nql_execute`) before
 suggesting it.
 
 Without this discipline an agent will either (a) write mappings from
@@ -319,13 +320,15 @@ as concurrent tool calls in a single turn rather than serializing
 them.
 
 Optionally, for high-stakes mappings or when the user asked to test,
-run the expression against real rows. `narrative_nql_run` is
-**asynchronous** — it returns a job descriptor; poll with
-`narrative_jobs_describe(job_ids: ["<id>"])` until `state` is
-`completed`, `failed`, or `cancelled`:
+run the expression against real rows. `narrative_nql_execute` is
+**asynchronous**, and it hands back a workflow and its run rather than
+rows: find the job that run enqueued with
+`narrative_jobs_search(workflow_run_id: "<run_id>")`, then follow
+`narrative_jobs_describe(job_ids: ["<job_id>"], include: ["result"])`
+until `state` is `completed`, `failed`, or `cancelled`:
 
 ```
-narrative_nql_run(
+narrative_nql_execute(
   nql: 'select <expression> as mapped, "<source_column>" as source from company_data."<dataset_id>" limit 25'
 )
 ```

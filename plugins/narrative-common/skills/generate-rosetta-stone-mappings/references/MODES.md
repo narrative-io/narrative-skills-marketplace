@@ -20,10 +20,12 @@ returns a non-empty `mappings[]` array, or the user said "evaluate" /
    `narrative_attributes_describe(attribute_ids: [<id>, ...])`.
 2. For each existing mapping, build a query that selects the mapping
    expression and the underlying source columns with a `limit` cap,
-   and submit it via `narrative_nql_run(nql: '...')`. Poll the
-   returned job with `narrative_jobs_describe(job_ids: ["<id>"])`
-   until `state` is `completed`, then read the result rows to see
-   what the mapping actually produces.
+   and submit it via `narrative_nql_execute(nql: '...')`. That returns
+   a workflow run: find the job it enqueued with
+   `narrative_jobs_search(workflow_run_id: "<run_id>")`, follow
+   `narrative_jobs_describe(job_ids: ["<job_id>"])` until `state` is
+   `completed`, then read the result rows to see what the mapping
+   actually produces.
 3. Score confidence per the main procedure's table, using *execution
    evidence* not just static reasoning.
 4. Present a human-readable scorecard to the user — a row per existing

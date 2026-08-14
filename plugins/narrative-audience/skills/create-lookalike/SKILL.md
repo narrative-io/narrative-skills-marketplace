@@ -21,7 +21,7 @@ compatibility: >-
   scripts/lookalike_state_tag.py for UI re-edit support. Portable to
   any agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.1.1
+  version: 0.1.2
   narrative:
     args:
       - name: "--seed"
@@ -391,7 +391,7 @@ If validation fails:
    not paraphrased; the wording carries the locator info.
 
 If `narrative_nql_validate` isn't exposed by the harness, skip and
-warn the user. Do not substitute `narrative_nql_run`; it allocates
+warn the user. Do not substitute `narrative_nql_execute`; it allocates
 compute.
 
 2. **Resolve the output identity mapping**: call

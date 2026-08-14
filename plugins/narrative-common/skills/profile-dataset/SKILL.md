@@ -21,7 +21,7 @@ compatibility: >-
   Portable to any agentskills.io-compliant harness via the documented
   fallbacks.
 metadata:
-  version: 0.1.2
+  version: 0.1.3
   narrative:
     args:
       - name: "--dataset"
@@ -95,7 +95,7 @@ metadata:
         - narrative_context_set_company
         - narrative_access_rules_describe
         - narrative_nql_validate
-        - narrative_nql_run
+        - narrative_nql_execute
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->

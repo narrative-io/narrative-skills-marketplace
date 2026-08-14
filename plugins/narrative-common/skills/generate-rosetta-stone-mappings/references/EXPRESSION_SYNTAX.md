@@ -181,7 +181,7 @@ Presto-style format mask tokens (most common):
 Drop confidence by ≥15 points and add an `ambiguous_date_format`
 warning when (a) the format mask is locale-dependent (M/D vs D/M), or
 (b) you're using `%y` rather than `%Y` (century rollover depends on
-the engine's pivot year — confirm with `narrative_nql_run` if any
+the engine's pivot year — confirm with `narrative_nql_execute` if any
 records may be pre-2000). Always validate the exact mask against the
 schema before suggesting it.
 

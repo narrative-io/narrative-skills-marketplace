@@ -20,7 +20,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.7.2
+  version: 0.7.3
   narrative:
     args:
       - name: "--dataset"
@@ -90,7 +90,7 @@ metadata:
         - narrative_context_set_company
         - narrative_attributes_describe
         - narrative_attributes_search
-        - narrative_nql_run
+        - narrative_nql_execute
         - narrative_workflows_trigger
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
@@ -681,7 +681,7 @@ If validation fails:
    not paraphrased; the wording carries the locator info.
 
 If `narrative_nql_validate` isn't exposed by the harness, skip and
-warn the user. Do not substitute `narrative_nql_run`; it allocates
+warn the user. Do not substitute `narrative_nql_execute`; it allocates
 compute.
 
 ---
@@ -959,7 +959,7 @@ new company context.
   inline (configure → recalculate → re-read). See
   [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 - **No `narrative_nql_validate`.** Skip Phase 6 pre-flight; do not
-  substitute `narrative_nql_run`. See
+  substitute `narrative_nql_execute`. See
   [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 - **No `AskUserQuestion`.** If the harness does not expose `AskUserQuestion` as a named tool
 (Claude Code does; most others don't), ask the user the same question

@@ -74,9 +74,10 @@ target attribute/property:
 
 When evaluating a mapping whose target has enum constraints:
 
-1. Submit a distribution query via `narrative_nql_run(nql: ...)` and
-   poll the returned job with `narrative_jobs_describe` until
-   `state` is `completed`. The query selects the expression against
+1. Submit a distribution query via `narrative_nql_execute(nql: ...)`.
+   It returns a workflow run rather than a job, so find the job with
+   `narrative_jobs_search(workflow_run_id: "<run_id>")`, then follow
+   `narrative_jobs_describe` until `state` is `completed`. The query selects the expression against
    the dataset's table reference `company_data."<dataset_id>"`:
    ```sql
    select <the_expression> as produced, count(*) as n

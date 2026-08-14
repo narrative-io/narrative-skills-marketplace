@@ -76,9 +76,9 @@ NQL material lives under `/concepts/nql/`, `/cookbooks/nql/`, and
 | `/concepts/nql/query-templates.mdx` | Reusable templates for common selects |
 | `/concepts/nql/materialized-views.mdx` | When the user asks to materialize a mapped projection |
 | `/cookbooks/nql/common-queries.mdx` | Worked patterns — coalesce, case-when, lower/upper, hashing |
-| `/cookbooks/nql/performance-patterns.mdx` | If `narrative_nql_run` is slow on a validation test |
+| `/cookbooks/nql/performance-patterns.mdx` | If `narrative_nql_execute` is slow on a validation test |
 | `/getting-started/first-nql-query.mdx` | Smoke check for `company_data."<id>"` syntax |
-| `/api-reference/nql/` | Endpoint contracts mirroring `narrative_nql_validate` / `narrative_nql_run` |
+| `/api-reference/nql/` | Endpoint contracts mirroring `narrative_nql_validate` / `narrative_nql_execute` |
 
 For NQL **gotchas / troubleshooting** specifically — when a mapping
 expression validates locally but fails at run time, or when you're

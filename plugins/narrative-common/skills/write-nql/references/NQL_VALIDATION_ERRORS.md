@@ -14,7 +14,7 @@ rule, follow the link to [`NQL_GOTCHAS.md`](NQL_GOTCHAS.md) or the KB.
 | "function does not exist" | Wrong function name (e.g., `LCASE`) | Use the supported function list in the syntax-essentials snippet |
 | "No match found for function signature `date_parse`/`parse_datetime`" | Function not exposed | Use `to_timestamp(text, format)` or `CAST(... AS timestamp)` |
 | "No match found for function signature `APPROX_PERCENTILE`" or run-time 500 on `PERCENTILE_CONT` | Percentile functions not available on the Snowflake data plane | Bucketed counts or row-position derivation — see [`PERCENTILE_DISTRIBUTION.md`](PERCENTILE_DISTRIBUTION.md) |
-| Validate-only "Unknown Table" on `company_data."<numeric_id>"` that run accepts | Validate call omitted `data_plane_id` and fell back to the company default plane | Pass `data_plane_id` to `narrative_nql_validate` matching the dataset's plane — same value as you'll pass to `narrative_nql_run` |
+| Validate-only "Unknown Table" on `company_data."<numeric_id>"` that run accepts | Validate call omitted `data_plane_id` and fell back to the company default plane | Pass `data_plane_id` to `narrative_nql_validate` matching the dataset's plane — same value as you'll pass to `narrative_nql_execute` |
 | "cannot cast string to long" | Implicit coercion | Wrap with `CAST(... AS long)` or `NULLIF` |
 | "unexpected ELSE without CASE" | Mismatched CASE/END | Count `CASE … END` pairs |
 | "wildcard not supported" / "SELECT \* not supported" | Used `SELECT *` or `COUNT(*)` | Enumerate columns; use `COUNT(1)` or `COUNT(<col>)` |
