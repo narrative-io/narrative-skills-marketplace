@@ -14,10 +14,11 @@ license: MIT
 compatibility: >-
   Requires the narrative-mcp MCP server. Recommends AskUserQuestion (a
   Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md)
-  and the narrative-knowledge-base MCP server. Portable to any
+  and the narrative-knowledge-base MCP server. Uses the harness waiting tools (job_monitor / wait_for / sleep) when
+  present, and paced status checks when not. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.7
+  version: 0.5.8
   narrative:
     args:
       - name: "--run"
@@ -407,10 +408,10 @@ Pass the same `data_plane_id` to validate and execute (rule detailed
 in the async snippet above).
 
 `narrative_nql_execute` hands back a workflow and a run, not rows:
-follow the run, then the job underneath it, per the async snippet
-above. Tell the user what's happening once ("Submitted run `<id>`;
-following it to completion…") — don't spam status updates on every
-check.
+find the job under the run, then wait on it with `job_monitor` /
+`wait_for` if you have them, per the async snippet above. Tell the user
+what's happening once ("Submitted run `<id>`; waiting for it to
+finish…") — don't narrate every check.
 
 On terminal state:
 

@@ -18,10 +18,11 @@ compatibility: >-
   AskUserQuestion (a Claude Code primitive; prose fallback in
   references/HARNESS_FALLBACK.md), the narrative-knowledge-base MCP
   server, and a shell with python3 (3.8+) to run
-  scripts/lookalike_state_tag.py for UI re-edit support. Portable to
+  scripts/lookalike_state_tag.py for UI re-edit support. Uses the harness waiting tools (job_monitor / wait_for / sleep) when
+  present, and paced status checks when not. Portable to
   any agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.1.2
+  version: 0.1.3
   narrative:
     args:
       - name: "--seed"

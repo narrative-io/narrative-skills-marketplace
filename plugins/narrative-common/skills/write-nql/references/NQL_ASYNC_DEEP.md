@@ -36,7 +36,7 @@ descriptor. To see them you have to run a second asynchronous job to
 materialize a sample, then fetch it.
 
 1. **Submit the sampling job.** `narrative_dataset_request_sample(dataset_id: <id>)` → returns a new `job_id` directly, with no workflow in between. Use the `dataset_id` from the materialize-view job's `result`.
-2. **Poll that job to completion** with `narrative_jobs_describe(job_ids: ["<sample_job_id>"])`, using the same backoff as the parent snippet.
+2. **Wait for that job** — `job_monitor(job_id: "<sample_job_id>")` then `wait_for` where those tools exist, otherwise `narrative_jobs_describe(job_ids: ["<sample_job_id>"])` on the parent snippet's backoff.
 3. **Read the sample rows** with `narrative_datasets_describe(dataset_ids: [<id>], include: ["sample"])`. The sample lives in the control plane and is what `include=["sample"]` returns.
 
 ```
@@ -45,7 +45,7 @@ narrative_nql_execute(nql: "CREATE MATERIALIZED VIEW \"my_view\" AS SELECT …")
 narrative_jobs_search(workflow_run_id: "<run>")        → job <job>
   → follow narrative_jobs_describe(job_ids: ["<job>"]) → result.dataset_id = 1234
 narrative_dataset_request_sample(dataset_id: 1234)     → job <sample-job>
-  → follow narrative_jobs_describe → completed
+  → wait_for the sample job → completed
 narrative_datasets_describe(dataset_ids: [1234], include: ["sample"])
   → returns the sample rows (capped at 1,000)
 ```
@@ -75,8 +75,8 @@ keep the `LIMIT` low (or push the work into aggregates: `COUNT(1)`,
 `narrative_dataset_refresh_materialized_view`, and
 `narrative_dataset_recalculate_statistics` hand back a **job id
 directly** — no workflow run to search through, unlike
-`narrative_nql_execute` — and from there use the same
-`narrative_jobs_describe` protocol. The state machine and backoff in
+`narrative_nql_execute` — which also makes them the easiest things to
+wait on: register the id with `job_monitor` and wait. The state machine and backoff in
 the parent snippet apply identically. The recalculation
 case has one caveat: for datasets not yet on the new statistics
 framework, the returned id is **not** a job id and

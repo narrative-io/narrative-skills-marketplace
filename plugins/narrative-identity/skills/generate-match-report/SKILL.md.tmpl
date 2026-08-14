@@ -17,10 +17,11 @@ license: MIT
 compatibility: >-
   Requires the narrative-mcp MCP server and local file Read. Recommends
   AskUserQuestion — a Claude Code primitive with a prose fallback in
-  references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
+  references/HARNESS_FALLBACK.md. Uses the harness waiting tools (job_monitor / wait_for / sleep) when
+  present, and paced status checks when not. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.7.3
+  version: 0.7.4
   narrative:
     args:
       - name: "--dataset"

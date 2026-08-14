@@ -58,6 +58,10 @@ The job appears only once the run has enqueued it, so an empty
 `narrative_jobs_search` on a run that just started means "not yet",
 not "nothing to find".
 
+Once you have that job id, **wait on it rather than re-reading it**:
+`job_monitor(job_id: "<job-uuid>")` then `wait_for`. Only the first
+hop — getting from a fresh run to its job — needs checking at all.
+
 {{SNIPPET:async-poll-cadence}}
 
 For NQL the early/startup job states are `queued` / `pending` (where

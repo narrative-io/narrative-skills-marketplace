@@ -40,7 +40,7 @@ narrative_dataset_get_column_stats(
 ```
 
 If the bundled sample is too old to trust for shape inference, enqueue a
-fresh one (async — poll the returned job):
+fresh one (async — wait for the returned job):
 
 ```
 narrative_dataset_request_sample(dataset_id: <id>)
@@ -111,8 +111,8 @@ narrative_dataset_recalculate_statistics(dataset_id: <id>)
 ```
 
 Async; returns a `recalculation_id` / job. **Gate this** behind the
-Phase 3 confirmation unless `--allow-recalc` was passed. Poll the
-returned job until terminal, then re-read with
+Phase 3 confirmation unless `--allow-recalc` was passed. Wait for the
+returned job to reach a terminal state, then re-read with
 `narrative_dataset_get_column_stats` and set
 `stats_freshness: "recalculated"` on the profile. Cadence:
 
