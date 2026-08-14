@@ -18,7 +18,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.8
+  version: 0.5.9
   narrative:
     args:
       - name: "--run"
@@ -373,7 +373,7 @@ in step 2 and the plain-English explanation from step 6.
 
 ```
 narrative_nql_execute(
-  query: '
+  nql: '
     CREATE MATERIALIZED VIEW "wn_<short_slug>_<yyyymmddhhmm>"
     DISPLAY_NAME = ''<Human-Readable Title — Not The Unique Name>''
     DESCRIPTION = ''<One+ sentence: what it computes, from which dataset(s), with which filters/caveats.>''
