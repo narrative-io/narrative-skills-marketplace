@@ -5,104 +5,104 @@ conversation, so something has to carry them into the platform. There
 is no upload step and no staging file: the rows travel as SQL string
 literals inside statements the platform executes.
 
+## Why there is no INSERT here
+
+`INSERT` cannot target a materialized view, and a materialized view is
+the only thing NQL creates. The platform rejects the combination
+identically at validate and at execute:
+
+```
+Invalid Target Dataset (400)
+Target '<name>' must be a regular dataset; views, materialized views,
+access rules, rosetta_stone, subscription datasets, and external
+datasets are not supported.
+```
+
+That closes the whole append-based family of approaches: seed a
+dataset then `INSERT` into it, `ExecuteDml` chunks in a workflow,
+`CreateMaterializedViewIfNotExists` followed by appends. None of them
+can run, whatever order they are sequenced in.
+
+The rows therefore arrive inside `CREATE` statements.
+
 ## The path this skill uses
 
-Two statements, run as an ordered workflow:
+1. **One part view per chunk**, roughly 500 rows each, built on a
+   multi-column `VALUES` constructor
+   ([`../assets/templates/02-synthetic-part.sql`](../assets/templates/02-synthetic-part.sql)).
+   Each part is temporary: `EXPIRE = 'P1D'` plus `_nio_interactive`.
+2. **A union of the parts** into the persistent synthetic half
+   ([`../assets/templates/03-synthetic-union.sql`](../assets/templates/03-synthetic-union.sql)).
 
-1. **`CreateMaterializedViewIfNotExists`** runs the seed statement,
-   which creates the dataset and puts the first row in it.
-2. **One `ExecuteDml` task per chunk** runs an
-   `INSERT INTO … (columns) VALUES (…), (…), …` that appends the rest.
+Each part is independent, so a malformed literal costs one chunk rather
+than the set, and the parts can be re-run individually.
 
-`ExecuteDml` is the documented execution surface for `INSERT`,
-`UPDATE`, and `DELETE`. Running the pair as a workflow rather than as
-two separate calls is what guarantees the ordering: workflow steps run
-sequentially, and `INSERT` fails if its target does not exist yet.
+## Constructions
 
-`INSERT` never creates a dataset, which is why the seed statement
-exists at all.
-
-## Why the seed carries a row instead of being empty
-
-The seed could have been a zero-row statement, and then every synthetic
-row would arrive through one mechanism. It carries one real row instead,
-for two reasons: an empty materialized view is a shape worth not
-depending on, and a zero-row seed needs a constant-false predicate whose
-handling is one more thing to be unsure about. One genuine row costs
-nothing and removes both questions.
-
-## Constructions, and which ones have evidence
-
-Three ways exist to express literal rows in NQL. They are not equally
-well established, and the difference matters when a query fails at
-run time after passing validation.
-
-| Construction | Evidence | Used here |
+| Construction | Status | Used here |
 | --- | --- | --- |
-| `INSERT INTO t (cols) VALUES (…), (…)` | Documented in `/nql/commands/insert`, multi-row and multi-column | Yes, for every chunk |
-| `WITH s AS (SELECT 'a' AS x) SELECT … FROM s` | The AI-enrichment cookbook uses exactly this shape | Yes, for the seed |
-| `FROM (VALUES ('a','b')) AS t(x, y)` | The single-column form appears in working queries; the multi-column form is not documented | No |
+| `SELECT t.a, t.b FROM (VALUES ('a','b'), ('c','d')) AS t(x, y)` | Validates and runs | Yes, for every part |
+| `WITH s AS (SELECT 'a' AS x, 'b' AS y) SELECT … FROM s` | Validates and runs | Fine for one or two rows; verbose past that |
+| `INSERT INTO <materialized view> … VALUES …` | Rejected, validate and execute | No — cannot work |
 
-The third one probably works — it is the same table-constructor grammar
-as the single-column form, which does. But the first two cover
-everything this skill needs and neither rests on an inference, so
-neither is worth trading for brevity.
-
-Where a table constructor is genuinely convenient and the column count
-is one, it is fine. The enum list in `01-real-labeled.sql` uses
-`(VALUES ('Class'), ('Class')) AS enum_rows("value")` for that reason.
+The multi-column table constructor is the compact form and it is what
+the part template uses. Earlier revisions of this skill avoided it on
+the grounds that only the single-column form was documented; that
+caution was wrong, and the construction it steered toward is the one
+that cannot run.
 
 ## Chunk sizing
 
-Roughly 500 rows per `INSERT` statement, one statement per `ExecuteDml`
-task.
+Roughly 500 rows per part.
 
-The limit that matters is not a platform maximum. It is that a single
-mis-escaped apostrophe fails the whole statement, and finding it in 500
+The limit that matters is not a platform maximum. It is that one
+mis-escaped literal fails its whole statement, and finding it in 500
 rows is quick where finding it in 5,000 is not. Smaller chunks also
-mean a failure part-way through loses less work, since the chunks that
-already ran stay committed.
+mean a failure part-way through loses less work, since the parts that
+already ran stay materialized.
 
-## Quoting
+Each part of ~500 rows renders to roughly 20KB of SQL. That is the real
+constraint on chunk size in an agent harness: the statement has to be
+authored into a tool call, so a whole synthetic set of a few thousand
+rows is a few hundred KB of generated SQL however it is divided.
 
-Every value is a single-quoted SQL string literal, so an apostrophe
-inside one has to be doubled:
+## Escaping
 
-```sql
-('O''Brien''s Terrier', 'Unknown', 'synthetic', 'synthetic_seed', 1.0, 1)
-```
+Every value is a single-quoted SQL string literal, and **two**
+characters need escaping. Both are easy to miss in rows that are
+deliberately full of typos and punctuation noise:
 
-This is the most likely thing to go wrong in the whole phase, because
-misspellings and punctuation noise are deliberately part of the rows
-being generated. Scan each chunk for apostrophes before submitting it.
+| Character | Escape | Example |
+| --- | --- | --- |
+| Apostrophe | double it | `'O''Brien''s Terrier'` |
+| Backslash | double it | `'n\\a'` stores `n\a` |
 
-## Validate before submitting
+The backslash is the one that bites quietly. It is an escape character
+inside the literal, so a raw `'n\a'` is read as an escape sequence and
+the stored value is not the value that was written — no error, just a
+row that says something other than what the generator intended. Junk
+values written for a catch-all class (`n/a`, `n\a`, `-`, `??`) are
+exactly where this shows up.
 
-`narrative_workflows_create` checks the YAML shape and the task
-contract. It does not check NQL semantics inside `nql:` fields, so a
-malformed `INSERT` gets caught at run time rather than at submission.
-
-Validate both statements separately first:
-
-```
-narrative_nql_validate(nql: <the seed CREATE statement>, data_plane_id: <plane>)
-narrative_nql_validate(nql: <a two-row version of chunk 1>, data_plane_id: <plane>)
-```
-
-Two rows is enough to confirm the column list, the positional binding,
-and the types. Once it validates, the full chunk differs only in how
-many rows follow `VALUES`.
+Scan each chunk for both characters before submitting. A generator that
+emits these rows should escape them at the point of emission rather
+than relying on the scan.
 
 ## Re-running
 
-`CreateMaterializedViewIfNotExists` skips the create when the dataset
-already exists, and the `ExecuteDml` steps append regardless. Running
-the same workflow twice therefore produces two copies of every row, and
-duplicate training rows quietly reweight the classes they belong to.
+`CREATE MATERIALIZED VIEW` against a name that **already exists** is a
+silent no-op: the run reports `completed` in about two seconds,
+enqueues no job, and leaves the existing rows in place. `WRITE_MODE =
+'overwrite'` does not change this.
 
-To re-run, use a new dataset name or delete the existing dataset first.
-Say which one is happening; silently appending to a dataset a model was
-already trained on makes that model's training set unreconstructable.
+That failure mode is worse than an error, because the run history shows
+green and the stale data looks fresh. Two habits protect against it:
+
+- **Use a new name for every rebuild.** Do not reuse the name of a view
+  you are trying to replace.
+- **Read the row count off the job result, not the run status.** A
+  completed run with no `materialize-view` job did nothing. The job's
+  `result.row_stats.inserted_rows` is the number that tells the truth.
 
 ## What this skill does not use
 
@@ -110,10 +110,4 @@ already trained on makes that model's training set unreconstructable.
 are the platform's bulk ingestion path, and for hundreds of thousands of
 rows they are the right answer. They have no MCP tool, so reaching them
 means hand-rolled authentication inside the skill. Synthetic training
-sets are thousands of rows at most, which `INSERT` handles comfortably.
-
-**`narrative_nql_run` for the `INSERT`.** The docs place `INSERT` on the
-NQL query endpoint as well as in `ExecuteDml`, so submitting it directly
-may well work. `ExecuteDml` is the surface the workflow documentation
-names for DML, and using it also buys the ordering guarantee, so this
-skill does not depend on the other path being available.
+sets are thousands of rows at most, which chunked `CREATE` handles.

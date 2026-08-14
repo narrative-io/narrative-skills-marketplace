@@ -23,7 +23,7 @@ compatibility: >-
   server. Portable to any agentskills.io-compliant harness via the
   documented fallbacks.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     args:
       - name: "--attribute"
@@ -113,10 +113,9 @@ metadata:
         - narrative_datasets_describe
         - narrative_data_planes_list
         - narrative_nql_validate
-        - narrative_nql_run
+        - narrative_nql_execute
         - narrative_jobs_describe
         - narrative_dataset_request_sample
-        - narrative_workflows_create
         - narrative_workflow_runs_list
     recommends:
       skills:
@@ -317,8 +316,16 @@ Resolve a phrase through `/find-attribute`; take an id straight to:
 narrative_attributes_describe(attribute_ids: [<id>])
 ```
 
-Read the JSON Schema off the response and pull the `enum` array. Then
-check three things and stop on any of them:
+Read the JSON Schema off the response and pull the `enum` array.
+
+Keep that array as the single source for everything downstream that
+names a class: the match table in phase 5, the response schema handed
+to `AI_COMPLETE`, and the per-class targets in phase 7. Generate them
+from the fetched array rather than retyping the values. Casing and
+accents are matched literally, so `Bichon Frisé` retyped as
+`Bichon Frise` is a class that never matches anything and never fills.
+
+Then check three things and stop on any of them:
 
 - **No `enum` on the attribute.** An unconstrained string attribute has
   no class list, so there is nothing to train toward. Say so and offer
@@ -345,7 +352,7 @@ narrative_datasets_describe(dataset_ids: [<id>], include: ["metadata", "schema",
 
 Capture the `unique_name`, the column list with types, the row count,
 and the data plane. Pass that plane id to every `narrative_nql_validate`
-and `narrative_nql_run` call in this skill.
+and `narrative_nql_execute` call in this skill.
 
 **Then check the plane's platform and stop if it is not Snowflake.**
 Both things this skill depends on are Snowflake-only: `AI_COMPLETE` for
@@ -470,7 +477,7 @@ spends money. Under `--dry-run`, stop here.
 On approval, run it and poll:
 
 ```
-narrative_nql_run(query: <the CREATE MATERIALIZED VIEW>, data_plane_id: <plane>)
+narrative_nql_execute(query: <the CREATE MATERIALIZED VIEW>, data_plane_id: <plane>)
 → { job_id }
 narrative_jobs_describe(job_ids: ["<job_id>"])
 ```
@@ -513,7 +520,7 @@ rows back takes a second job; the sequence is in
 
 ### 6. Measure coverage — mandatory
 
-Do not eyeball a sample for this. A sample is capped at 1,000 rows,
+Do not eyeball a sample for this. A sample is capped at 100 rows,
 which is smaller than most training sets and says nothing reliable
 about a thin class. Run an aggregate instead:
 
@@ -592,10 +599,29 @@ synthetic set written in clean title case teaches the classifier that
 casing predicts the label, and it will use that.
 
 Do not produce the class name N times. N copies of one string is one
-training example carrying a large weight, not N examples. Vary each
-class instead along the six axes the reference lists: canonical form,
-casing, abbreviation, misspelling, embedded qualifier, and near-miss
-confusable.
+training example carrying a large weight, not N examples.
+
+Vary each class along the axes the reference lists, and in its order:
+**vocabulary first** — registry and historical alternates, regional
+names, slang, other languages, domain shorthand — then **surface**
+— casing, clipping, spacing, misspelling, qualifiers. Vocabulary axes
+are what a string edit cannot reach: `Alsatian` is not derivable from
+`German Shepherd Dog` by any transformation, so the class only gets it
+if the vocabulary step found it. A set built surface-first looks
+diverse by row count and is narrow by content.
+
+Collect that vocabulary as its own step before generating, and above
+roughly 30 classes fan it out across subagents in batches — the
+reference gives the brief and the two checks that keep the results
+usable. Then include the boundary cases: values sitting close to the
+line between two classes, each labeled correctly, so the model learns
+where a class stops instead of guessing.
+
+When a class genuinely has one name and no alternates, it supports
+fewer distinct examples than a class with nine. Lower the floor for it
+and say so, or take the padding and report that the class is mostly one
+string wearing hats. Do not emit twenty doubled-letter variants and
+call the class covered.
 
 **Show the user the generated rows before materializing them.** They
 are being invented, they will be trained on, and this is the cheapest
@@ -603,22 +629,41 @@ point at which a wrong one can be removed. For a large set, show every
 row for a handful of classes and a summary for the rest.
 
 Once approved, write them in. The rows travel as SQL string literals
-inside statements the platform runs; there is no upload step. Two
-statements do it, and they have to run in that order:
+inside statements the platform runs; there is no upload step and no
+`INSERT`.
 
-1. **Create the dataset and seed it** with the first row, from
-   [`assets/templates/02-synthetic-seed.sql`](assets/templates/02-synthetic-seed.sql).
-   `INSERT` cannot create a dataset, so this has to exist first.
-2. **Append the rest in chunks**, roughly 500 rows per statement, from
-   [`assets/templates/03-synthetic-insert.sql`](assets/templates/03-synthetic-insert.sql).
+**`INSERT` cannot target a materialized view**, and a materialized view
+is the only thing NQL can create. The platform rejects the combination
+at both validate and execute, with the same error:
 
-Run both as a single workflow, seeding step first and one `ExecuteDml`
-task per chunk:
-[`assets/templates/synthetic-workflow.yaml`](assets/templates/synthetic-workflow.yaml).
-`ExecuteDml` is the documented execution surface for `INSERT`, and a
-workflow runs its steps sequentially, so the create-then-append ordering
-is guaranteed rather than hoped for. Hand off to `/create-workflow` if
-the spec needs more than the template shape.
+```
+Target '<name>' must be a regular dataset; views, materialized views,
+access rules, rosetta_stone, subscription datasets, and external
+datasets are not supported.
+```
+
+So the rows arrive as `CREATE MATERIALIZED VIEW` statements built on a
+multi-column `VALUES` constructor, from
+[`assets/templates/02-synthetic-part.sql`](assets/templates/02-synthetic-part.sql):
+
+1. **Write one part view per chunk**, roughly 500 rows each. Each part
+   is temporary — `EXPIRE = 'P1D'` and `_nio_interactive` — because the
+   deliverable is the union, not the parts.
+2. **Union the parts** into the synthetic half, from
+   [`assets/templates/03-synthetic-union.sql`](assets/templates/03-synthetic-union.sql).
+
+Chunk at ~500 rows for the same reason a chunked `INSERT` would: one
+mis-escaped literal fails its whole statement, and finding it in 500
+rows is quick where finding it in 5,000 is not. Each part is
+independent, so a failure costs one chunk rather than the set.
+
+Every statement in this phase creates a **new** name. Re-issuing
+`CREATE MATERIALIZED VIEW` against a name that already exists reports
+`completed` in about two seconds, enqueues no job, and leaves the
+existing rows untouched — `WRITE_MODE = 'overwrite'` does not override
+it. A rebuild that reuses a name therefore looks like it succeeded
+while changing nothing. Use a fresh name, and confirm the row count
+from the job result rather than from the run status.
 
 Validate both statements before submitting anything.
 `narrative_workflows_create` checks the YAML shape and the task
@@ -814,8 +859,11 @@ Full prose in [`references/EDGE_CASES.md`](references/EDGE_CASES.md).
 - **Confidence gate placed in a `JOIN` instead of a `WHERE`** → low-confidence rows survive with a null label and poison the training set. Drop them.
 - **Class names that differ only by accent or case** → the exact match folds case, so `Frise` and `Frisé` collide. Match on the verbatim enum string.
 - **Name collision with an existing dataset** → stop and ask; overwriting a training set silently invalidates any model already trained on it.
-- **Re-running the synthetic workflow** → every row is appended a second time. The create step is skipped when the dataset exists, the `ExecuteDml` steps append regardless. Use a new name or delete the dataset first.
-- **An apostrophe inside a synthetic value** → the `INSERT` fails on the whole chunk. Double it: `'O''Brien'`.
+- **Rebuilding a view under a name that already exists** → the run reports `completed` in about two seconds, enqueues no job, and leaves the old rows in place. `WRITE_MODE = 'overwrite'` does not override it, so a rebuild looks successful while changing nothing. Use a new name, and read the row count off the job result rather than the run status.
+- **`INSERT` into anything this skill creates** → rejected at both validate and execute: the target must be a regular dataset, and NQL only creates materialized views. Synthetic rows arrive as chunked `CREATE` statements, never as appends.
+- **An apostrophe inside a synthetic value** → the statement fails on the whole chunk. Double it: `'O''Brien'`.
+- **A backslash inside a synthetic value** → worse than a failure, because it succeeds. The backslash escapes the next character, so `'n\a'` stores something other than `n\a` with no error. Double it: `'n\\a'`. Catch-all junk values are where this appears.
+- **Retyping the enum instead of generating from the payload** → one wrong accent or capital and that class matches nothing, silently. Generate the match table and the response schema from the same fetched array.
 - **Synthetic rows written in clean casing against messy real data** → the classifier learns casing as a feature. Mimic the source.
 - **A class the labeler was never confident about** → usually two enum values that overlap in meaning. Surface it; it is a class-design problem, not a data problem.
 

@@ -884,7 +884,7 @@
     },
     {
       "name": "create-training-data",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "Build a labeled training dataset that maps a source dataset onto the\nenum classes of a Rosetta Stone attribute, ready to train in Classifier\nStudio. Labels real rows in-plane with AI_COMPLETE behind a\ndeterministic matcher, generates synthetic rows for the classes real\ndata misses, and unions the two into one training view, reporting\nclass and feature coverage at each step.\nUse when: \"create training data for a classifier\", \"training data for\n<attribute>\", \"I need labeled data to classify <column> as\n<attribute>\", \"generate synthetic training rows\", \"my classifier has\nno examples for these classes\", \"prepare a dataset for Classifier\nStudio\".\n(narrative-ml)",
       "plugin": "narrative-ml",
       "path": "plugins/narrative-ml/skills/create-training-data/SKILL.md",
@@ -900,10 +900,9 @@
             "narrative_datasets_describe",
             "narrative_data_planes_list",
             "narrative_nql_validate",
-            "narrative_nql_run",
+            "narrative_nql_execute",
             "narrative_jobs_describe",
             "narrative_dataset_request_sample",
-            "narrative_workflows_create",
             "narrative_workflow_runs_list"
           ]
         },
