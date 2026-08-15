@@ -12,7 +12,7 @@ the moment:
 - `APPROX_PERCENTILE(col, p)` returns HTTP 422 *"No match found for
   function signature"* — the function is not registered on the engine.
 - `PERCENTILE_CONT(p) WITHIN GROUP (ORDER BY col)` **validates** but
-  returns HTTP 500 from `narrative_nql_run` when wrapped in a
+  returns HTTP 500 from `narrative_nql_execute` when wrapped in a
   `CREATE MATERIALIZED VIEW`.
 
 Multiple agents have independently re-invented the workaround. This

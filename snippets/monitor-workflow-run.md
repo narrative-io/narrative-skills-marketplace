@@ -7,7 +7,10 @@ narrative_workflow_runs_list(workflow_id=workflowId)
 ```
 
 Terminal states are `completed`, `failed`, and `terminated`; any other
-status means keep polling.
+status means it is still going.
+
+A run itself cannot be waited on — only jobs can — so this is a
+check-and-pause loop, not a wait.
 
 {{SNIPPET:async-poll-cadence}}
 

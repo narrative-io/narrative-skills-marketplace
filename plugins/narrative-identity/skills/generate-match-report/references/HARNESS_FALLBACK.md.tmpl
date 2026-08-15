@@ -10,7 +10,7 @@ Skip the Phase 6 pre-flight validation. Surface a one-line warning
 to the user before the submit gate ("NQL validation tool not
 available — the workflow runner will catch any syntax errors after
 ~5 minutes instead of up front"). Do not auto-substitute
-`narrative_nql_run` — that allocates compute.
+`narrative_nql_execute` — that allocates compute.
 
 ## When `/profile-dataset` is unavailable (Phase 3)
 
@@ -50,6 +50,10 @@ completes, re-fetch column stats, and read the histogram keys into
 `narrative_dataset_set_column_stats_config`, and
 `narrative_dataset_recalculate_statistics` tools (declared by
 `/profile-dataset`, not by this skill).
+
+## When the waiting tools are unavailable
+
+{{SNIPPET:waiting-tools-fallback}}
 
 ## When `AskUserQuestion` is unavailable
 

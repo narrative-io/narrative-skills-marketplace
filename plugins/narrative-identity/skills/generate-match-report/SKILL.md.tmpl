@@ -17,10 +17,11 @@ license: MIT
 compatibility: >-
   Requires the narrative-mcp MCP server and local file Read. Recommends
   AskUserQuestion — a Claude Code primitive with a prose fallback in
-  references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
+  references/HARNESS_FALLBACK.md. Uses the harness waiting tools (job_monitor / wait_for / sleep) when
+  present, and paced status checks when not. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.7.2
+  version: 0.7.4
   narrative:
     args:
       - name: "--dataset"
@@ -90,7 +91,7 @@ metadata:
         - narrative_context_set_company
         - narrative_attributes_describe
         - narrative_attributes_search
-        - narrative_nql_run
+        - narrative_nql_execute
         - narrative_workflows_trigger
 ---
 
@@ -827,7 +828,7 @@ new company context.
   inline (configure → recalculate → re-read). See
   [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 - **No `narrative_nql_validate`.** Skip Phase 6 pre-flight; do not
-  substitute `narrative_nql_run`. See
+  substitute `narrative_nql_execute`. See
   [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 - **No `AskUserQuestion`.** {{SNIPPET:askuserquestion-fallback}}
   Multi-select prompts (id-type subsetting, enrichment attribute

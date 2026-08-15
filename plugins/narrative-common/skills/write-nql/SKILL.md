@@ -14,10 +14,11 @@ license: MIT
 compatibility: >-
   Requires the narrative-mcp MCP server. Recommends AskUserQuestion (a
   Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md)
-  and the narrative-knowledge-base MCP server. Portable to any
+  and the narrative-knowledge-base MCP server. Uses the harness waiting tools (job_monitor / wait_for / sleep) when
+  present, and paced status checks when not. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.6
+  version: 0.5.9
   narrative:
     args:
       - name: "--run"
@@ -56,7 +57,9 @@ metadata:
         - narrative_datasets_search
         - narrative_datasets_describe
         - narrative_nql_validate
-        - narrative_nql_run
+        - narrative_nql_execute
+        - narrative_workflow_runs_list
+        - narrative_jobs_search
         - narrative_jobs_describe
     recommends:
       tools:
@@ -256,7 +259,7 @@ What to extract:
   if the user is about to query a stale or tiny dataset.
 - **Data plane**: the dataset's `data_plane_id` (or equivalent plane
   field) from the metadata block. You'll pass this to
-  `narrative_nql_run` and `narrative_nql_get_job` in step 8 —
+  `narrative_nql_validate` and `narrative_nql_execute` in step 8 —
   omitting it falls back to the company default plane, which is
   usually wrong on multi-plane tenants. If the describe response
   doesn't surface a plane field for this tenant, call
@@ -436,7 +439,7 @@ If validation fails:
    not paraphrased; the wording carries the locator info.
 
 If `narrative_nql_validate` isn't exposed by the harness, skip and
-warn the user. Do not substitute `narrative_nql_run`; it allocates
+warn the user. Do not substitute `narrative_nql_execute`; it allocates
 compute.
 
 Do **not** display or execute an unvalidated query.
@@ -504,31 +507,37 @@ back to step 4 with their feedback.
 
 ### 8. Execute — opt-in only
 
-`narrative_nql_run` is **asynchronous**. It returns a job descriptor
-immediately; the actual rows arrive only after the job finishes.
+`narrative_nql_execute` is **asynchronous**. It returns a *workflow*
+that runs the query plus the *run* of that workflow — no rows, and no
+job id. The rows (or the view) arrive only after the run finishes.
 
 ```
-narrative_nql_run(
-  query: 'CREATE MATERIALIZED VIEW "<name>" AS SELECT … FROM company_data."<id>"',
+narrative_nql_execute(
+  nql: 'CREATE MATERIALIZED VIEW "<name>" AS SELECT … FROM company_data."<id>"',
   data_plane_id: '<uuid-of-dataset-plane>'
 )
-→ { job_id: "<uuid>", state: "queued", ... }
+→ ## NQL workflow <workflow-uuid>
+  _run:_ <run-uuid>
 ```
+
+> The old name `narrative_nql_run` still resolves to this tool, but it
+> is no longer advertised in the tool list, and it used to hand back a
+> job id instead of the two ids above. Call `narrative_nql_execute`.
 
 ### Selecting `data_plane_id` — mandatory when it's not the company default
 
 NQL queries execute inside a single data plane and only see datasets
-that live there. `narrative_nql_validate`, `narrative_nql_run`, and
-`narrative_nql_get_job` all accept an optional `data_plane_id`; when
+that live there. Both `narrative_nql_validate` and
+`narrative_nql_execute` accept an optional `data_plane_id`; when
 omitted, each falls back to the **company default** plane, which is
 almost never the right choice for a multi-plane tenant. Pass the data
-plane of the dataset(s) being queried explicitly to all three.
+plane of the dataset(s) being queried explicitly to both.
 
 Resolution sequence:
 
 1. **Capture the dataset's data plane during describe.** `narrative_datasets_describe(dataset_ids: [<id>], include: ["metadata"])` exposes the dataset's plane assignment alongside its name and id. Record it next to the unique_name / id you'll use in the query.
 2. **Confirm every dataset on the query is on the same plane.** Cross-plane joins fail at execution; if a query references multiple datasets, all of them must share a plane. If they don't, that's the cross-data-plane gotcha — query each plane separately or materialize one side into the other plane first.
-3. **Pass the same `data_plane_id` to validate, run, and get_job.** If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first. See the gotchas reference for the failure mode this prevents — most visibly, validator-only "Unknown Table" errors on numeric-id references that run accepts.
+3. **Pass the same `data_plane_id` to validate and execute.** If you need to discover available planes (e.g. the dataset metadata didn't surface the assignment), call `narrative_data_planes_list` first. See the gotchas reference for the failure mode this prevents — most visibly, validator-only "Unknown Table" errors on numeric-id references that execution accepts.
 
 If the dataset describe response doesn't include a plane field for
 your tenant, fall back to: `narrative_data_planes_list(include: ["metadata"])`
@@ -537,46 +546,88 @@ for that dataset, or ask the user. **Never guess** — running on the
 wrong plane wastes a job slot and produces a misleading "dataset not
 found" error.
 
-Poll with `narrative_jobs_describe(job_ids: ["<uuid>"])` until `state`
-is terminal.
+### Following the run to its result
 
-Calibrate the wait to how long Narrative async operations actually
-take: they rarely finish in under ~30s, the **median is roughly 5
-minutes**, and large or cold-pool work can run for **hours**.
-Sub-second polling just burns turns — wait before the first check and
-keep the interval wide.
+Two levels, and they answer different questions. The **run** tells you
+whether the query is still going; the **job** underneath it holds the
+result and any error message.
 
-**Prefer a non-blocking watcher over a foreground sleep.** By default,
-do the waiting with a `Monitor` driving an `until` loop (or whatever
-equivalent background-wait the harness exposes): arm it to re-check on
+```
+narrative_workflow_runs_list(workflow_id: "<workflow-uuid>")
+  → status: completed | failed | terminated (anything else: not finished)
+
+narrative_jobs_search(workflow_run_id: "<run-uuid>")
+  → the job this run enqueued for the query
+
+narrative_jobs_describe(job_ids: ["<job-uuid>"], include: ["compiled_sql", "result"])
+  → state, result, failures, and the SQL the query compiled to
+```
+
+The job appears only once the run has enqueued it, so an empty
+`narrative_jobs_search` on a run that just started means "not yet",
+not "nothing to find".
+
+Once you have that job id, **wait on it rather than re-reading it**:
+`job_monitor(job_id: "<job-uuid>")` then `wait_for`. Only the first
+hop — getting from a fresh run to its job — needs checking at all.
+
+Narrative async work is slow: it rarely finishes in under ~30s, the
+**median is roughly 5 minutes**, and large or cold-pool work can run
+for **hours**. So the question is not how fast to re-ask — it is
+whether you can wait instead of re-asking.
+
+**Have a job id and the `job_monitor` / `wait_for` tools? Wait.**
+
+```
+job_monitor(job_id: "<uuid>")                          → waitable.handle "wt_…"
+wait_for(handles: ["wt_…"], timeout_seconds: 3600)     → status + result
+```
+
+You are paused until the job finishes, at no cost while you wait — no
+turns, no model calls — and you get back what the job did. Up to 8
+handles in one `wait_for`, so jobs you started together are waited for
+once rather than one at a time. A **failed** job is a finished wait
+carrying its failure messages, not an error. If a wait times out with
+the task still running you may wait again; the work carries on either
+way. Never loop `narrative_jobs_describe` to find out whether a job is
+done.
+
+**No handle to wait on? Then you have to check, and pause between
+checks.** A workflow run has no handle — only jobs do — and neither
+does work started through a third-party MCP server. In order of
+preference: `sleep(duration_seconds: <n>)` if you have it (up to an
+hour per call); otherwise a background watcher if your harness has one
+(Claude Code's `Monitor` driving an `until` loop, armed to re-check on
 an interval and emit once the state is terminal, so the session stays
-free while the operation runs and you're notified the moment it
-finishes. (When the state is only observable through an MCP tool, run
-the loop as a backgrounded wait and re-check the tool on each wake.)
-**Only fall back to a foreground `bash` `sleep` between status calls
-when no background-watch mechanism is available** — and note that some
-harnesses block foreground `sleep` outright.
+free); and a foreground `bash` `sleep` only when neither exists — some
+harnesses, Narrative agent runs among them, block it outright.
 
-**Cadence.** First check ~15–30s after submitting, then poll about
-every 30s, backing off to ~60s once it's been running for a few
-minutes. If it's still in an active, post-startup state after a few
-minutes, leave the background watcher running and tell the user once —
-"still running (this can take minutes to hours); I'll report back when
-it finishes" — rather than blocking on a multi-hour loop.
+**Cadence when you are the one checking.** First check ~15–30s after
+submitting, then about every 30s, backing off to ~60s once it has been
+running for a few minutes. Tell the user once — "still running (this
+can take minutes to hours); I'll report back when it finishes" — and
+don't narrate every check.
+
+**Your turns are finite.** Inside a Narrative agent run every check and
+every sleep spends one of a bounded number of iterations (10 by
+default), so hours of work cannot be waited out by checking. Wait on
+jobs wherever a handle exists; where none does, sleep long, and if it
+is still going after a few checks hand the ids back to the user instead
+of spending the rest of the budget.
 
 **Give-up rule — abandon a *stuck* operation, not a merely slow one.**
 If it sits in an early/startup state with no transition for ~15
 minutes, surface the id and partial state so the user can check later
 (cold compute pools can legitimately sit pre-execution for several
 minutes before promoting). Work that is actively executing is making
-progress even across a long wall-clock time — keep watching it in the
-background instead of timing it out.
+progress even across a long wall-clock time — keep waiting on it rather
+than timing it out.
 
-For NQL jobs the early/startup states are `queued` / `pending` (where
+For NQL the early/startup job states are `queued` / `pending` (where
 the stuck-job give-up rule applies) and the active states are
 `running` / `processing`.
 
-Terminal states:
+Terminal job states:
 
 | `state` | Meaning | Next step |
 | --- | --- | --- |
@@ -584,14 +635,15 @@ Terminal states:
 | `failed` | Engine error mid-execution | Read `failures` from the job payload; show it to the user verbatim; revise query and retry |
 | `cancelled` | Operator or timeout abort | Tell the user the job was cancelled; offer to re-run |
 
-Non-terminal states (`queued`, `running`, `processing`) → keep
-polling. Never treat them as a result.
+Non-terminal states (`queued`, `running`, `processing`) → not a
+result. Same for a run that is not yet `completed`, `failed`, or
+`terminated`.
 
 > Payload shapes and the materialize-view → sample → describe dance are documented in [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md).
 
 Before submitting, wrap your validated `SELECT` in `CREATE MATERIALIZED
 VIEW` — a bare `SELECT` is not a runnable form against
-`narrative_nql_run`, even when it passes validation. Use the smallest
+`narrative_nql_execute`, even when it passes validation. Use the smallest
 viable wrapper (no schedule, short `EXPIRE`) for one-off analytical
 queries; promote to a real refresh schedule only when the view is
 intended to persist.
@@ -624,8 +676,8 @@ Derive the `DISPLAY_NAME` and `DESCRIPTION` from the question you framed
 in step 2 and the plain-English explanation from step 6.
 
 ```
-narrative_nql_run(
-  query: '
+narrative_nql_execute(
+  nql: '
     CREATE MATERIALIZED VIEW "wn_<short_slug>_<yyyymmddhhmm>"
     DISPLAY_NAME = ''<Human-Readable Title — Not The Unique Name>''
     DESCRIPTION = ''<One+ sentence: what it computes, from which dataset(s), with which filters/caveats.>''
@@ -638,7 +690,7 @@ narrative_nql_run(
 ```
 
 **Do not add a `BUDGET` clause to the default wrapper.** The validator
-accepts `BUDGET … USD`, but `narrative_nql_run` returns HTTP 500 when
+accepts `BUDGET … USD`, but `narrative_nql_execute` returns HTTP 500 when
 the query reads the user's own data (`company_data.<id>`). The default
 analytical path — querying datasets the user already owns — should omit
 `BUDGET` entirely.
@@ -656,13 +708,14 @@ In either case, query the Narrative knowledge base
 `query_docs_filesystem_narrative_i_o_knowledge_base`) for the current
 `BUDGET` syntax before submitting. Do not hardcode `BUDGET 5 USD`.
 
-Pass the same `data_plane_id` to validate, run, and get_job (rule
-detailed in the async snippet above).
+Pass the same `data_plane_id` to validate and execute (rule detailed
+in the async snippet above).
 
-Then poll `narrative_jobs_describe(job_ids: ["<job_id>"])` per the
-cadence above. While polling, tell the user what's happening once
-("Submitted job `<id>`; polling for completion…") — don't spam status
-updates on every poll.
+`narrative_nql_execute` hands back a workflow and a run, not rows:
+find the job under the run, then wait on it with `job_monitor` /
+`wait_for` if you have them, per the async snippet above. Tell the user
+what's happening once ("Submitted run `<id>`; waiting for it to
+finish…") — don't narrate every check.
 
 On terminal state:
 

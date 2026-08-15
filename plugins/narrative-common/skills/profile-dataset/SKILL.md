@@ -18,10 +18,12 @@ compatibility: >-
   Recommends AskUserQuestion (a Claude Code primitive; prose fallback in
   references/HARNESS_FALLBACK.md), the `/write-nql` sibling skill for the
   custom-measure escalation, and the narrative-knowledge-base MCP server.
+  Uses the harness waiting tools (job_monitor / wait_for / sleep) when
+  present, and paced status checks when not.
   Portable to any agentskills.io-compliant harness via the documented
   fallbacks.
 metadata:
-  version: 0.1.2
+  version: 0.1.4
   narrative:
     args:
       - name: "--dataset"
@@ -95,7 +97,7 @@ metadata:
         - narrative_context_set_company
         - narrative_access_rules_describe
         - narrative_nql_validate
-        - narrative_nql_run
+        - narrative_nql_execute
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -288,8 +290,9 @@ current snapshot. Do **not** hand-write NQL for anything in this tier.
 - `narrative_dataset_set_column_stats_config(...)` with the right
   `enabled_stats` (only if a histogram / finer stat is needed),
 - `narrative_dataset_recalculate_statistics(dataset_id: <id>)`,
-- poll the returned job (async; median ~5 min — cadence in the ladder
-  reference), then re-read with `narrative_dataset_get_column_stats`.
+- wait for the returned job (async; median ~5 min — `job_monitor` +
+  `wait_for` where available, cadence in the ladder reference), then
+  re-read with `narrative_dataset_get_column_stats`.
 
 The recalc is the one mutating call — **gate it.** Unless `--allow-recalc`
 was passed, ask the user once before recalculating:

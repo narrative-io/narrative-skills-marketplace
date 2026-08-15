@@ -18,10 +18,11 @@ license: MIT
 compatibility: >-
   Requires the narrative-mcp MCP server and local file Read. Recommends
   AskUserQuestion — a Claude Code primitive with a prose fallback in
-  references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
+  references/HARNESS_FALLBACK.md. Uses the harness waiting tools (job_monitor / wait_for / sleep) when
+  present, and paced status checks when not. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.3.7
+  version: 0.3.8
   narrative:
     args:
       - name: "--dataset"
@@ -429,12 +430,13 @@ malformed mapping shape, wrong-plane reference), and loop back to
 Phase 3 or Phase 7 with a concrete fix. Do NOT retry the same spec
 blindly.
 
-### Phase 9. Poll the run — opt-in (default on)
+### Phase 9. Follow the run — opt-in (default on)
 
-If `trigger_immediately: true` was set, poll the run by calling
+If `trigger_immediately: true` was set, follow the run by calling
 `narrative_workflow_runs_list(workflow_id: '<workflow_id>')` and
 reading the first entry's `state`. Stop on
-`state in ('completed', 'failed', 'cancelled')`.
+`state in ('completed', 'failed', 'cancelled')`. A run has no handle to
+wait on, so pause between checks rather than asking back to back.
 
 {{SNIPPET:async-poll-cadence}}
 
@@ -445,7 +447,7 @@ When the run reaches a terminal state, read the task output. For
 - `conflictMappings[]` — attribute IDs already mapped (no-op).
 - `failedMappings[]` — entries that errored, with per-entry reasons.
 
-If `--no-trigger` was passed, skip polling. Tell the user the
+If `--no-trigger` was passed, skip this phase. Tell the user the
 workflow exists at `workflow_id` and they can trigger it via
 `narrative_workflows_trigger` when ready.
 

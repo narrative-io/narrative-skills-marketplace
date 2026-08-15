@@ -23,5 +23,5 @@ If validation fails:
    not paraphrased; the wording carries the locator info.
 
 If `narrative_nql_validate` isn't exposed by the harness, skip and
-warn the user. Do not substitute `narrative_nql_run`; it allocates
+warn the user. Do not substitute `narrative_nql_execute`; it allocates
 compute.

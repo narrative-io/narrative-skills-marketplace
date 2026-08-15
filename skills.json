@@ -36,11 +36,11 @@
   "skills": [
     {
       "name": "create-lookalike",
-      "version": "0.1.1",
+      "version": "0.1.3",
       "description": "Create a look-alike audience from a seed audience and a candidate\npopulation dataset. Classifies Rosetta Stone attributes, generates\nthe same materialized-view scoring pipeline Lookalike Studio emits\n(Naive-Bayes categorical weights + Gaussian continuous similarity),\ngates on approval, submits via `narrative_workflows_create`, and\nmonitors the build to completion.\nUse when: \"create a lookalike audience\", \"find more users like this\nsegment\", \"expand my seed audience to 500k similar users\", \"score\nthe population against my customers\", \"build a look-alike of\ndataset X\".\n(narrative-audience)",
       "plugin": "narrative-audience",
       "path": "plugins/narrative-audience/skills/create-lookalike/SKILL.md",
-      "compatibility": "Requires the narrative-mcp MCP server and local file Read. Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md), the narrative-knowledge-base MCP server, and a shell with python3 (3.8+) to run scripts/lookalike_state_tag.py for UI re-edit support. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
+      "compatibility": "Requires the narrative-mcp MCP server and local file Read. Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md), the narrative-knowledge-base MCP server, and a shell with python3 (3.8+) to run scripts/lookalike_state_tag.py for UI re-edit support. Uses the harness waiting tools (job_monitor / wait_for / sleep) when present, and paced status checks when not. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
       "requirements": {
         "requires": {
           "tools": [
@@ -154,11 +154,11 @@
     },
     {
       "name": "apply-rosetta-stone-mappings",
-      "version": "0.3.7",
+      "version": "0.3.8",
       "description": "Apply a set of Rosetta Stone attribute mappings to a Narrative\ndataset by wrapping them in a one-shot workflow that calls the\n`CreateRosettaStoneMappingsIfNotExist` task. Consumes the structured\noutput of `/generate-rosetta-stone-mappings`, normalizes the\ngenerator's snake_case to the workflow task's camelCase, re-validates\nevery expression against the dataset's current schema, gates on\nuser approval, submits via `narrative_workflows_create`, polls the\ntriggered run, and reports per-mapping created / conflict / failed.\nUse when: \"apply these mappings to dataset N\", \"create the\nRosetta Stone mappings I just generated\", \"push the mappings I\nsaved earlier to <dataset>\", \"productionize this mapping list\",\n\"submit the suggested_mappings array\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/apply-rosetta-stone-mappings/SKILL.md",
-      "compatibility": "Requires the narrative-mcp MCP server and local file Read. Recommends AskUserQuestion — a Claude Code primitive with a prose fallback in references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
+      "compatibility": "Requires the narrative-mcp MCP server and local file Read. Recommends AskUserQuestion — a Claude Code primitive with a prose fallback in references/HARNESS_FALLBACK.md. Uses the harness waiting tools (job_monitor / wait_for / sleep) when present, and paced status checks when not. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
       "requirements": {
         "requires": {
           "tools": [
@@ -448,7 +448,7 @@
     },
     {
       "name": "generate-rosetta-stone-mappings",
-      "version": "0.5.2",
+      "version": "0.5.3",
       "description": "Generate, evaluate, and improve Rosetta Stone attribute mappings for\na Narrative dataset.\nUse when: \"map this dataset to Rosetta Stone\", \"suggest normalized\nattributes for dataset N\", \"evaluate the mappings on dataset N\", \"why\nis this mapping low confidence\", \"fix this expression\", \"improve this\nNQL mapping expression\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md",
@@ -470,7 +470,8 @@
             "narrative_datasets_describe",
             "narrative_attributes_describe",
             "narrative_nql_validate",
-            "narrative_nql_run",
+            "narrative_nql_execute",
+            "narrative_jobs_search",
             "narrative_jobs_describe"
           ]
         },
@@ -500,11 +501,11 @@
     },
     {
       "name": "profile-dataset",
-      "version": "0.1.2",
+      "version": "0.1.4",
       "description": "Produce a coverage & quality profile of a Narrative dataset (or access\nrule): row count, per-column null/fill rate, cardinality, ranges,\ntop-values, inferred column shape, and quality flags. Reads bundled\nstats + sample first, recovers missing/stale stats by configuring and\nrecalculating them, and escalates to a cheap `/write-nql` query only\nfor a measure no stat can provide. Descriptive, not prescriptive.\nUse when: \"profile dataset N\", \"what does dataset N look like\",\n\"coverage and quality of <dataset>\", \"what id types does N emit\",\n\"null rates / cardinality for <dataset>\", \"is this dataset's stats\nfresh\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/profile-dataset/SKILL.md",
-      "compatibility": "Requires the narrative-mcp MCP server (no MCP → cannot profile). Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md), the `/write-nql` sibling skill for the custom-measure escalation, and the narrative-knowledge-base MCP server. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
+      "compatibility": "Requires the narrative-mcp MCP server (no MCP → cannot profile). Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md), the `/write-nql` sibling skill for the custom-measure escalation, and the narrative-knowledge-base MCP server. Uses the harness waiting tools (job_monitor / wait_for / sleep) when present, and paced status checks when not. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
       "requirements": {
         "requires": {
           "mcp-servers": [
@@ -535,7 +536,7 @@
             "narrative_context_set_company",
             "narrative_access_rules_describe",
             "narrative_nql_validate",
-            "narrative_nql_run"
+            "narrative_nql_execute"
           ]
         }
       },
@@ -587,11 +588,11 @@
     },
     {
       "name": "write-nql",
-      "version": "0.5.6",
+      "version": "0.5.9",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/write-nql/SKILL.md",
-      "compatibility": "Requires the narrative-mcp MCP server. Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md) and the narrative-knowledge-base MCP server. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
+      "compatibility": "Requires the narrative-mcp MCP server. Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md) and the narrative-knowledge-base MCP server. Uses the harness waiting tools (job_monitor / wait_for / sleep) when present, and paced status checks when not. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
       "requirements": {
         "requires": {
           "mcp-servers": [
@@ -604,7 +605,9 @@
             "narrative_datasets_search",
             "narrative_datasets_describe",
             "narrative_nql_validate",
-            "narrative_nql_run",
+            "narrative_nql_execute",
+            "narrative_workflow_runs_list",
+            "narrative_jobs_search",
             "narrative_jobs_describe"
           ]
         },
@@ -700,11 +703,11 @@
     },
     {
       "name": "generate-match-report",
-      "version": "0.7.2",
+      "version": "0.7.4",
       "description": "Compare your data to a partner's data in the marketplace. Given a\ndataset you already own with person/edge data, this skill walks you\nthrough picking a partner data source to match against, choosing which\nidentifier types to match on, optionally selecting which enrichment\nattributes to attach, and then submits the report — returning overlap,\nmatch counts, and demographic coverage.\nUse when: \"how does my data compare to your marketplace\", \"compare my\ndata to [partner]\", \"how much overlap do I have with [supplier]\",\n\"run a match report\", \"match my customers against 3P data\", \"see\nwhat enrichment is available for my dataset\", or any open-ended\nquestion about marketplace overlap.\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-match-report/SKILL.md",
-      "compatibility": "Requires the narrative-mcp MCP server and local file Read. Recommends AskUserQuestion — a Claude Code primitive with a prose fallback in references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
+      "compatibility": "Requires the narrative-mcp MCP server and local file Read. Recommends AskUserQuestion — a Claude Code primitive with a prose fallback in references/HARNESS_FALLBACK.md. Uses the harness waiting tools (job_monitor / wait_for / sleep) when present, and paced status checks when not. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
       "requirements": {
         "requires": {
           "skills": [
@@ -744,7 +747,7 @@
             "narrative_context_set_company",
             "narrative_attributes_describe",
             "narrative_attributes_search",
-            "narrative_nql_run",
+            "narrative_nql_execute",
             "narrative_workflows_trigger"
           ]
         }

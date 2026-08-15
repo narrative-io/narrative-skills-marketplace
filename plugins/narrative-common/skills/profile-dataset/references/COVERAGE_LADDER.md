@@ -42,7 +42,7 @@ narrative_dataset_get_column_stats(
 ```
 
 If the bundled sample is too old to trust for shape inference, enqueue a
-fresh one (async — poll the returned job):
+fresh one (async — wait for the returned job):
 
 ```
 narrative_dataset_request_sample(dataset_id: <id>)
@@ -113,42 +113,62 @@ narrative_dataset_recalculate_statistics(dataset_id: <id>)
 ```
 
 Async; returns a `recalculation_id` / job. **Gate this** behind the
-Phase 3 confirmation unless `--allow-recalc` was passed. Poll the
-returned job until terminal, then re-read with
+Phase 3 confirmation unless `--allow-recalc` was passed. Wait for the
+returned job to reach a terminal state, then re-read with
 `narrative_dataset_get_column_stats` and set
 `stats_freshness: "recalculated"` on the profile. Cadence:
 
-Calibrate the wait to how long Narrative async operations actually
-take: they rarely finish in under ~30s, the **median is roughly 5
-minutes**, and large or cold-pool work can run for **hours**.
-Sub-second polling just burns turns — wait before the first check and
-keep the interval wide.
+Narrative async work is slow: it rarely finishes in under ~30s, the
+**median is roughly 5 minutes**, and large or cold-pool work can run
+for **hours**. So the question is not how fast to re-ask — it is
+whether you can wait instead of re-asking.
 
-**Prefer a non-blocking watcher over a foreground sleep.** By default,
-do the waiting with a `Monitor` driving an `until` loop (or whatever
-equivalent background-wait the harness exposes): arm it to re-check on
+**Have a job id and the `job_monitor` / `wait_for` tools? Wait.**
+
+```
+job_monitor(job_id: "<uuid>")                          → waitable.handle "wt_…"
+wait_for(handles: ["wt_…"], timeout_seconds: 3600)     → status + result
+```
+
+You are paused until the job finishes, at no cost while you wait — no
+turns, no model calls — and you get back what the job did. Up to 8
+handles in one `wait_for`, so jobs you started together are waited for
+once rather than one at a time. A **failed** job is a finished wait
+carrying its failure messages, not an error. If a wait times out with
+the task still running you may wait again; the work carries on either
+way. Never loop `narrative_jobs_describe` to find out whether a job is
+done.
+
+**No handle to wait on? Then you have to check, and pause between
+checks.** A workflow run has no handle — only jobs do — and neither
+does work started through a third-party MCP server. In order of
+preference: `sleep(duration_seconds: <n>)` if you have it (up to an
+hour per call); otherwise a background watcher if your harness has one
+(Claude Code's `Monitor` driving an `until` loop, armed to re-check on
 an interval and emit once the state is terminal, so the session stays
-free while the operation runs and you're notified the moment it
-finishes. (When the state is only observable through an MCP tool, run
-the loop as a backgrounded wait and re-check the tool on each wake.)
-**Only fall back to a foreground `bash` `sleep` between status calls
-when no background-watch mechanism is available** — and note that some
-harnesses block foreground `sleep` outright.
+free); and a foreground `bash` `sleep` only when neither exists — some
+harnesses, Narrative agent runs among them, block it outright.
 
-**Cadence.** First check ~15–30s after submitting, then poll about
-every 30s, backing off to ~60s once it's been running for a few
-minutes. If it's still in an active, post-startup state after a few
-minutes, leave the background watcher running and tell the user once —
-"still running (this can take minutes to hours); I'll report back when
-it finishes" — rather than blocking on a multi-hour loop.
+**Cadence when you are the one checking.** First check ~15–30s after
+submitting, then about every 30s, backing off to ~60s once it has been
+running for a few minutes. Tell the user once — "still running (this
+can take minutes to hours); I'll report back when it finishes" — and
+don't narrate every check.
+
+**Your turns are finite.** Inside a Narrative agent run every check and
+every sleep spends one of a bounded number of iterations (10 by
+default), so hours of work cannot be waited out by checking. Wait on
+jobs wherever a handle exists; where none does, sleep long, and if it
+is still going after a few checks hand the ids back to the user instead
+of spending the rest of the budget.
 
 **Give-up rule — abandon a *stuck* operation, not a merely slow one.**
 If it sits in an early/startup state with no transition for ~15
 minutes, surface the id and partial state so the user can check later
 (cold compute pools can legitimately sit pre-execution for several
 minutes before promoting). Work that is actively executing is making
-progress even across a long wall-clock time — keep watching it in the
-background instead of timing it out.
+progress even across a long wall-clock time — keep waiting on it rather
+than timing it out.
 
 If the user declines the gate, profile from the sample, set
 `stats_freshness: "sample_only"`, and flag every affected column. Don't
