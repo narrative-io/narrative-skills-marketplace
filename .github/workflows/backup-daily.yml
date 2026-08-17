@@ -5,7 +5,11 @@ on:
   schedule:
     - cron: 0 6 * * *
 
+# backup.yml only uses GITHUB_TOKEN (passed to called workflows
+# automatically); AWS access comes from the runner's instance profile.
+permissions:
+  contents: read
+
 jobs:
   s3-backup-daily:
     uses: narrative-io/common-github/.github/workflows/backup.yml@e195191407ca2a256a9d5c4ca6323f0284a988ab # 2026-07-16, post-hardening (sc-62809)
-    secrets: inherit
