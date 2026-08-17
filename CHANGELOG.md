@@ -14,6 +14,40 @@ the two views are deliberately redundant.
 
 <!-- RELEASES BELOW -->
 
+## [2026.08.0] - 2026-08-17
+
+### ✨ Features
+
+- **waiting:** wait on jobs with job_monitor/wait_for, fix the nql async contract (#105) (0c90b52)
+- **generate-match-report:** custom match keys (compound features + array fields) + --array-field-handling (#83) (81627d7)
+- **write-nql:** add handoff exit criterion (#81) (436d949)
+- **write-nql:** add exit criteria and describe-failure degradation rule (#80) (13be26e)
+- [SC-60258] add script to upload skills to s3 (#74) (4b6c348)
+- **skills:** declare and validate inter-skill dependencies (#75) (71b546b)
+
+### 🐛 Bug Fixes
+
+- use merged common-github backup workflow SHA (#73) (73ba87c)
+
+### 🧹 Maintenance
+
+- **deps:** lock file maintenance (#98) (a0b7e5f)
+- **deps:** update dependency typescript to v7 (#103) (d51d1be)
+- **deps:** update minor and patch updates (#102) (c3df214)
+- **deps:** update actions/checkout action to v7.0.1 (#101) (e06beba)
+- **deps:** bump actions/checkout from 7.0.0 to 7.0.1 (#100) (d25e01e)
+- **deps:** bump narrative-io/common-github/.github/workflows/backup.yml from 1.0.0 to 1.1.0 (#99) (cd91bff)
+- **deps:** update minor and patch updates (#95) (b6b251b)
+- **deps:** update minor and patch updates (#85) (f1cf219)
+- sha-pin backup workflow and add dependabot updates (sc-62797) (#84) (f931c95)
+- **deps:** update minor and patch updates (#82) (104e027)
+- **deps:** update actions/checkout action to v7 (#79) (9e37899)
+- **deps:** update dependency knip to ^6.17.1 (#78) (e342c14)
+- **deps:** update dependency @biomejs/biome to ^2.5.0 (#77) (0b1ec3e)
+- **deps:** update minor and patch updates to ^6.16.1 (#76) (30ea050)
+- **deps:** update minor and patch updates (#72) (36e3248)
+
+
 ## [2026.06.0] - 2026-06-12
 
 ### ✨ Features
