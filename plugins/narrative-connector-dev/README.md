@@ -5,10 +5,11 @@ connector-building know-how that currently lives as repo-local skills into
 one spec-driven skill set that carries a connector from an idea to a
 verified production deployment — stopping at every human gate along the way.
 
-> **Status: scaffolding.** Every skill here is a **stub** — its
-> frontmatter, purpose, inputs, outputs, and human-gate boundaries are
-> defined, but the phased implementation is authored in follow-up work, one
-> skill at a time. Each `SKILL.md` says so at the top.
+> **Status: in progress.** Skills are implemented one at a time
+> (`/spec-connector` and `/preflight-connector` so far); the rest are
+> **stubs** — frontmatter, purpose, inputs, outputs, and human-gate
+> boundaries defined, with the phased implementation authored in
+> follow-up work. Each stub's `SKILL.md` says so at the top.
 
 ## The composition contract: `connector-spec.yaml`
 

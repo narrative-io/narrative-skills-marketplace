@@ -131,8 +131,8 @@ slug: google-dv360            # lowercase, dashes ok. Drives module dirs,
 package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
                               # + narrative-db dir names.
 display_name: "Display & Video 360"   # human-facing listing name
-app_id: 47                    # marketplace app id — max(id)+1 over existing
-                              # apps. null until /preflight-connector pins it.
+app_id: 47                    # marketplace app id. null until
+                              # /preflight-connector pins it.
 destination_type: audience    # audience | conversion_api | measurement | combined.
                               # `audience` means any outbound record/membership
                               # delivery — ad audiences, email list members, CRM
@@ -167,7 +167,8 @@ auth:
 # present. `hash`/`normalization` capture the destination's expectations.
 # Every `attribute` URI is verified against the live catalog via the
 # narrative-common find-attribute skill — never typed from memory. An
-# attribute that doesn't exist yet is a blocker, not a TODO.
+# attribute that doesn't exist yet is created at preflight with the
+# user's approval, never invented in the spec.
 identifier_groups:
   - name: email
     attribute: "https://api.narrative.io/attributes/sha256_hashed_email"
