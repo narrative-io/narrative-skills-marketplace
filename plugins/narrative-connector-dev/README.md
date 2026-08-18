@@ -6,10 +6,12 @@ one spec-driven skill set that carries a connector from an idea to a
 verified production deployment — stopping at every human gate along the way.
 
 > **Status: in progress.** Skills are implemented one at a time
-> (`/spec-connector` and `/preflight-connector` so far); the rest are
-> **stubs** — frontmatter, purpose, inputs, outputs, and human-gate
-> boundaries defined, with the phased implementation authored in
-> follow-up work. Each stub's `SKILL.md` says so at the top.
+> (`/spec-connector`, `/preflight-connector`, `/scaffold-connector`,
+> `/create-scaffold-manifest`, and `/define-connector-interface` so
+> far); the rest are **stubs** — frontmatter, purpose, inputs,
+> outputs, and human-gate boundaries defined, with the phased
+> implementation authored in follow-up work. Each stub's `SKILL.md`
+> says so at the top.
 
 ## Entry paths
 
