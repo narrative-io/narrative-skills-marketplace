@@ -173,24 +173,25 @@ Audience-building workflows backed by the narrative-mcp server — turning marke
 
 ### `narrative-connector-dev`
 
-Build Narrative data connectors agentically — a spec-driven skill set that carries a connector from spec through service code, infrastructure, platform registration, frontend listing, and deploy/verify, stopping at every human gate. Filesystem/git work across narrative-connectors, narrative-db, and narrative-platform-ui.
+Build Narrative data connectors agentically — a spec-driven skill set that carries a connector from spec through service code, infrastructure, platform registration, frontend listing, and deploy/verify, stopping at every human gate. Filesystem/git work across the connector, database, and frontend repos.
 
 | Skill | Use when |
 |-------|----------|
 | `/add-connector-app-ui` | "build the connector app UI", "add the profile creation form", "wire up the quick settings form", "add the OAuth connect button for the connector". |
 | `/add-connector-listing` | "add the connector listing", "list the connector in the marketplace UI", "add the connector card", "register the connector in the catalog UI". |
 | `/add-connector-oauth` | "add OAuth to the connector", "wire up the <platform> OAuth flow", "the connector needs authorization-code auth", "add token storage". |
-| `/add-measurement-ingestion` | "add measurement ingestion to the connector", "ingest the partner measurement feed", "wire up the S3 inbox scan", "pull conversion feedback files". |
+| `/add-measurement-ingestion` | "add measurement ingestion to the connector", "ingest the partner measurement feed", "wire up the object-storage inbox scan", "pull conversion feedback files". |
 | `/build-connector` | "build a connector for <platform> end to end", "run the whole connector build", "orchestrate the connector from spec to deploy", "take the connector from spec to prod". |
+| `/create-scaffold-manifest` | "create a scaffold manifest", "write connector-scaffold.yaml", "onboard my repo for connector scaffolding", "infer connector conventions from my repo", "teach the scaffolder our repo layout". |
 | `/define-connector-interface` | "define the connector interface", "generate the audience metaschema", "wire up the quick settings types", "build the collaboration policy for the connector". |
 | `/deploy-connector` | "deploy the connector", "quick-publish and apply to dev", "promote the connector to prod", "ship the connector image". |
 | `/implement-delivery-executor` | "implement the delivery executor", "write the audience delivery path", "wire up the Arrow reader for the connector", "build the connector executor". |
 | `/implement-partner-client` | "implement the partner API client", "write the <platform> API client", "wire up the delivery endpoints", "handle the partner rate limits". |
 | `/preflight-connector` | "preflight the connector spec", "is this connector spec ready to build", "validate connector-spec.yaml", "check the connector spec before scaffolding". |
-| `/provision-connector-db` | "provision the connector database", "write the narrative-db migrations for the connector", "set up the connector RDS", "add the connector db terraform". |
-| `/register-connector-app` | "register the connector app", "bootstrap the marketplace app", "create the app row for the connector", "run bootstrap-app for the connector". |
-| `/scaffold-connector` | "scaffold the <slug> connector", "generate the connector modules", "create the sbt skeleton for the connector", "stand up the connector project". |
-| `/scaffold-connector-infra` | "scaffold the connector infra", "generate the terraform for the connector", "add the CI workflows for the connector", "set up the ECS service for the connector". |
+| `/provision-connector-db` | "provision the connector database", "write the database migrations for the connector", "set up the connector database", "add the connector db infrastructure". |
+| `/register-connector-app` | "register the connector app", "bootstrap the marketplace app", "create the app row for the connector", "run the app registration for the connector". |
+| `/scaffold-connector` | "scaffold the <slug> connector", "generate the connector modules", "stand up the connector project", "scaffold a connector in my repo", "start a connector from scratch". |
+| `/scaffold-connector-infra` | "scaffold the connector infra", "generate the infrastructure code for the connector", "add the CI workflows for the connector", "set up the service runtime for the connector". |
 | `/spec-connector` | "spec out a connector for <platform>", "start a new connector", "research the <platform> connector", "write the connector spec", "draft connector-spec.yaml". |
 | `/test-connector` | "test the connector", "run the connector tests", "add sanity tests for the connector", "does the connector compile and pass". |
 | `/verify-connector` | "verify the connector", "run an end-to-end delivery check", "confirm the connector delivered correctly", "check the connector logs after deploy". |

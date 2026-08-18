@@ -12,11 +12,11 @@ description: |
 license: MIT
 compatibility: >-
   Stub — implementation pending. No hard requirements: local codegen in the
-  narrative-connectors working tree; partner delivery happens only at the
+  connector repo's working tree; partner delivery happens only at the
   deploy/verify gate. Reads the delivery + identifier_groups blocks of
   connector-spec.yaml. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -28,11 +28,9 @@ metadata:
 # Implement Delivery Executor
 
 > **Status: stub — implementation pending.** Contract only. Consolidates
-> the greenfield Arrow-path patterns from
-> `narrative-connectors/.claude/skills/migrate-connector-to-arrow`
-> (`Arrow<Slug>ConnectorParser`, `Arrow<Slug>AudienceFileReader`,
-> `FileDeliveryMetrics`) so new connectors start on the Arrow path rather
-> than the legacy JSON path.
+> the greenfield Arrow-path patterns (`Arrow<Slug>ConnectorParser`,
+> `Arrow<Slug>AudienceFileReader`, `FileDeliveryMetrics`) so new connectors
+> start on the Arrow path rather than the legacy JSON path.
 
 ## Purpose
 
