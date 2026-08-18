@@ -1,0 +1,69 @@
+---
+name: scaffold-connector
+description: |
+  Generate the sbt module skeleton for a new connector — the
+  api/services/stores/worker/executor/poller modules, build.sbt and
+  QuickPublish entries, and ops docs — from the reference connector
+  template, driven entirely by connector-spec.yaml.
+  Use when: "scaffold the <slug> connector", "generate the connector
+  modules", "create the sbt skeleton for the connector", "stand up the
+  connector project".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. No hard requirements: local filesystem/git
+  codegen in the narrative-connectors working tree; no infra, DB, or
+  registration side effects. Reads connector-spec.yaml. Runs on any
+  agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:preflight-connector
+        - narrative-connector-dev:define-connector-interface
+---
+
+# Scaffold Connector
+
+> **Status: stub — implementation pending.** Contract only. Consolidates
+> the module-generation half of
+> `narrative-connectors/.claude/skills/create-connector` (the sbt module
+> set, build.sbt + QuickPublish wiring, ops docs) — infra, DB, and
+> registration are split into their own skills in this plugin.
+
+## Purpose
+
+Produce the connector's Scala module skeleton so the implementation skills
+have somewhere to write. Copies the reference connector's module set
+(`<slug>-{api,services,stores,worker,executor,poller}`), rewrites package
+and identifier names, and wires the new modules into `build.sbt` and
+`QuickPublish.scala`, plus the `<slug>/` ops-docs directory.
+
+Phase: **service** (the first code-generation step).
+
+## Inputs (from connector-spec.yaml)
+
+- `slug`, `package_slug` — module directory names, Scala package, image
+  names.
+- `destination_type` — which modules are relevant (e.g. poller only when
+  measurement is in scope).
+- Modules to omit (optional).
+
+## Outputs
+
+- `<slug>-{api,services,stores,worker,executor,poller}` modules.
+- `build.sbt` `lazy val`s + aggregate-root entries; `QuickPublish.scala`
+  flags.
+- `<slug>/` ops docs (operations.md, README, architecture.md, CHANGES.md).
+
+## Human gates
+
+- Local codegen only — every file is a reviewable working-tree change.
+- **Out of scope here:** no `terraform`, no narrative-db migrations, no
+  app registration. Those are `/scaffold-connector-infra`,
+  `/provision-connector-db`, and `/register-connector-app`.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}
