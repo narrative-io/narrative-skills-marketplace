@@ -191,7 +191,7 @@ Build Narrative data connectors agentically — a spec-driven skill set that car
 | `/register-connector-app` | "register the connector app", "bootstrap the marketplace app", "create the app row for the connector", "run bootstrap-app for the connector". |
 | `/scaffold-connector` | "scaffold the <slug> connector", "generate the connector modules", "create the sbt skeleton for the connector", "stand up the connector project". |
 | `/scaffold-connector-infra` | "scaffold the connector infra", "generate the terraform for the connector", "add the CI workflows for the connector", "set up the ECS service for the connector". |
-| `/spec-connector` | "spec out a connector for <platform>", "start a new connector", "research the <platform> connector", "write the connector spec". |
+| `/spec-connector` | "spec out a connector for <platform>", "start a new connector", "research the <platform> connector", "write the connector spec", "draft connector-spec.yaml". |
 | `/test-connector` | "test the connector", "run the connector tests", "add sanity tests for the connector", "does the connector compile and pass". |
 | `/verify-connector` | "verify the connector", "run an end-to-end delivery check", "confirm the connector delivered correctly", "check the connector logs after deploy". |
 
