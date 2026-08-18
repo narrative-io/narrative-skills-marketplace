@@ -31,6 +31,16 @@
         "narrative-knowledge-base",
         "narrative-mcp"
       ]
+    },
+    {
+      "name": "narrative-ml",
+      "version": "0.1.0",
+      "description": "Machine-learning workflows backed by the narrative-mcp server — building labeled training datasets that map source data onto Rosetta Stone attribute classes, ready for Classifier Studio.",
+      "mcpServers": [
+        "narrative-agent-gateway",
+        "narrative-knowledge-base",
+        "narrative-mcp"
+      ]
     }
   ],
   "skills": [
@@ -872,6 +882,129 @@
           "name": "<free-text tail>",
           "required": false,
           "description": "Additional context about the source system. With no arguments, the skill walks the user through interactively."
+        }
+      ]
+    },
+    {
+      "name": "create-training-data",
+      "version": "0.2.0",
+      "description": "Build a labeled training dataset that maps a source dataset onto the\nenum classes of a Rosetta Stone attribute, ready to train in Classifier\nStudio. Labels real rows in-plane with AI_COMPLETE behind a\ndeterministic matcher, generates synthetic rows for the classes real\ndata misses, and unions the two into one training view, reporting\nclass and feature coverage at each step.\nUse when: \"create training data for a classifier\", \"training data for\n<attribute>\", \"I need labeled data to classify <column> as\n<attribute>\", \"generate synthetic training rows\", \"my classifier has\nno examples for these classes\", \"prepare a dataset for Classifier\nStudio\".\n(narrative-ml)",
+      "plugin": "narrative-ml",
+      "path": "plugins/narrative-ml/skills/create-training-data/SKILL.md",
+      "compatibility": "Requires the narrative-mcp MCP server and a Snowflake data plane (Classifier Studio and AI_COMPLETE are Snowflake-only). Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md), the /find-attribute, /profile-dataset and /write-nql sibling skills, and the narrative-knowledge-base MCP server. Portable to any agentskills.io-compliant harness via the documented fallbacks.",
+      "requirements": {
+        "requires": {
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_attributes_describe",
+            "narrative_datasets_describe",
+            "narrative_data_planes_list",
+            "narrative_nql_validate",
+            "narrative_nql_execute",
+            "narrative_jobs_describe",
+            "narrative_dataset_request_sample",
+            "narrative_workflow_runs_list"
+          ]
+        },
+        "recommends": {
+          "skills": [
+            "narrative-common:find-attribute",
+            "narrative-common:profile-dataset",
+            "narrative-common:write-nql",
+            "narrative-common:create-workflow"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-knowledge-base"
+          ],
+          "mcp-tools": [
+            "narrative_context_search_companies",
+            "narrative_context_set_company",
+            "narrative_attributes_search",
+            "narrative_dataset_get_column_stats",
+            "narrative_jobs_search"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "--attribute",
+          "value": "<id or phrase>",
+          "required": false,
+          "description": "The Rosetta Stone attribute whose enum values become the classes. Accepts a canonical id or a phrase to resolve through /find-attribute. If omitted, the skill asks."
+        },
+        {
+          "name": "--dataset",
+          "value": "<id>",
+          "required": false,
+          "description": "The source dataset holding the data to classify. If omitted, the skill asks; it does not search."
+        },
+        {
+          "name": "--label-input",
+          "value": "<col,col,...>",
+          "required": false,
+          "description": "Columns the labeler reads to decide the class. Defaults to the single column named in the free-text tail, or the skill asks."
+        },
+        {
+          "name": "--features",
+          "value": "<col,col,...>",
+          "required": false,
+          "description": "Columns the classifier trains on. Defaults to the label-input columns, which is the right default for distilling an LLM labeler into a cheap classifier."
+        },
+        {
+          "name": "--real",
+          "required": false,
+          "description": "Build only the real-data view. Mutually exclusive with --synthetic; passing neither builds both plus the union."
+        },
+        {
+          "name": "--synthetic",
+          "required": false,
+          "description": "Build only the synthetic view. Requires an existing real view (or --classes) to know which classes need filling."
+        },
+        {
+          "name": "--min-per-class",
+          "value": "<n>",
+          "required": false,
+          "description": "Rows every class must reach before the training set is considered covered. Default 25."
+        },
+        {
+          "name": "--max-per-class",
+          "value": "<n>",
+          "required": false,
+          "description": "Per-class row cap applied to the real view, so a head-heavy source distribution cannot swamp the tail. Default 500."
+        },
+        {
+          "name": "--confidence",
+          "value": "<0..1>",
+          "required": false,
+          "description": "Minimum labeler confidence for a real row to enter the training set. Default 0.75. Rows below it are dropped, not kept as null."
+        },
+        {
+          "name": "--model",
+          "value": "<id>",
+          "required": false,
+          "description": "Model id passed to AI_COMPLETE. Default 'openai-gpt-5'."
+        },
+        {
+          "name": "--name",
+          "value": "<slug>",
+          "required": false,
+          "description": "Base name for the created views. The skill appends _real, _synthetic, and nothing for the union. Derived from the attribute name when omitted."
+        },
+        {
+          "name": "--dry-run",
+          "required": false,
+          "description": "Draft and validate every query, show them, and stop without running anything. Nothing is materialized and no inference is billed."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "What is being classified and from which column, in plain words (e.g. \"classify the breed_raw column as dog breed\"). Steers column selection and the labeling prompt."
         }
       ]
     }

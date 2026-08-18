@@ -171,6 +171,14 @@ Audience-building workflows backed by the narrative-mcp server — turning marke
 |-------|----------|
 | `/create-lookalike` | "create a lookalike audience", "find more users like this segment", "expand my seed audience to 500k similar users", "score the population against my customers", "build a look-alike of dataset X". |
 
+### `narrative-ml`
+
+Machine-learning workflows backed by the narrative-mcp server — building labeled training datasets that map source data onto Rosetta Stone attribute classes, ready for Classifier Studio.
+
+| Skill | Use when |
+|-------|----------|
+| `/create-training-data` | "create training data for a classifier", "training data for <attribute>", "I need labeled data to classify <column> as <attribute>", "generate synthetic training rows", "my classifier has no examples for these classes", "prepare a dataset for Classifier Studio". |
+
 <!-- END PLUGINS -->
 
 ## What's a skill?
