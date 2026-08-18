@@ -94,6 +94,14 @@ field values.
   marked `TODO`, the skill stops and asks — it does not invent slugs,
   app ids, endpoints, rate limits, or Rosetta attribute URIs. (The
   "DO NOT GUESS" rule from `/spec-connector` holds for the whole plugin.)
+- **Blocking is skill-scoped.** An `open_questions` entry blocks only
+  the skills its `blocks` list names. Before doing anything else, a
+  skill checks the list: if any unanswered entry names it, it stops and
+  says which questions block it; entries scoped to other skills are
+  reported as context, never treated as a reason to stop or to hedge.
+  A skill whose own required fields carry real values runs, whatever
+  the overall preflight verdict says — the verdict summarizes the
+  per-skill picture, it is not a global gate.
 - **Write back what you learn.** A skill that resolves a value —
   `preflight-connector` pinning `app_id`, `add-connector-oauth`
   confirming the token-endpoint shape — writes it back so later phases
@@ -138,6 +146,30 @@ auth:
       access_token: true
       refresh_token: true
       expires_in: true
+  # Present only when model is NOT oauth2 (static_credentials | jwt |
+  # sftp_key | partner_id_header). Says what the customer supplies, how it
+  # is presented on the wire, and what the profile row stores — the
+  # static-credential equivalent of the `oauth` block.
+  credentials:
+    fields:                     # what the customer pastes into the profile form
+      - { name: api_key, type: string, secret: true, purpose: "Customer-minted API key" }
+    presentation: "Authorization: Bearer {api_key}"   # how it goes on the wire
+    required_scopes: []         # vendor-side permissions the credential must carry
+    verification_endpoint: null # a cheap call that proves the credential works
+    rotation: customer_managed  # customer_managed | narrative_managed | none
+  # Credentials WE issue to the PARTNER, for destinations that call us
+  # (webhook receivers, postback URLs). The inverse of the blocks above:
+  # here Narrative is the server being authenticated to. Omit when the
+  # partner never calls us.
+  inbound:
+    mechanisms: []              # signature_verification | oauth2_client_credentials
+                                # | shared_secret | mtls | none
+    signature:                  # present when mechanisms includes signature_verification
+      algorithm: null           # e.g. ecdsa_p256_sha256
+      headers: []               # the header names carrying signature + timestamp
+      signed_payload: null      # e.g. "timestamp + raw request body bytes"
+      key_source: null          # how we obtain the partner's public key
+    token_endpoint: null        # path WE host when the partner uses client-credentials
   # Which vendor object the profile binds to (advertiser / ad-account / dataset).
   account_binding: advertiser_id
 
@@ -209,7 +241,15 @@ partner_api:
     - { scope: per_day,    limit: 1000000 }
   pagination: page_number         # page_number | cursor | offset | none
   idempotency: "upsert keyed on external id; safe to retry"   # dedup key + retry semantics
-  failure_semantics: whole_batch  # whole_batch | row_level
+  failure_semantics: whole_batch  # whole_batch | row_level | async_job
+                                  # async_job: the write returns 202 + a job id and
+                                  # per-record outcomes are only available by polling
+                                  # a status endpoint — the delivery response means
+                                  # "queued", not "succeeded".
+  job_status:                     # required when failure_semantics: async_job
+    endpoint: null                # the status endpoint to poll
+    terminal_states: []           # which states end the poll
+    poll_guidance: null           # documented/observed cadence, or TODO
 
 # ── Delivery semantics ──────────────────────────────────────
 delivery:
@@ -225,10 +265,29 @@ delivery:
 
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
+  # How the feed reaches us. bucket_inbox: the partner writes files into an
+  # object-store inbox we own and a poll loop ingests them (the framework's
+  # MeasurementFeedIngestionProcessor). partner_webhook: the partner PUSHES
+  # events to an endpoint we expose — a receiver, not a poll loop, and the
+  # `partition_layout` / `inbox_prefix` / `partner_access` fields below do
+  # not apply. Defaults to bucket_inbox when omitted.
+  ingestion_mode: bucket_inbox  # bucket_inbox | partner_webhook
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
   inbox_prefix: "<object-store>/<slug>/inbox/"
   partner_access: bucket_policy  # | assumed_role | static_keys
-  host_app: poller              # which app runs the ingestion loop
+  host_app: poller              # which app runs the ingestion loop / receiver
+  # Present only when ingestion_mode: partner_webhook. Auth for the inbound
+  # call lives in `auth.inbound`; this block is the delivery contract.
+  webhook:
+    receiver_path: null         # the path we expose, e.g. "/<slug>/events"
+    provisioning: customer_creates  # connector_creates (we register the webhook
+                                    # via the partner's API) | customer_creates | either
+    payload: null               # shape of one POST, e.g. "JSON array of event objects"
+    dedupe_key: null            # the field that makes retries idempotent
+    retry_policy: null          # partner-side retry behavior + the response we must return
+    max_payload: null           # documented size cap, or TODO
+    buffering: null             # how received events reach the dataset (e.g. batch to
+                                # object store, then _NIO_COMMIT)
   dataset_ids:
     dev: "ds_..."
     prod: "ds_..."
@@ -240,6 +299,33 @@ open_questions:
   - question: "Exact per-day request quota?"
     owner: partner              # partner | internal | customer
     status: "asked 2026-07-20; awaiting reply"
+    blocks: [implement-partner-client]   # which skills cannot run until this
+                                         # is answered. Skills not named here
+                                         # proceed. Empty/absent = advisory,
+                                         # blocks nothing.
+  # A question that can be answered empirically carries a `probe` block.
+  # /probe-partner-api executes the probe against a user-designated test
+  # account and writes back `observed`. The `class` field governs the
+  # gate: read_only probes run once the probe plan is approved,
+  # reversible_write probes need a designated disposable account, and
+  # account_hostile probes need per-probe opt-in.
+  - question: "Is X-RateLimit-Reset an epoch timestamp or seconds-until-reset?"
+    owner: partner
+    status: "probe before implementing the client"
+    blocks: [implement-partner-client]
+    probe:
+      class: read_only          # read_only | reversible_write | account_hostile
+      request: "GET /v3/marketing/lists?page_size=1, twice, a few seconds apart"
+      observe: "whether the header value tracks wall-clock time or counts down"
+    observed:                   # written back by /probe-partner-api
+      value: "delta seconds, counting down"
+      date: 2026-07-22
+      account: "vendor free-tier test account"
+      closes: true              # false keeps the question open with the
+                                # observation attached — right for rate
+                                # limits and anything with compliance
+                                # weight, where observed behavior is
+                                # evidence, not a vendor commitment
 
 # ── Scaffold target ─────────────────────────────────────────
 # Where connector code materializes. The rest of the spec says what the
