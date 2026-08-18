@@ -21,7 +21,7 @@ compatibility: >-
   runtime. Recommends AskUserQuestion (prose fallback documented in
   the body). Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 1.0.0
+  version: 1.0.1
   narrative:
     args:
       - name: "<spec-path>"
@@ -185,7 +185,11 @@ subsequent observations anyway.
 
 ### Phase 4 — Evidence log
 
-Write `probe-log.md` next to the spec. Per question: the probe as
+Write `probe-log.md` next to the spec. The log is a workflow
+artifact: it stays in the spec directory and is never copied into any
+code repo, because it quotes live API responses
+([`references/git-conventions.md`](references/git-conventions.md)).
+Per question: the probe as
 run, the raw evidence (redacted), the reading of that evidence, and
 the verdict — answered (with the value) or evidence-only (with what
 was observed and why it doesn't close the question). Where the

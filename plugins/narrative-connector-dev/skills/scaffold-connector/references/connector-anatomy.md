@@ -32,6 +32,16 @@ which real connectors vary are covered in
 | `background_worker` | Async job loop for deliveries too long for a request/response cycle: claims delivery jobs, drives the `delivery_executor`, reports status. | The target's runtime separates long-running work from the service API (the target decides; the spec only supplies the delivery semantics). |
 | `measurement_poller` | Polling loop for measurement data the partner writes into an object-store inbox: scans the inbox per `measurement.partition_layout`, copies new files into the dataset ingestion path, dedups so no file lands twice. | `delivery.directions` includes `measurement_ingestion` and `measurement.ingestion_mode` is `bucket_inbox` (the default). |
 | `measurement_receiver` | HTTP endpoint for measurement events the partner pushes to the connector, per `measurement.webhook`: verifies the inbound call per `auth.inbound`, persists the raw payload, acknowledges before any processing, and dedups on `measurement.webhook.dedupe_key`. A buffer-flush step then lands the persisted events on the same dataset ingestion path the poller uses. | `delivery.directions` includes `measurement_ingestion` and `measurement.ingestion_mode` is `partner_webhook`. |
+| `app_ui` | The configuration UI a customer uses: the profile-creation flow (OAuth connect per `auth.model`, or credential fields) and the settings forms, rendered from the settings-form contract `/define-connector-interface` defines so forms and codecs never drift. | Always. |
+
+The app UI is part of the connector's surface, but it has two possible
+homes and the target decides between them. A target whose `repos` list
+carries a frontend-role repo materializes `app_ui` there, in the
+platform frontend's own idiom (`/add-connector-app-ui` builds it). A
+greenfield target has no frontend repo, so the connector serves the UI
+itself; the runtime profile says how (for cloudflare-workers, a React
+single-page app served as static assets by the same Worker). Either
+way the forms render from the same settings-form contract.
 
 ## Derivation rules
 
