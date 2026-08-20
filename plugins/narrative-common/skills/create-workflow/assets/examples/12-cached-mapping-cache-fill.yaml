@@ -1,0 +1,249 @@
+# Fill the cache behind a Rosetta Stone cached_mapping, on a schedule.
+#
+# A cached_mapping resolves an attribute by joining the source dataset
+# against a cache table at query time. Nothing computes the values —
+# this workflow does, ahead of time. Three tasks:
+#   1. Create the resolved view (the Rules -> ML -> LLM waterfall) if
+#      it doesn't exist yet.
+#   2. Refresh it, so later runs pick up newly-arrived raw values.
+#   3. INSERT the newly resolved rows into the cache.
+#
+# Use when:
+#   - A cached_mapping exists and its cache needs filling or keeping
+#     current.
+#   - Normalizing messy free-text values (dog breeds, product
+#     categories, job titles) into an attribute's enum via any mix of
+#     exact rules, an ML classifier, and an LLM.
+#
+# This is the example /create-cached-mapping composes against — that
+# skill generates the two NQL bodies and hands them here. Don't
+# hand-author the waterfall SQL from this file alone; the cost-control
+# rules below are not optional and are easy to break silently.
+#
+# Notes:
+#   - THE CACHE MUST BE ACTIVE BEFORE THIS RUNS. Creating a
+#     cached_mapping auto-provisions a correctly-shaped cache dataset,
+#     but it lands in status `pending` and a pending dataset has no
+#     physical table. fillCache then fails in ~1.5s with "Invalid
+#     Target Dataset ... not found" for a dataset that plainly exists.
+#     Activate it with `PUT /datasets/<cache_id>/activate` first.
+#     Proven: same workflow, same NQL — pending run failed, active run
+#     inserted 98 rows.
+#   - THE CACHE SCHEMA IS `input_0 … input_{n-1}` PLUS `mapped_value`
+#     — one typed column per input expression of the mapping, in the
+#     same order, then the mapped value. Multi-column keys are NOT
+#     concatenated into one column; each gets its own. Read the cache
+#     dataset's schema rather than assuming column names.
+#   - AI_COMPLETE MUST RUN AGAINST A RELATION A `WHERE` HAS ALREADY
+#     REDUCED to the rows nothing cheaper resolved. That is the whole
+#     cost-control mechanism. `CASE WHEN ... ELSE AI_COMPLETE(...)`
+#     and `COALESCE(x, AI_COMPLETE(...))` both call the model on every
+#     row and discard the losing branch — identical output, much
+#     larger bill. A CTE with no WHERE is just as bad; it's the WHERE
+#     that does the work, not the syntax wrapping it. Do not "simplify"
+#     the llm_in CTE away.
+#   - The row cap must be `QUALIFY ROW_NUMBER() OVER (ORDER BY ...)
+#     <= N`, never `ORDER BY ... LIMIT N`. A materialized view stores
+#     an unordered bag of rows, so LIMIT does not bound what later
+#     reads return. Include the ORDER BY so which rows survive the cap
+#     is deterministic. Capped-out keys come back with a NULL
+#     mapped_value, which reads as "not answered yet".
+#   - AI_COMPLETE will not accept an expression as its prompt. Build
+#     the prompt as a column in the preceding CTE (`ptext` below) and
+#     pass the column. An inline CONCAT fails validation with
+#     "Invalid UDF(ai_complete) call: '' prompt is invalid".
+#   - Both anti-joins use `LEFT JOIN ... WHERE c.input_0 IS NULL`, not
+#     `NOT IN`. Cache columns are nullable by design, and a single
+#     NULL in the cache makes `NOT IN` evaluate to UNKNOWN for every
+#     row — silently emptying the result set instead of erroring.
+#   - The keys anti-join is what makes a *scheduled* fill affordable:
+#     the waterfall never sees a key the cache already holds, so a
+#     refresh pays only for genuinely new values. Dropping it (as an
+#     INSERT-time-only dedupe would) re-asks the LLM about every
+#     unresolved key on every run and throws the answers away.
+#   - An INSERT's source may only scan datasets and views this company
+#     owns, so the cross-company `narrative.rosetta_stone` table and
+#     third-party access rules are rejected at compile time. Attribute
+#     references on your own datasets are fine. The waterfall still
+#     reads raw columns, for a different reason: resolving the attribute
+#     this mapping populates would join against the cache being filled.
+#   - Task order matters on the first run only: CreateMaterializedView-
+#     IfNotExists performs the initial materialization, so
+#     refreshResolved is a near no-op incremental pass behind it.
+#     On later runs Create no-ops and Refresh does the work. Without
+#     the Refresh task the workflow would INSERT from a stale view
+#     forever, because Create no-ops once the dataset exists.
+#   - Tasks are sequential and fail-fast. If refreshResolved fails,
+#     fillCache does not run and the cache keeps its previous rows —
+#     a safe failure.
+
+document:
+  dsl: '1.0.0'
+  namespace: rosetta-stone
+  name: canine-breed-cache-fill
+  version: '1.0.0'
+
+# Nightly at 03:00 UTC. Match the cadence to how fast new raw values
+# arrive, not to how fast the source dataset grows — a table gaining
+# millions of rows a day may still see only a handful of new distinct
+# values.
+schedule:
+  cron: '0 3 * * *'
+
+do:
+  # ─── 1. The resolved view: Rules -> ML -> LLM ─────────────────────
+  # Each tier is an optional pair of CTEs; drop the ones that aren't
+  # configured and nothing else changes. The output schema is always
+  # input_0 / resolver / ml_conf / mapped_value, which is what lets
+  # one fillCache task serve every tier combination.
+  - createResolved:
+      call: CreateMaterializedViewIfNotExists
+      with:
+        nql: |
+          CREATE MATERIALIZED VIEW "resolved_canine_breed"
+          DISPLAY_NAME = 'Resolved Canine Breed — Waterfall Output'
+          DESCRIPTION = 'Normalizes free-text BREED_ENTERED values from vet_intake_raw to the canine_breed enum via exact rules, the VET_CANINE_BREED_CLASSIFIER model above 0.5 confidence, and openai-gpt-5 for the remainder. Feeds the canine_breed cached_mapping cache. Keys already cached are excluded, so each refresh only resolves newly-seen values.'
+          AS
+          WITH keys AS (
+            -- Distinct un-cached, non-null keys. The LEFT JOIN is the
+            -- anti-join: DISTINCT absorbs any fan-out from duplicate
+            -- cache rows (the cache is append-mode).
+            SELECT DISTINCT LOWER(TRIM(s.BREED_ENTERED)) AS input_0
+            FROM company_data.vet_intake_raw s
+            LEFT JOIN company_data.cache_canine_breed_935ecc36 c
+              ON c.input_0 = LOWER(TRIM(s.BREED_ENTERED))
+            WHERE LOWER(TRIM(s.BREED_ENTERED)) IS NOT NULL
+              AND c.input_0 IS NULL
+          ),
+          -- TIER 1: rules. Cheap, deterministic, runs on everything.
+          rules AS (
+            SELECT
+              k.input_0,
+              CASE k.input_0
+                WHEN 'lab'           THEN 'Labrador Retriever'
+                WHEN 'lab retriever' THEN 'Labrador Retriever'
+                WHEN 'frenchie'      THEN 'French Bulldog'
+                WHEN 'wiener dog'    THEN 'Dachshund'
+                WHEN 'mutt'          THEN 'Mixed Breed'
+                ELSE NULL
+              END AS rule_value
+            FROM keys k
+          ),
+          -- REDUCE before tier 2. The classifier is cheaper than the
+          -- LLM, not free — without this it runs on rule-resolved keys
+          -- too.
+          ml_in AS (
+            SELECT r.input_0 FROM rules r WHERE r.rule_value IS NULL
+          ),
+          -- TIER 2: classifier. PREDICT returns a class index, not a
+          -- name; PREDICT_PROBA is where the confidence lives.
+          ml AS (
+            SELECT
+              m.input_0,
+              CAST(PARSE_JSON(CALL_MODEL_FUNCTION('VET_CANINE_BREED_CLASSIFIER', 'v1', 'PREDICT', m.input_0))['prediction'] AS LONG) AS pred_idx,
+              CALL_MODEL_FUNCTION('VET_CANINE_BREED_CLASSIFIER', 'v1', 'PREDICT_PROBA', m.input_0) AS proba_json
+            FROM ml_in m
+          ),
+          ml2 AS (
+            SELECT
+              ml.input_0,
+              ml.pred_idx,
+              CAST(PARSE_JSON(ml.proba_json)[CONCAT('proba_', CAST(ml.pred_idx AS STRING))] AS DOUBLE) AS ml_conf
+            FROM ml
+          ),
+          -- Merge tiers 1 and 2. resolver IS NULL means "nothing cheap
+          -- resolved this".
+          resolved AS (
+            SELECT
+              r.input_0,
+              m2.ml_conf,
+              CASE
+                WHEN r.rule_value IS NOT NULL THEN 'rule'
+                WHEN m2.ml_conf >= 0.5        THEN 'ml'
+                ELSE NULL
+              END AS resolver,
+              CASE
+                WHEN r.rule_value IS NOT NULL THEN r.rule_value
+                WHEN m2.ml_conf >= 0.5        THEN lk.breed
+                ELSE NULL
+              END AS resolved_value
+            FROM rules r
+            LEFT JOIN ml2 m2 ON m2.input_0 = r.input_0
+            LEFT JOIN company_data.class_index_lookup lk ON lk.idx = m2.pred_idx
+          ),
+          -- ════════════════════════════════════════════════════════
+          -- THE SHORT-CIRCUIT. Do not fold this into a CASE or a
+          -- COALESCE. AI_COMPLETE is only affordable because this CTE
+          -- has already cut the relation down to the fall-through
+          -- rows. Snowflake does not short-circuit an external
+          -- function inside CASE/COALESCE — it evaluates the branch
+          -- for every row and throws the loser away, so the output
+          -- looks identical and only the bill changes.
+          -- ════════════════════════════════════════════════════════
+          llm_in AS (
+            SELECT
+              t.input_0,
+              CONCAT('Normalize this free-text dog breed to EXACTLY one value from this list, copied character-for-character, and nothing else: Dachshund, French Bulldog, Labrador Retriever, Mixed Breed, Poodle, Siberian Husky, Unknown. Use "Mixed Breed" for clear non-purebreds and "Unknown" if it is not identifiable as a dog breed. Entry: ', t.input_0) AS ptext
+            FROM resolved t
+            WHERE t.resolver IS NULL
+            QUALIFY ROW_NUMBER() OVER (ORDER BY t.input_0) <= 10000
+          ),
+          -- TIER 3: the LLM. Always last, and only ever sees what
+          -- llm_in handed it.
+          llm AS (
+            SELECT
+              s.input_0,
+              AI_COMPLETE('openai-gpt-5', s.ptext, '{"temperature":0}', '{}', FALSE) AS llm_raw
+            FROM llm_in s
+          )
+          SELECT
+            t.input_0,
+            CASE
+              WHEN t.resolver IS NOT NULL  THEN t.resolver
+              WHEN llm.input_0 IS NOT NULL THEN 'llm'
+              ELSE NULL
+            END AS resolver,
+            t.ml_conf,
+            -- Enum validation, one arm per allowed value. An off-enum
+            -- answer becomes the fallback rather than junk. Validating
+            -- against a classifier's class lookup instead would drop
+            -- any enum value the model wasn't trained on — that is how
+            -- a correct "Mixed Breed" silently became "Unknown".
+            CASE
+              WHEN t.resolver IS NOT NULL                        THEN t.resolved_value
+              WHEN UPPER(TRIM(llm.llm_raw)) = 'DACHSHUND'          THEN 'Dachshund'
+              WHEN UPPER(TRIM(llm.llm_raw)) = 'FRENCH BULLDOG'     THEN 'French Bulldog'
+              WHEN UPPER(TRIM(llm.llm_raw)) = 'LABRADOR RETRIEVER' THEN 'Labrador Retriever'
+              WHEN UPPER(TRIM(llm.llm_raw)) = 'MIXED BREED'        THEN 'Mixed Breed'
+              WHEN UPPER(TRIM(llm.llm_raw)) = 'POODLE'             THEN 'Poodle'
+              WHEN UPPER(TRIM(llm.llm_raw)) = 'SIBERIAN HUSKY'     THEN 'Siberian Husky'
+              WHEN llm.input_0 IS NOT NULL                         THEN 'Unknown'
+              ELSE NULL
+            END AS mapped_value
+          FROM resolved t
+          LEFT JOIN llm ON llm.input_0 = t.input_0
+
+  # ─── 2. Refresh, so later runs see newly-arrived raw values ───────
+  # Create no-ops once the dataset exists, so without this task every
+  # run after the first would INSERT from a stale view.
+  - refreshResolved:
+      call: RefreshMaterializedView
+      with:
+        datasetName: resolved_canine_breed
+
+  # ─── 3. Fill the cache ───────────────────────────────────────────
+  # Idempotent by anti-join, so a re-run without a refresh inserts
+  # nothing rather than duplicating. Only resolved rows are written —
+  # a key the cap cut short stays out of the cache and gets another
+  # chance next run.
+  - fillCache:
+      call: ExecuteDml
+      with:
+        nql: |
+          INSERT INTO company_data.cache_canine_breed_935ecc36 (input_0, mapped_value)
+          SELECT r.input_0, r.mapped_value
+          FROM company_data.resolved_canine_breed r
+          LEFT JOIN company_data.cache_canine_breed_935ecc36 c
+            ON c.input_0 = r.input_0
+          WHERE r.mapped_value IS NOT NULL
+            AND c.input_0 IS NULL
