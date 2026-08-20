@@ -587,6 +587,93 @@
       ]
     },
     {
+      "name": "suggest-compute-pool",
+      "version": "0.7.0",
+      "description": "Work out whether an account has the right compute pools for the\nworkloads it runs, and recommend the set it should have. Built for the\ntwo moments it comes up: an account being configured for the first time,\nand a new batch of workloads coming online on an existing one. Works\nfrom what the platform exposes — the pools already configured, stored\nvolumes and cardinality from dataset stats, each workload's NQL, and how\nlong past runs took — then asks for what the data can't supply. Names\nthe pools, the settings to create them with, which workloads run where,\nand its assumptions. Runs unattended for a per-account sweep. Advises\nonly; never creates or resizes a pool.\nUse when: \"are our compute pools set up right\", \"we're onboarding an\naccount — what pools does it need\", \"we're bringing new workloads\nonline\", \"which compute pool should I use\", \"what size compute pool do I\nneed\", \"my job is too slow\", \"job stuck in Pending\".\n(narrative-common)",
+      "plugin": "narrative-common",
+      "path": "plugins/narrative-common/skills/suggest-compute-pool/SKILL.md",
+      "compatibility": "Requires the narrative-mcp MCP server (no MCP → cannot inspect data planes, pools, datasets, or job history). Recommends AskUserQuestion (a Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md) and the narrative-knowledge-base MCP server for compute-pool docs. Advice-only and read-only by default; never creates or resizes a pool. The optional probe query and stats recalculation run jobs, and are offered rather than taken. Portable to any agentskills.io-compliant harness.",
+      "requirements": {
+        "requires": {
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_data_planes_list",
+            "narrative_data_planes_describe",
+            "narrative_datasets_describe",
+            "narrative_jobs_search",
+            "narrative_jobs_describe"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-knowledge-base"
+          ],
+          "mcp-tools": [
+            "narrative_context_search_companies",
+            "narrative_context_set_company",
+            "narrative_datasets_search",
+            "narrative_dataset_get_column_stats",
+            "narrative_access_rules_describe",
+            "narrative_access_rules_search",
+            "narrative_nql_validate",
+            "narrative_nql_run",
+            "narrative_dataset_set_column_stats_config",
+            "narrative_dataset_recalculate_statistics",
+            "narrative_workflow_runs_list",
+            "search_narrative_i_o_knowledge_base"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "--plane",
+          "value": "<id>",
+          "required": false,
+          "description": "Review every workload on this data plane against the pools it has configured. The account-level entry point, and what an unattended sweep passes alongside --quick."
+        },
+        {
+          "name": "--dataset",
+          "value": "<id>",
+          "required": false,
+          "description": "The dataset or MV the workload runs against, by numeric id. Source of row counts, cardinality, view definition, refresh schedule, and data plane."
+        },
+        {
+          "name": "--access-rule",
+          "value": "<id>",
+          "required": false,
+          "description": "An access rule the workload reads. Source of the underlying dataset ids and the rule's NQL. Carries no row counts — see references/EVIDENCE.md."
+        },
+        {
+          "name": "--job",
+          "value": "<id>",
+          "required": false,
+          "description": "A job id that was too slow or failed. Source of elapsed time, input flags, and failure text; resolves the dataset."
+        },
+        {
+          "name": "--pool",
+          "value": "<id>",
+          "required": false,
+          "description": "Evaluate a specific existing pool as the incumbent rather than the plane's default."
+        },
+        {
+          "name": "--quick",
+          "required": false,
+          "description": "Skip the interview. Recommend from MCP evidence alone, with every unfilled gap stated as an explicit assumption."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "The workload in the user's words — an example query, a deadline, a cadence, or what happened last time. Steers shared-vs-private and the size adjustments."
+        }
+      ]
+    },
+    {
       "name": "write-nql",
       "version": "0.5.9",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
