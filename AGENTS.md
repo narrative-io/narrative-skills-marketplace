@@ -62,6 +62,7 @@ hyphen-separated).
 | `prep` | Prepare for a specific event |
 | `build` | Assemble multi-artifact output |
 | `sweep` | Scheduled hygiene pass |
+| `register` | Attach an existing external object to the platform |
 
 Never use adjective-noun (`/new-lead`) or noun-noun (`/campaign-brief`).
 
