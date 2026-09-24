@@ -1,0 +1,14 @@
+# .narrative/ship.yml — release approval + CR reviewer policy for this repo.
+# Read by /propose-ship, /ship-pr, and /create-cr.
+approval:
+  mode: any            # any | all — how many listed approvers must sign off
+  approvers:           # the only people whose sign-off counts for deploy
+    - github: NJordan72
+      slack: nick
+reviewers:
+  count: 1             # reviewers selected per CR
+  pool:                # the only valid CR reviewers for this repo
+    - github: NJordan72
+      slack: nick
+    - github: mbabic
+      slack: marko
