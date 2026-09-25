@@ -25,5 +25,8 @@ Thumbs.db
 npm-debug.log*
 bun-debug.log*
 
-# Local Claude state (per-user)
-.claude/
+# Local Claude state (per-user). The audit and burndown skills and the
+# audit rubrics are shared and committed; everything else stays local.
+.claude/*
+!.claude/skills/
+!.claude/audit-rubrics/

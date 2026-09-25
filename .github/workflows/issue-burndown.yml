@@ -1,0 +1,430 @@
+# issue-burndown — one issue off the queue, one pull request, every morning.
+#
+# 13:00 UTC daily, Claude reads the open issues, drops the ones it must not or
+# cannot touch, picks one, fixes it, and opens a pull request.
+#
+# THIS REPOSITORY IS PUBLIC, so anyone can open an issue, and issue text is
+# handed to a model that edits files. The skill's step 2 drops every issue
+# whose author is not an owner, member or collaborator unless a maintainer has
+# added `auto-fix-ok`, and treats the text of what remains as data rather than
+# instructions. The audit's AUD-OPS-03 checks that filter is still there.
+#
+# The queue is built before the model starts, by `bun run screen:issues`
+# (scripts/screen-issues.ts), not by the model. That step applies the trust
+# filter and then asks TypeSafe's Jev model whether each remaining issue tries
+# to direct an AI agent — the jev.how "screen" recipe. A flagged issue gets
+# `auto-fix-skip` and a comment; an uncertain one is left out quietly; an issue
+# Jev could not score is left out too. The model reads only the file that step
+# writes, so issue text it was not handed never reaches it.
+# `/burndown-issues` in .claude/skills/burndown-issues/SKILL.md is the procedure;
+# this file supplies the trigger, the credentials, and the run report.
+#
+# IT NEVER MERGES, and it never closes an issue. The run ends at an open pull
+# request — the same argument audit-weekly.yml makes for `contents: read`: a bot
+# that reviews its own work has no adversary. A person merges, and merging is
+# what closes the issue, via `Fixes #n` in the PR body.
+#
+# ONE PR PER RUN, by construction, and the daily cadence is the throttle. An
+# empty queue reports `no_work` and files nothing, which is a normal morning.
+#
+# THE TOKEN CANNOT EDIT WORKFLOWS, deliberately. `create-github-app-token` is
+# asked for contents + pull-requests and nothing else, so GitHub rejects a push
+# that creates or updates anything under .github/workflows/. A bot whose pull
+# requests nobody is required to approve should not be able to edit the CI that
+# reviews them. The rejection lands at push time, after the work is done, so the
+# skill declines such an issue up front instead — see its step 3. This is not
+# hypothetical here: the audit's `automation` rubric files findings about
+# workflows, and every one of them is out of this job's reach by design. The
+# skill also declines anything under .claude/skills/ or .claude/audit-rubrics/:
+# those are this job's own guardrails, and it does not get to edit them.
+#
+# It is also why the checkout below is not the token used to push. The app token
+# is minted separately and handed to create-pull-request, which installs its own
+# credential.
+#
+# TWO THINGS ABOUT GITHUB'S SCHEDULER before editing the cron: scheduled runs
+# only fire from the DEFAULT BRANCH, so a change here does nothing until it
+# merges — which is what workflow_dispatch is for; and 13:00 UTC is a request,
+# not a promise, since GitHub delays scheduled runs under load and stops
+# scheduling them on a repository with no recent activity.
+#
+# The hour is an hour after audit-weekly's Monday slot on purpose: on a Monday
+# the audit files first, so the burndown reads a queue that includes whatever it
+# found rather than last week's. 13:00 UTC is also 09:00 in New York, so the pull
+# request arrives at the start of the working day rather than overnight.
+#
+# Credentials: ANTHROPIC_FEDERATION_RULE_ID and AUTOMATION_APP_ID (repository
+# variables) and AUTOMATION_APP_PRIVATE_KEY (secret), for a GitHub App installed
+# on this repository with Contents and Pull requests read/write. The preflight
+# step fails the run by name if any is missing.
+
+name: issue-burndown
+
+on:
+  schedule:
+    - cron: "0 13 * * *" # every day, 13:00 UTC
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number to fix, e.g. 42 (skips queue selection)
+        type: string
+        required: false
+
+permissions: {}
+
+# Serialise. Two burndowns reading the same queue concurrently would each pick
+# the same issue and open two pull requests for it.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  burndown:
+    name: burndown
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      # Labelling and commenting on an issue it declines. Not closing — the skill
+      # forbids that, and merging the pull request is what closes an issue.
+      issues: write
+      # Workload identity federation: the action fetches a GitHub OIDC token and
+      # exchanges it for a short-lived Anthropic access token.
+      id-token: write
+    steps:
+      # GitHub expands an unset variable or secret to the empty string, so
+      # without this the run fails later with an error that says nothing about
+      # which value is missing.
+      - name: Preflight
+        env:
+          FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          APP_ID: ${{ vars.AUTOMATION_APP_ID }}
+          HAS_APP_KEY: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY != '' }}
+          HAS_TYPESAFE_KEY: ${{ secrets.TYPESAFE_API_KEY != '' }}
+        run: |
+          missing=0
+          if [ -z "$FEDERATION_RULE_ID" ]; then
+            echo "::error title=Missing variable::ANTHROPIC_FEDERATION_RULE_ID is not set."
+            missing=1
+          fi
+          if [ -z "$APP_ID" ]; then
+            echo "::error title=Missing variable::AUTOMATION_APP_ID is not set."
+            missing=1
+          fi
+          if [ "$HAS_APP_KEY" != "true" ]; then
+            echo "::error title=Missing secret::AUTOMATION_APP_PRIVATE_KEY is not set."
+            missing=1
+          fi
+          if [ "$HAS_TYPESAFE_KEY" != "true" ]; then
+            echo "::error title=Missing secret::TYPESAFE_API_KEY is not set."
+            missing=1
+          fi
+          exit "$missing"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # create-pull-request needs real history to diff the branch against the
+          # base.
+          fetch-depth: 0
+          # create-pull-request installs its own credential from the `token`
+          # input, so the checkout credential is only a liability here.
+          persist-credentials: false
+
+      # Contents and pull-requests, and nothing else. No `permission-workflows`,
+      # which is what makes a push touching .github/workflows/ fail.
+      #
+      # No `permission-issues` either. Issue labelling and commenting go through
+      # the actions token instead, which carries the job's own `issues: write`,
+      # handed to the model as BURNDOWN_ISSUE_TOKEN — see the env block below
+      # for why it cannot simply be called GH_TOKEN. Keeping Issues off the app
+      # token also means the credential that can push a branch cannot also
+      # rewrite the issues that steer it.
+      - name: Mint a write token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: narrative-skills-marketplace
+          permission-contents: write
+          permission-pull-requests: write
+          permission-metadata: read
+
+      # The skill runs `bun run gen:all` after editing a template and
+      # `bun run ci` before leaving a fix in the tree. Without this neither is
+      # possible and every run has to decline. Same Bun as ci.yml, so a PR that
+      # is green here is green there. (shellcheck, which the skill runs when it
+      # touches `setup`, is preinstalled on ubuntu-latest.)
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Builds the queue the model reads. Exits 2 when no issue could be
+      # screened — a Jev outage fails the run here rather than handing the model
+      # an unscreened queue. The key is set on this step alone; TypeSafe offers
+      # no workload identity federation, so it is a static secret.
+      - name: Screen the queue
+        id: screen
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BURNDOWN_ISSUE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          BURNDOWN_QUEUE: ${{ runner.temp }}/queue.json
+          BURNDOWN_SCREEN: ${{ runner.temp }}/screen.json
+          BURNDOWN_ISSUE: ${{ inputs.issue }}
+          BURNDOWN_SKIP_LABEL: auto-fix-skip
+          BURNDOWN_OPT_IN_LABEL: auto-fix-ok
+          AUDIT_LABEL: repo-audit
+        run: |
+          set -euo pipefail
+          bun run screen:issues
+          echo "queue_size=$(jq length < "$BURNDOWN_QUEUE")" >> "$GITHUB_OUTPUT"
+
+      # An empty queue after screening is a normal morning. Skipping the model
+      # saves a run that would only report `no_work`.
+      - uses: anthropics/claude-code-action@9ca9355b36297178e28d37c799d1c9c8a28e6507 # main, untagged: first commit bundling Claude Code 2.1.280 (Opus 5.5)
+        id: claude
+        if: steps.screen.outputs.queue_size != '0'
+        env:
+          BURNDOWN_QUEUE: ${{ runner.temp }}/queue.json
+          BURNDOWN_SKIP_LABEL: auto-fix-skip
+          BURNDOWN_OPT_IN_LABEL: auto-fix-ok
+          BURNDOWN_ISSUE: ${{ inputs.issue }}
+          BURNDOWN_SUMMARY: ${{ runner.temp }}/burndown-summary.json
+          BURNDOWN_PR_BODY: ${{ runner.temp }}/pr-body.md
+          # The actions token, under a name the action leaves alone. The skill
+          # checks linked pull requests with it and labels and comments on what
+          # it declines, and the job's `issues: write` is the only grant that
+          # covers that here — see the mint step above. The app token is used
+          # solely to open the pull request.
+          #
+          # It cannot be called GH_TOKEN. claude-code-action overwrites GH_TOKEN,
+          # GITHUB_TOKEN and OVERRIDE_GITHUB_TOKEN in the model's environment
+          # with its own `github_token:` input below — the app token, minted
+          # without Issues — so anything assigned here under those three names is
+          # discarded before the model runs and every issue read through them
+          # returns 403. The action does keep the actions token as
+          # DEFAULT_WORKFLOW_TOKEN, but that is an implementation detail of the
+          # action rather than a promise to callers, and a version bump could
+          # rename it without anything here noticing. Hence a BURNDOWN_ name,
+          # which is ours.
+          BURNDOWN_ISSUE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        with:
+          # Workload identity federation — no ANTHROPIC_API_KEY to store or
+          # rotate. These are identifiers, not credentials: possessing them
+          # grants nothing without a GitHub OIDC token from a repo and workflow
+          # the federation rule matches. Setting `anthropic_api_key` here would
+          # silently take precedence and federation would stop being used.
+          #
+          # The rule ID is a repository variable because it has to be this
+          # repository's own rule. A federation rule is scoped to the identity
+          # that may use it, so mintlify-docs' rule rejects a token minted here
+          # with a 401 at exchange time — before a single token is billed, which
+          # is why a run that fails this way shows one turn, zero cost, and no
+          # output at all. The preflight step above fails first if it is unset.
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ce299ed7-c40a-4e24-92cd-157a14a94118
+          anthropic_service_account_id: svac_01AvTJ3cTYJTjU9v3hGgfUkp
+          anthropic_workspace_id: wrkspc_01FfU8EtQD9xS3Uy6yoLrRJg
+          github_token: ${{ steps.app-token.outputs.token }}
+          # Spelled out rather than the bare slash command `/burndown-issues`,
+          # for the same reason as audit-weekly.yml: the procedure lives in the
+          # skill, and this removes the run's dependence on slash-command
+          # resolution inside the action.
+          prompt: |
+            Run this repository's daily issue burndown.
+
+            Read `.claude/skills/burndown-issues/SKILL.md` in full, then follow
+            it exactly, start to finish.
+
+            Do not commit, do not push, and do not open a pull request — leave
+            your edits in the working tree and write the pull-request body to
+            $BURNDOWN_PR_BODY. A later step opens the pull request from what you
+            leave behind. Never merge anything and never close an issue.
+
+            Finish by writing $BURNDOWN_SUMMARY, as its step 7 describes.
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 400
+            --allowedTools "Read,Edit,Write,Glob,Grep,TodoWrite,Bash"
+
+      # Without this a failed run leaves nothing to debug with: the transcript
+      # is written to the runner and thrown away with it. The first dispatch of
+      # this workflow failed with one turn and no output, and there was no way
+      # to tell from the run page whether the model had errored, refused, or
+      # never started. `always()` because a failed run is when this matters.
+      - name: Explain the run
+        if: always() && steps.claude.outputs.execution_file != ''
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          set -uo pipefail
+
+          [ -f "$EXECUTION_FILE" ] || { echo "No execution file at $EXECUTION_FILE"; exit 0; }
+
+          # The file is a JSON array in current versions and JSONL in older
+          # ones. Normalise to an array so one set of filters covers both.
+          jq -s 'if length == 1 and (.[0] | type) == "array" then .[0] else . end' \
+            "$EXECUTION_FILE" > "$RUNNER_TEMP/transcript.json" || exit 0
+
+          {
+            echo "### What Claude said"
+            echo
+            jq -r '[.[]? | select(.type == "assistant") | .message.content[]?
+                   | select(.type == "text") | .text] | last // "_No closing message._"' \
+              "$RUNNER_TEMP/transcript.json"
+            echo
+
+            echo "### Tools it used"
+            echo
+            jq -r '[.[]? | select(.type == "assistant") | .message.content[]?
+                   | select(.type == "tool_use") | .name] | group_by(.)
+                   | map("- \(.[0]) × \(length)") | join("\n") | select(. != "") // "_None._"' \
+              "$RUNNER_TEMP/transcript.json"
+            echo
+
+            # An error result carries its reason here and nowhere else on the
+            # run page.
+            echo "### Result"
+            echo
+            echo '```json'
+            jq -c '.[]? | select(.type == "result")' "$RUNNER_TEMP/transcript.json"
+            echo '```'
+
+            denials=$(jq -r '[.[]? | select(.type == "result") | .permission_denials[]?] | length' "$RUNNER_TEMP/transcript.json")
+            if [ "${denials:-0}" -gt 0 ]; then
+              echo
+              echo "### Refused by the permission rules ($denials)"
+              echo
+              echo '```json'
+              jq -c '.[]? | select(.type == "result") | .permission_denials[]?' "$RUNNER_TEMP/transcript.json"
+              echo '```'
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The skill leaves its work in the tree and this step opens the pull
+      # request, so that the branch, the title and the token are decided here
+      # rather than by the model. A run that declined everything leaves the tree
+      # clean and create-pull-request does nothing.
+      - name: Read the summary
+        id: summary
+        if: always()
+        env:
+          SUMMARY: ${{ runner.temp }}/burndown-summary.json
+          QUEUE_SIZE: ${{ steps.screen.outputs.queue_size }}
+        run: |
+          set -uo pipefail
+
+          if [ ! -f "$SUMMARY" ]; then
+            if [ "$QUEUE_SIZE" = "0" ]; then
+              echo "outcome=no_work" >> "$GITHUB_OUTPUT"
+            else
+              echo "outcome=failed" >> "$GITHUB_OUTPUT"
+            fi
+            echo "issue=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "outcome=$(jq -r '.outcome // "failed"' < "$SUMMARY")"
+            echo "issue=$(jq -r '.issue // "unknown" | tostring' < "$SUMMARY")"
+          } >> "$GITHUB_OUTPUT"
+
+      # `fix_ready` is a claim about the tree, not about a pull request: the skill
+      # cannot report having opened one, because this step is what opens it.
+      - name: Open the fix pull request
+        id: pr
+        if: steps.summary.outputs.outcome == 'fix_ready'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          # The app token rather than GITHUB_TOKEN: GitHub does not start
+          # workflow runs for events GITHUB_TOKEN created, so a pull request
+          # opened with it would sit there with no CI, no zizmor run and no
+          # PR-title check — on a PR whose whole purpose is to be reviewed.
+          token: ${{ steps.app-token.outputs.token }}
+          branch: fix/issue-${{ steps.summary.outputs.issue }}
+          delete-branch: true
+          title: "fix: resolve issue #${{ steps.summary.outputs.issue }}"
+          commit-message: "fix: resolve issue #${{ steps.summary.outputs.issue }}"
+          labels: automated
+          body-path: ${{ runner.temp }}/pr-body.md
+
+      - name: Report
+        if: always()
+        env:
+          SUMMARY: ${{ runner.temp }}/burndown-summary.json
+          SCREEN: ${{ runner.temp }}/screen.json
+          QUEUE_SIZE: ${{ steps.screen.outputs.queue_size }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          set -uo pipefail
+
+          # The screen leads. Issue numbers and scores only, never titles: an
+          # issue that was flagged is exactly the text that should not be
+          # rendered anywhere a person or a model will read it as trusted.
+          if [ -f "$SCREEN" ]; then
+            jq -r '
+              [
+                "## Issue screen",
+                "Queue \(.queue_size) after screening · \(.untrusted_dropped) untrusted dropped · \(.skipped) skip-labelled · bounds \(.bounds.lower)/\(.bounds.upper)",
+                (if (.screened | length) == 0 then ""
+                 else "| Issue | Outcome | Question | Score |\n| --- | --- | --- | --- |\n" + ([.screened[]
+                   | "| #\(.issue) | \(.outcome) | \(.pattern // "—") | \(if .score then (.score * 100 | round / 100 | tostring) else (.error // "—") end) |"] | join("\n")) end)
+              ] | map(select(. != "")) | join("\n\n")
+            ' < "$SCREEN" >> "$GITHUB_STEP_SUMMARY"
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Issue screen"
+              echo
+              echo "The screen did not finish, so the model never ran. See the \"Screen the queue\" step."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ ! -f "$SUMMARY" ]; then
+            if [ "$QUEUE_SIZE" = "0" ]; then
+              {
+                echo "## Daily issue burndown — no_work"
+                echo
+                echo "Nothing passed the screen, so the model was not run. [View run]($RUN_URL)"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            {
+              echo "## Daily issue burndown"
+              echo
+              echo "The run finished without writing a summary. Step 7 of \`/burndown-issues\` is where that happens."
+              echo
+              echo "[View run]($RUN_URL)"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=No burndown summary::The run wrote no \$BURNDOWN_SUMMARY."
+            exit 0
+          fi
+
+          # `declined` leads over the pull request, for the same reason
+          # audit-weekly leads with `not_evaluated`: an issue declined every
+          # morning is a standing signal, and it is invisible from the PR list.
+          jq -r --arg url "$RUN_URL" --arg pr "${PR_URL:-no pull request was opened}" '
+            [
+              "## Daily issue burndown — \(.outcome)",
+              "Queue \(.queue_size // 0) · [view run](\($url))",
+              (if ((.declined // []) | length) == 0 then ""
+               else "### Declined\n" + ([(.declined // [])[]
+                 | "- #\(.issue) — \(.reason)"] | join("\n")) end),
+              (if (.outcome // "") == "fix_ready" then
+                 "### Fixed\n- [#\(.issue)](\(.issue_url // "")) → \($pr)"
+               else "" end),
+              (if ((.verification // []) | length) == 0 then ""
+               else "### Verification\n" + ([(.verification // [])[]
+                 | "- `\(.)`"] | join("\n")) end),
+              (if (.notes // "") == "" then "" else "---\n\n\(.notes)" end)
+            ]
+            | map(select(. != "")) | join("\n\n")
+          ' < "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
