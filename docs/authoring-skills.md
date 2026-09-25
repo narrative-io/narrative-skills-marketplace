@@ -697,6 +697,7 @@ convention also keeps us spec-conforming.)
 | `sweep`  | Scheduled hygiene pass |
 | `score`  | Rank or rate inputs |
 | `query`  | Read-only lookup |
+| `register` | Attach an existing external object to the platform |
 
 Single-word names are fine when the verb is unambiguous (`/commit`,
 `/qualify`). Never use adjective-noun (`/new-lead`) or noun-noun

@@ -587,6 +587,63 @@
       ]
     },
     {
+      "name": "register-snowflake-dataset",
+      "version": "0.1.0",
+      "description": "Register a Snowflake table or view as a Narrative dataset from SQL,\nwith no Configuration screen and no browser. Not for installing or\nconfiguring the native app, and not for querying a dataset that\nalready exists.\nUse when: \"register this table as a dataset\", \"register a Snowflake\ndataset from SQL\", \"onboard my_table to Narrative\", \"script dataset\nregistration\", \"add this view to my data plane\".\n(narrative-common)",
+      "plugin": "narrative-common",
+      "path": "plugins/narrative-common/skills/register-snowflake-dataset/SKILL.md",
+      "compatibility": "Requires a way to execute SQL against the Snowflake account hosting the Narrative native app — Bash with a Snowflake client, or an equivalent capability — as a role holding dataset_registration plus SELECT and REFERENCES on the source object. The application itself needs a granted warehouse and outbound access for its Narrative API token. Recommends AskUserQuestion, a Claude Code primitive with a prose fallback documented in the body.",
+      "requirements": {
+        "requires": {
+          "tools": [
+            "Bash"
+          ]
+        },
+        "recommends": {
+          "skills": [
+            "narrative-common:generate-rosetta-stone-mappings",
+            "narrative-common:profile-dataset"
+          ],
+          "tools": [
+            "AskUserQuestion"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "--object",
+          "value": "<db.schema.name>",
+          "required": false,
+          "description": "Fully qualified source table or view. If omitted, the skill asks."
+        },
+        {
+          "name": "--display-name",
+          "value": "<text>",
+          "required": false,
+          "description": "Dataset name on the platform. Must be unique among registered datasets. If omitted, the skill asks — it is never invented."
+        },
+        {
+          "name": "--machine-name",
+          "value": "<text>",
+          "required": false,
+          "description": "The dataset's machine name. Optional; Snowflake defaults it to the display name with every character that is not a letter, number or underscore replaced by an underscore."
+        },
+        {
+          "name": "--description",
+          "value": "<text>",
+          "required": false,
+          "description": "Free text stored on the dataset. Omitted when not supplied."
+        },
+        {
+          "name": "--app",
+          "value": "<application>",
+          "required": false,
+          "default": "NARRATIVE_DATA_COLLABORATION",
+          "description": "The installed native app. Verified before use; discovered with SHOW APPLICATIONS only when the default does not resolve."
+        }
+      ]
+    },
+    {
       "name": "write-nql",
       "version": "0.5.9",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
