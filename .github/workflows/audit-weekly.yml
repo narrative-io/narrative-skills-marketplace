@@ -1,0 +1,259 @@
+# audit-weekly — a standing audit that files issues and changes nothing.
+#
+# Monday mornings, Claude reads every issue ever filed under the `repo-audit`
+# label, grades one rubric from .claude/audit-rubrics/ on a three-week rotation,
+# and files between zero and five GitHub issues. `/audit-repo` in
+# .claude/skills/audit-repo/SKILL.md is the procedure and the rubrics are the
+# standard; this file supplies only the trigger, the credentials, and the report.
+#
+# `contents: read` is deliberate and the point of the design. The audit does not
+# fix what it finds — a person picks the issues up through the path that already
+# has review in it. `issues: write` is the one thing it may do.
+#
+# Two things about GitHub's scheduler are worth knowing before editing this:
+# scheduled workflows only run from the **default branch**, so a change here does
+# nothing until it merges (which is why workflow_dispatch is in the trigger
+# list); and the 13:00 UTC slot is a request, not a promise — GitHub delays
+# scheduled runs under load, sometimes by tens of minutes, and stops scheduling
+# them entirely on a repository with no recent activity.
+#
+# Credentials: the Anthropic exchange needs this repository's own federation
+# rule, stored as the ANTHROPIC_FEDERATION_RULE_ID repository variable. The
+# preflight step fails the run by name if it is missing.
+#
+# The action's actor check does not apply here. It gates issue, PR, comment,
+# review and workflow_run events; `schedule` and `workflow_dispatch` are exempt,
+# because GitHub already requires write access to dispatch a workflow and a
+# scheduled run has no external actor. So no `allowed_bots` entry is needed even
+# though a cron run is attributed to whoever last edited the `cron:` line.
+
+name: audit-weekly
+
+on:
+  schedule:
+    - cron: "0 12 * * 1" # Mondays, 12:00 UTC — an hour before issue-burndown
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: Focus area — `auto` rotates by ISO week number
+        type: choice
+        required: false
+        default: auto
+        options:
+          - auto
+          - skills
+          - tooling
+          - automation
+
+permissions: {}
+
+# Serialise runs. Two audits reading the same ledger concurrently would each
+# decide the other's finding was new and file it twice.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # The audit's one write: filing findings. Not pull-requests, not contents.
+      issues: write
+      # `gh run list` — AUD-OPS-05 checks that the scheduled workflows have
+      # actually been running rather than assuming the cron still fires.
+      actions: read
+      # Workload identity federation: the action fetches a GitHub OIDC token and
+      # exchanges it for a short-lived Anthropic access token.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # AUD-GEN-01 compares when each plugin's version last moved against
+          # when its content last changed, and AUD-GEN-07 reads release tags;
+          # both want real history rather than a depth-1 checkout.
+          fetch-depth: 0
+          # Nothing here pushes, so don't leave the token in .git/config.
+          persist-credentials: false
+
+      # The tooling rubric runs the check:* gates and the portable build in a
+      # scratch worktree (AUD-GEN-02, AUD-GEN-04), and the skills rubric parses
+      # frontmatter with gray-matter. Without this those rules are
+      # `not-evaluated`, which is an honest result but a wasted one.
+      # Same Bun as ci.yml, so a gate behaves here as it does on a PR.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # GitHub expands an unset variable to the empty string, so without this
+      # the federation exchange fails with a 401 that says nothing about why.
+      - name: Preflight
+        env:
+          FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+        run: |
+          if [ -z "$FEDERATION_RULE_ID" ]; then
+            echo "::error title=Missing variable::ANTHROPIC_FEDERATION_RULE_ID is not set. Create a federation rule for this repository in the Anthropic console and store its fdrl_... ID as a repository variable."
+            exit 1
+          fi
+
+      - uses: anthropics/claude-code-action@9ca9355b36297178e28d37c799d1c9c8a28e6507 # main, untagged: first commit bundling Claude Code 2.1.280 (Opus 5.5)
+        id: claude
+        env:
+          AUDIT_LABEL: repo-audit
+          AUDIT_FOCUS: ${{ inputs.focus || 'auto' }}
+          AUDIT_SUMMARY: ${{ runner.temp }}/audit-summary.json
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        with:
+          # Workload identity federation — no ANTHROPIC_API_KEY to store or
+          # rotate. These are identifiers, not credentials: possessing them
+          # grants nothing without a GitHub OIDC token from a repo and workflow
+          # the federation rule matches. Setting `anthropic_api_key` here would
+          # silently take precedence and federation would stop being used.
+          #
+          # The rule ID is a repository variable because it has to be this
+          # repository's own rule. A federation rule is scoped to the identity
+          # that may use it, so mintlify-docs' rule rejects a token minted here
+          # with a 401 at exchange time — before a single token is billed, which
+          # is why a run that fails this way shows one turn, zero cost, and no
+          # output at all. The preflight step above fails first if it is unset.
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ce299ed7-c40a-4e24-92cd-157a14a94118
+          anthropic_service_account_id: svac_01AvTJ3cTYJTjU9v3hGgfUkp
+          anthropic_workspace_id: wrkspc_01FfU8EtQD9xS3Uy6yoLrRJg
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Spelled out rather than the bare slash command `/audit-repo`. The
+          # procedure lives in the skill either way; this only removes the
+          # run's dependence on slash-command resolution inside the action,
+          # which is not something this workflow can see working or failing.
+          prompt: |
+            Run this repository's weekly audit.
+
+            Read `.claude/skills/audit-repo/SKILL.md` in full, then follow it
+            exactly, start to finish. It is the procedure; the rubrics under
+            `.claude/audit-rubrics/` are the standard.
+
+            You are read-only. Do not edit, commit, branch, or open a pull
+            request. Filing GitHub issues is the one write you may perform.
+
+            Finish by writing $AUDIT_SUMMARY, as its step 8 describes.
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 300
+            --allowedTools "Read,Glob,Grep,Write,TodoWrite,Bash"
+
+      # Without this a failed run leaves nothing to debug with: the transcript
+      # is written to the runner and thrown away with it. The first dispatch of
+      # this workflow failed with one turn and no output, and there was no way
+      # to tell from the run page whether the model had errored, refused, or
+      # never started. `always()` because a failed run is when this matters.
+      - name: Explain the run
+        if: always() && steps.claude.outputs.execution_file != ''
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          set -uo pipefail
+
+          [ -f "$EXECUTION_FILE" ] || { echo "No execution file at $EXECUTION_FILE"; exit 0; }
+
+          # The file is a JSON array in current versions and JSONL in older
+          # ones. Normalise to an array so one set of filters covers both.
+          jq -s 'if length == 1 and (.[0] | type) == "array" then .[0] else . end' \
+            "$EXECUTION_FILE" > "$RUNNER_TEMP/transcript.json" || exit 0
+
+          {
+            echo "### What Claude said"
+            echo
+            jq -r '[.[]? | select(.type == "assistant") | .message.content[]?
+                   | select(.type == "text") | .text] | last // "_No closing message._"' \
+              "$RUNNER_TEMP/transcript.json"
+            echo
+
+            echo "### Tools it used"
+            echo
+            jq -r '[.[]? | select(.type == "assistant") | .message.content[]?
+                   | select(.type == "tool_use") | .name] | group_by(.)
+                   | map("- \(.[0]) × \(length)") | join("\n") | select(. != "") // "_None._"' \
+              "$RUNNER_TEMP/transcript.json"
+            echo
+
+            # An error result carries its reason here and nowhere else on the
+            # run page.
+            echo "### Result"
+            echo
+            echo '```json'
+            jq -c '.[]? | select(.type == "result")' "$RUNNER_TEMP/transcript.json"
+            echo '```'
+
+            denials=$(jq -r '[.[]? | select(.type == "result") | .permission_denials[]?] | length' "$RUNNER_TEMP/transcript.json")
+            if [ "${denials:-0}" -gt 0 ]; then
+              echo
+              echo "### Refused by the permission rules ($denials)"
+              echo
+              echo '```json'
+              jq -c '.[]? | select(.type == "result") | .permission_denials[]?' "$RUNNER_TEMP/transcript.json"
+              echo '```'
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # A run that graded everything and found nothing looks exactly like a run
+      # that died quietly. The summary is the only thing that tells them apart,
+      # so lift it onto the run page. `always()` because a failed run is when
+      # this matters most.
+      - name: Report
+        if: always()
+        env:
+          SUMMARY: ${{ runner.temp }}/audit-summary.json
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+
+          if [ ! -f "$SUMMARY" ]; then
+            {
+              echo "## Weekly repo audit"
+              echo
+              echo "The run finished without writing a summary. Step 8 of \`/audit-repo\` is where that happens."
+              echo
+              echo "[View run]($RUN_URL)"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=No audit summary::The run wrote no \$AUDIT_SUMMARY."
+            exit 0
+          fi
+
+          # `not_evaluated` leads, before the filed list. A run that filed three
+          # issues while leaving four rules dark is a weaker run than one that
+          # filed none and graded everything, and only this number shows it.
+          # Sections are collected into an array and the empty ones dropped, so a
+          # quiet week renders as a short report rather than a long one full of
+          # blank headings.
+          jq -r --arg url "$RUN_URL" '
+            (.coverage // {pass:0, fail:0, n_a:0, not_evaluated:0, total:0}) as $c
+            | [
+                "## Weekly repo audit — \(.focus) (week \(.week))",
+                "Rubric v\(.rubric_version // 1) · ledger \(.ledger_size // 0) · [view run](\($url))",
+                "**Graded \($c.pass + $c.fail)/\($c.total)** — \($c.pass) pass, \($c.fail) fail, \($c.n_a) n/a, \($c.not_evaluated) not evaluated",
+                (if $c.not_evaluated > 0 then
+                   "### Not evaluated\n" + ([((.results // []) + (.integrity // []))[]
+                     | select(.status == "not-evaluated")
+                     | "- `\(.rule_id)` — \(.note // "no reason given")"] | join("\n"))
+                 else "" end),
+                (if ((.integrity // []) | map(select(.status == "fail")) | length) > 0 then
+                   "### :rotating_light: Audit integrity failures\n" + ([(.integrity // [])[]
+                     | select(.status == "fail")
+                     | "- `\(.rule_id)` — \(.note // "")"] | join("\n"))
+                 else "" end),
+                (if ((.filed // []) | length) == 0 then "### Filed\n\n_Nothing filed this week._"
+                 else "### Filed\n" + ([(.filed // [])[]
+                   | "- `\(.rule_id)` [\(.title)](\(.url)) — \(.severity)"] | join("\n")) end),
+                (if ((.skipped // []) | length) == 0 then ""
+                 else "### Found again, not filed\n" + ([(.skipped // [])[]
+                   | "- `\(.key)` — \(.reason)"] | join("\n")) end),
+                (if (.notes // "") == "" then "" else "---\n\n\(.notes)" end)
+              ]
+            | map(select(. != "")) | join("\n\n")
+          ' < "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"

@@ -43,6 +43,28 @@ narrative-skills-marketplace/
 └── README.md
 ```
 
+## Repo automation
+
+Two scheduled Claude jobs maintain this repo (both on Opus 5.5 via
+`anthropics/claude-code-action`):
+
+- **`audit-weekly.yml`** (Mon 12:00 UTC) runs
+  [`/audit-repo`](.claude/skills/audit-repo/SKILL.md): grades one rubric from
+  [`.claude/audit-rubrics/`](.claude/audit-rubrics/README.md) (skills →
+  tooling → automation, by ISO week) and files 0–5 `repo-audit` issues. It
+  never edits files. Close an issue as **not planned** to decline it for good.
+- **`issue-burndown.yml`** (daily 13:00 UTC) runs
+  [`/burndown-issues`](.claude/skills/burndown-issues/SKILL.md): picks one
+  open issue, fixes it, and opens a PR for human review. It never merges. The
+  queue is built first by `bun run screen:issues`, which drops issues from
+  outside the org (unless labelled `auto-fix-ok`) and screens the rest for
+  prompt injection with TypeSafe's Jev model. Add `auto-fix-skip` to keep an
+  issue away from it.
+
+Setup: repo variables `ANTHROPIC_FEDERATION_RULE_ID` and `AUTOMATION_APP_ID`,
+secrets `AUTOMATION_APP_PRIVATE_KEY` and `TYPESAFE_API_KEY`. Each workflow's
+preflight step names anything missing.
+
 ## Naming conventions
 
 Skills follow the **verb-noun** pattern (`/triage-lead`, `/create-deck`).
