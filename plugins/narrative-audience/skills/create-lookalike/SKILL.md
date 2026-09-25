@@ -22,7 +22,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to
   any agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.1.3
+  version: 0.1.4
   narrative:
     args:
       - name: "--seed"
@@ -472,9 +472,11 @@ narrative_workflows_create(
 )
 ```
 
-On a 4xx, show the validator's error verbatim, fix the spec (it is
-generated, so up to 3 fix-and-resubmit rounds are allowed), then
-surface and stop if it still fails.
+On a 4xx, show the validator's error verbatim, fix the spec, and
+loop back to phase 7 to re-render and re-gate. The approval covers
+the spec the user saw, not a later edit of it, so never resubmit a
+fixed spec without a fresh **Submit**. Bound this to 3 loops, then
+surface the error and stop.
 
 If `--no-trigger` was passed, report the workflow ID and how to
 trigger it later, then skip to phase 9's reporting of what *will*

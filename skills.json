@@ -4,7 +4,7 @@
   "plugins": [
     {
       "name": "narrative-audience",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Audience-building workflows backed by the narrative-mcp server — turning marketing briefs into filtered, materialized audience datasets and activating them to downstream advertising connectors.",
       "mcpServers": [
         "narrative-agent-gateway",
@@ -36,7 +36,7 @@
   "skills": [
     {
       "name": "create-lookalike",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "description": "Create a look-alike audience from a seed audience and a candidate\npopulation dataset. Classifies Rosetta Stone attributes, generates\nthe same materialized-view scoring pipeline Lookalike Studio emits\n(Naive-Bayes categorical weights + Gaussian continuous similarity),\ngates on approval, submits via `narrative_workflows_create`, and\nmonitors the build to completion.\nUse when: \"create a lookalike audience\", \"find more users like this\nsegment\", \"expand my seed audience to 500k similar users\", \"score\nthe population against my customers\", \"build a look-alike of\ndataset X\".\n(narrative-audience)",
       "plugin": "narrative-audience",
       "path": "plugins/narrative-audience/skills/create-lookalike/SKILL.md",
