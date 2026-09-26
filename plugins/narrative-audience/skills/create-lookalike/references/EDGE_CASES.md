@@ -68,11 +68,13 @@ stages surface as failed steps at run time (diagnose via
 
 ## Run fails mid-pipeline
 
-Surface the failing step's job error verbatim and stop. If the cause
-is fixable in the spec (e.g. a feature column type surprise), fix and
-resubmit under the *same* name — completed stages resume as no-ops.
-If the fix changes the model configuration, that's a changed-config
-re-run: new name (see above).
+Surface the failing step's job error verbatim and stop — do not
+auto-retry. If the cause is fixable in the spec (e.g. a feature column
+type surprise), propose the fix and loop back to phase 7 so the user
+sees and approves the edited spec before anything is resubmitted.
+Once approved, resubmit under the *same* name — completed stages
+resume as no-ops. If the fix changes the model configuration, that's a
+changed-config re-run: new name (see above).
 
 ## Lookalike Studio interop (the wizard-state tag)
 
