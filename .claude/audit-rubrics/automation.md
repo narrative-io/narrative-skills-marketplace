@@ -142,7 +142,7 @@ most recent run did the thing its name promises. A cron that silently stopped is
 indistinguishable from a cron with nothing to do.
 
 **Applies to.** Every workflow in `.github/workflows/` with a `schedule:` trigger —
-currently `backup-daily`, `audit-weekly` and `issue-burndown`.
+currently `audit-weekly` and `issue-burndown`.
 
 **Pass.** Each has a run inside twice its cron interval, and the latest concluded
 `success`. A `success` that did nothing is a pass only if doing nothing was correct — a
