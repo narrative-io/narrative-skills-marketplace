@@ -1,6 +1,6 @@
 {
   "name": "narrative-audience",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Audience-building workflows backed by the narrative-mcp server — turning marketing briefs into filtered, materialized audience datasets and activating them to downstream advertising connectors.",
   "author": {
     "name": "Narrative I/O"
