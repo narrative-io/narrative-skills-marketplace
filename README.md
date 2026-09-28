@@ -131,7 +131,7 @@ nesting), `dist/mcp/*.mcp.json`, and `dist/skills.json`. Then:
 
 **One Claude-Code-specific dependency:** the skills currently use
 `AskUserQuestion` (a Claude Code primitive) for interactive prompts.
-It's declared in `compatibility.recommends.tools`, not `requires`, so
+It's declared in `metadata.narrative.recommends.tools`, not `requires`, so
 spec-compliant harnesses without it should fall through to the
 documented prose Q&A fallback in each skill's `## Harness fallbacks`
 section.
@@ -185,20 +185,38 @@ each gate.
 ```yaml
 ---
 name: write-nql
-version: 1.0.0
 description: |
-  Compose, validate, and run NQL against a Narrative dataset.
+  Write, validate, and (optionally) execute an NQL query against a
+  Narrative dataset.
   Use when: "write an NQL query for X", "validate this NQL".
-allowed-tools:
-  - Bash
-  - Read
-  - AskUserQuestion
+  (narrative-common)
+license: MIT
+compatibility: >-
+  Requires the narrative-mcp MCP server. Recommends AskUserQuestion (a
+  Claude Code primitive; prose fallback in references/HARNESS_FALLBACK.md).
+metadata:
+  version: 0.5.9
+  narrative:
+    requires:
+      mcp-servers:
+        - narrative-mcp
+      mcp-tools:
+        - narrative_datasets_describe
+        - narrative_nql_validate
+        - narrative_nql_execute
+    recommends:
+      tools:
+        - AskUserQuestion
 ---
 
 ## Phase 1. Pin the dataset
 
 …
 ```
+
+The field-by-field rules — and which ones `bun run check:spec`
+enforces — are in
+[docs/authoring-skills.md → Frontmatter](docs/authoring-skills.md#2-frontmatter).
 
 Some skills reuse boilerplate via the snippet system — author a
 `SKILL.md.tmpl` with `{{SNIPPET:pin-company-context}}` and `bun run
