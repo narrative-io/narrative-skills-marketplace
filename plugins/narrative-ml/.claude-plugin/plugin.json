@@ -1,0 +1,22 @@
+{
+  "name": "narrative-ml",
+  "version": "0.1.0",
+  "description": "Machine-learning workflows backed by the narrative-mcp server — building labeled training datasets that map source data onto Rosetta Stone attribute classes, ready for Classifier Studio.",
+  "author": {
+    "name": "Narrative I/O"
+  },
+  "mcpServers": {
+    "narrative-mcp": {
+      "type": "http",
+      "url": "https://mcp.narrative.io/mcp"
+    },
+    "narrative-knowledge-base": {
+      "type": "http",
+      "url": "https://docs.narrative.io/mcp"
+    },
+    "narrative-agent-gateway": {
+      "type": "http",
+      "url": "https://narrative.support/mcp"
+    }
+  }
+}

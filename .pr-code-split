@@ -1,0 +1,21 @@
+# Bucket overrides for pr-code-split. First match wins, so the generated
+# rules come before the broad references/*.md rule.
+#
+# Two things the default path conventions get wrong here:
+#
+#   - Almost everything in this repo is markdown, and the default rules
+#     read markdown as docs. A skill's SKILL.md.tmpl and its references
+#     are the product — they are what the agent executes against — so
+#     they count as production.
+#   - Several tracked files are build output, not authored code:
+#     SKILL.md and HARNESS_FALLBACK.md render from their .tmpl twins,
+#     and skills.json, README.md, and mcp/*.json are emitted by
+#     `bun run gen:all`. A reviewer should skip all of them.
+
+generated:plugins/**/SKILL.md
+generated:plugins/**/references/HARNESS_FALLBACK.md
+generated:skills.json
+generated:README.md
+generated:mcp/*.json
+config:.claude-plugin/marketplace.json
+production:plugins/**/references/*.md
