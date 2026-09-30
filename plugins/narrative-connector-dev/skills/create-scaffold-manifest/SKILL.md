@@ -22,7 +22,7 @@ compatibility: >-
   Recommends AskUserQuestion (prose fallback documented in the body).
   Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 1.1.0
+  version: 1.1.1
   narrative:
     args:
       - name: "<repo-path>..."
@@ -244,7 +244,11 @@ from Phase 2 alongside each rule. On approval, write
 `connector-scaffold.yaml` at the primary repo's root (or the location
 the user chooses; note that `/scaffold-connector` looks at the root
 by default). Leave it uncommitted for review, alongside
-`scaffold-manifest-notes.md`. Secondary repos get no files; the
+`scaffold-manifest-notes.md`, and propose the checkpoint commit
+message from
+[`references/git-conventions.md`](references/git-conventions.md)
+(the manifest is a repo file and belongs in the repo; the notes file
+is the user's to keep or delete). Secondary repos get no files; the
 manifest's `repos` list is what records them.
 
 ### Phase 5 — Hand off
@@ -398,6 +402,8 @@ components:
   measurement_receiver: "{slug}-api"    # measurement_ingestion with ingestion_mode: partner_webhook.
                                         # Often shares the service_api unit — the receiver is a route
                                         # on the connector's public HTTP surface, not a loop.
+  app_ui: "connectors/{slug}"           # in the frontend-role repo when the repos list has one;
+                                        # otherwise a ui unit the connector serves itself
 
 # ── Build wiring ────────────────────────────────────────────
 # Files outside the copied tree that need entries for the new units.

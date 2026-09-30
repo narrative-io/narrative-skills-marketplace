@@ -1,22 +1,24 @@
 ---
 name: add-connector-app-ui
 description: |
-  Build the connector's app UI in the frontend repo — the profile-creation
-  flow (OAuth connect button or credential fields) and the quick-settings
-  form — generated from the auth and quick_settings blocks of
-  connector-spec.yaml.
+  Build the connector's app UI — the profile-creation flow (OAuth connect
+  button or credential fields) and the quick-settings form — generated
+  from the auth and quick_settings blocks of connector-spec.yaml. The UI
+  is part of the connector's surface: it lands in the platform frontend
+  repo when the scaffold target lists one, and otherwise in the ui unit
+  the connector serves itself.
   Use when: "build the connector app UI", "add the profile creation form",
   "wire up the quick settings form", "add the OAuth connect button for the
   connector".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. No hard requirements: local UI code in the
-  frontend repo's working tree, PR-reviewed; no infra or destructive
+  Stub — implementation pending. No hard requirements: local UI code in
+  the target repo's working tree, PR-reviewed; no infra or destructive
   ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.2.0
+  version: 0.3.0
   narrative:
     recommends:
       skills:
@@ -27,15 +29,24 @@ metadata:
 # Add Connector App UI
 
 > **Status: stub — implementation pending.** Contract only. Targets the
-> frontend repo's working tree.
+> working tree of whichever repo owns the `app_ui` component.
 
 ## Purpose
 
 Build the interactive app UI a customer uses to configure the connector:
 the profile-creation flow — an OAuth "connect" button (bound to
 `/add-connector-oauth`'s authorize route) or credential input fields — and
-the quick-settings form, generated from the connector's quick-setting
-types so the form and the backend codecs stay in lockstep.
+the quick-settings form, rendered from the settings-form contract
+`/define-connector-interface` defines so the form and the backend codecs
+stay in lockstep.
+
+The app UI is part of the connector's surface, with two possible homes
+(the `app_ui` note in `/scaffold-connector`'s connector-anatomy
+reference): a frontend-role repo in the scaffold target's `repos` list,
+built in that repo's idiom, or — when the target has no frontend repo,
+as in greenfield mode — the ui unit the connector serves itself (for
+cloudflare-workers, a React single-page app built with Vite and served
+as static assets by the same Worker).
 
 Phase: **frontend**.
 
@@ -48,12 +59,13 @@ Phase: **frontend**.
 
 ## Outputs
 
-- The connector's profile-creation and quick-settings React
-  components/forms, in the frontend repo.
+- The connector's profile-creation and quick-settings forms: React
+  components in the frontend repo, or the connector-served SPA's
+  components in greenfield mode.
 
 ## Human gates
 
-- Local UI code only — shipped through the frontend repo's normal PR
+- Local UI code only — shipped through the owning repo's normal PR
   review; no direct deploy from this skill.
 
 ## Composition contract
