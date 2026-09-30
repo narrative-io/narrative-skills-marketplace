@@ -1,22 +1,23 @@
 ---
 name: add-connector-oauth
 description: |
-  Add a third-party OAuth 2.0 authorization-code flow with KMS-encrypted
+  Add a third-party OAuth 2.0 authorization-code flow with encrypted
   token storage to a scaffolded connector — domains, stores, api client,
   oauth service, callback + authorize routes, the token-table migration,
-  and the KMS/IAM/SSM plumbing — all driven by the auth.oauth block of
-  connector-spec.yaml.
+  and the encryption-key, access-policy, and secret-store plumbing — all
+  driven by the auth.oauth block of connector-spec.yaml.
   Use when: "add OAuth to the connector", "wire up the <platform> OAuth
   flow", "the connector needs authorization-code auth", "add token storage".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
   Stub — implementation pending. Mostly local codegen, but reaches the DB
-  (token-table migration) and infra (KMS/IAM/SSM) at human gates. Reads the
+  (token-table migration) and infra (encryption key, access policy, secret
+  store) at human gates. Reads the
   auth.oauth block of connector-spec.yaml. Recommends AskUserQuestion for
   gate confirmations. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -30,20 +31,12 @@ metadata:
 
 # Add Connector OAuth
 
-> **Status: stub — implementation pending.** Contract only. Consolidates
-> `narrative-connectors/.claude/skills/add-connector-oauth`.
->
-> **Name-collision note.** A repo-local skill of the same name lives at
-> `narrative-connectors/.claude/skills/add-connector-oauth`. This plugin's
-> copy is intended to become the canonical one; the repo-local copy becomes
-> a thin pointer once the plugin is adopted. See the plugin README for the
-> decision. (There is no collision inside this marketplace — the flat
-> portable build only dedupes within the marketplace's own skills.)
+> **Status: stub — implementation pending.** Contract only.
 
 ## Purpose
 
 Bolt a provider OAuth 2.0 authorization-code flow onto an already-scaffolded
-connector, with company-scoped, KMS-encrypted token storage. Runs *after*
+connector, with company-scoped, encrypted token storage. Runs *after*
 `/scaffold-connector`.
 
 Phase: **service** (+ DB + infra at gates).
@@ -59,20 +52,21 @@ Phase: **service** (+ DB + infra at gates).
 ## Outputs
 
 - `<Slug>OAuthState` / `<Slug>OAuthToken` domains + company-scoped stores.
-- `TokenEncryptionService` (AWS KMS), `<Slug>ApiClient`
+- `TokenEncryptionService` (a managed encryption key), `<Slug>ApiClient`
   (authorize/exchange/refresh/me), `<Slug>OAuthService`.
 - Public `GET /callback` + authed `GET /profiles/{id}/authorize` routes.
-- V3/U3 narrative-db migrations; KMS key + IAM + SSM client-id/secret
-  terraform; oauth tests.
+- V3/U3 database migrations; encryption key + access policy + secret-store
+  client-id/secret infrastructure; oauth tests.
 
 ## Human gates
 
 - **DB migration** (V3/U3) — applied via the `/provision-connector-db`
   machinery, at that skill's gate.
-- **terraform apply** for the KMS key + IAM SSM statement — a *missing* SSM
-  statement silently wedges ECS rollout, so this is called out explicitly.
-- **Manual one-time SSM writes** of `client_id` / `client_secret` per stage
-  (needs AWS). Confirm before each.
+- **infrastructure apply** for the encryption key + secret-store access
+  policy — a *missing* secret-store grant silently wedges the service
+  rollout, so this is called out explicitly.
+- **Manual one-time secret-store writes** of `client_id` / `client_secret`
+  per stage. Confirm before each.
 - Out of scope: access-token auto-refresh and token revocation.
 
 ## Composition contract
@@ -115,10 +109,10 @@ field values.
 schema_version: 1
 
 # ── Identity ────────────────────────────────────────────────
-slug: google-dv360            # lowercase, dashes ok. Drives module dirs,
-                              # SSM paths, deploy URLs, Docker image names.
-package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
-                              # + narrative-db dir names.
+slug: google-dv360            # lowercase, dashes ok. Drives directory names,
+                              # deploy names, image names.
+package_slug: googledv360     # dashes dropped — the identifier-safe variant
+                              # for code packages and database identifiers.
 display_name: "Display & Video 360"   # human-facing listing name
 app_id: 47                    # marketplace app id. null until
                               # /preflight-connector pins it.
@@ -196,9 +190,9 @@ destination:
                                     # (e.g. a CRM contact's list memberships)
 
 # ── Quick settings ──────────────────────────────────────────
-# One entry per QuickSettingsType the connector exposes. `type` is the
+# One entry per quick-settings type the connector exposes. `type` is the
 # JSON discriminator ("<platform>_<kind>_quick_settings"); fields drive
-# both the Scala codecs and the app-ui form.
+# both the connector's codecs and the settings form.
 quick_settings:
   - type: dv360_audience_quick_settings
     parser: Dv360AudienceParser
@@ -233,8 +227,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -248,11 +242,33 @@ open_questions:
     owner: partner              # partner | internal | customer
     status: "asked 2026-07-20; awaiting reply"
 
-# ── Build & deploy targets ──────────────────────────────────
+# ── Scaffold target ─────────────────────────────────────────
+# Where connector code materializes. The rest of the spec says what the
+# connector is; `target` says where and how it gets built.
+# /scaffold-connector resolves this block (asking when absent) and
+# writes it back; the implementation skills read it to know which
+# working tree and conventions they operate in.
+target:
+  mode: template-repo         # template-repo | reference-clone | greenfield
+  repo_path: "~/dev/my-connectors"   # working tree for template-repo / reference-clone
+  manifest_path: null         # template-repo: scaffold-manifest location; null means
+                              # <repo_path>/connector-scaffold.yaml
+  reference_connector: null   # reference-clone: path (inside repo_path) of the
+                              # existing connector to copy conventions from
+  runtime: null               # greenfield: runtime profile (cloudflare-workers)
+
+# ── Build & deploy stages ───────────────────────────────────
 stages: [dev, prod]
-modules_omitted: []            # of api|services|stores|worker|executor|poller|infra —
-                               # rare; empty means the standard full module set
-narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+
+# ── Deployment extension (optional) ─────────────────────────
+# Stack-specific paths and tuning the infra, DB, registration, and
+# deploy skills read. Values here are the target environment's, not the
+# connector's; a scaffold target that doesn't need them omits the block.
+# (Today these skills assume Narrative's stack; the values below are its
+# defaults.)
+deployment:
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
+  modules_omitted: []          # rare tuning of the template's module set
 ```
 
 Fields not yet known carry the literal `TODO` (or `null` where optional)
