@@ -19,6 +19,7 @@ it and the gotchas that apply.
 | Run an LLM inside the pipeline | [`examples/09-run-model-inference.yaml`](examples/09-run-model-inference.yaml) | `RunModelInference` |
 | Capture a sample after refreshing | [`examples/10-dataset-sample-after-refresh.yaml`](examples/10-dataset-sample-after-refresh.yaml) | `RefreshMaterializedView`, `CreateDatasetSample` |
 | Build an identity graph end-to-end from N edge sources (UNION → label components) | [`examples/11-identity-graph-multi-source-build.yaml`](examples/11-identity-graph-multi-source-build.yaml) | `CreateMaterializedViewIfNotExists`, `LabelConnectedComponents` |
+| Fill the cache behind a `cached_mapping` on a schedule (rules → ML → LLM waterfall) | [`examples/12-cached-mapping-cache-fill.yaml`](examples/12-cached-mapping-cache-fill.yaml) | `CreateMaterializedViewIfNotExists`, `RefreshMaterializedView`, `ExecuteDml`, `schedule.cron` |
 
 If none match the user's intent precisely, start from
 [`templates/workflow-skeleton.yaml`](templates/workflow-skeleton.yaml)
