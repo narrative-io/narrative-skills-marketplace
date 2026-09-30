@@ -1,0 +1,66 @@
+---
+name: verify-connector
+description: |
+  Verify a deployed connector end to end — enqueue a delivery job, read the
+  file-delivery logs, and confirm total_rows / total_identifiers against the
+  expected baseline, plus the OAuth callback round-trip and any measurement
+  sample-file commit — and return a go / no-go verdict.
+  Use when: "verify the connector", "run an end-to-end delivery check",
+  "confirm the connector delivered correctly", "check the connector logs
+  after deploy".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. Enqueues live jobs and reads logs in dev
+  (and prod after promotion) — confirm before prod verification. Reads
+  connector-spec.yaml. Recommends AskUserQuestion. Runs on any
+  agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:deploy-connector
+      tools:
+        - AskUserQuestion
+---
+
+# Verify Connector
+
+> **Status: stub — implementation pending.** Contract only. Consolidates the
+> verification steps across the source skills — the `[file-delivery]`
+> log-read and count-match from `migrate-connector-to-arrow`, the
+> `writing commit file` check from `add-measurement-feed-ingestion`, and the
+> OAuth callback round-trip from `add-connector-oauth`.
+
+## Purpose
+
+Prove the deployed connector actually works before it carries customer
+data: enqueue a delivery job, read the `[file-delivery]` logs, and confirm
+delivered `total_rows` / `total_identifiers` match the expected baseline
+exactly. Also exercises the OAuth callback round-trip and, when measurement
+is in scope, the sample-file → `writing commit file` path.
+
+Phase: **deploy/verify** (the final gate).
+
+## Inputs (from connector-spec.yaml)
+
+- `measurement.dataset_ids`, expected identifier counts / baseline.
+- `auth` → the OAuth round-trip to exercise.
+- `stages` → verify dev first, prod only after promotion.
+
+## Outputs
+
+- A verification report with a single go / no-go verdict.
+
+## Human gates
+
+- Runs **live jobs** — automatic in dev; **prod verification is confirmed
+  first**.
+- **Correctness rule:** a `total_rows` / `total_identifiers` mismatch is a
+  no-go and a correctness regression, not a fix-forward. Blocks prod
+  promotion.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

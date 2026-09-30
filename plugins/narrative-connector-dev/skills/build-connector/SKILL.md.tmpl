@@ -1,0 +1,89 @@
+---
+name: build-connector
+description: |
+  Orchestrate a full connector build — sequence the spec, service, infra,
+  registration, frontend, and deploy/verify skills against a single
+  connector-spec.yaml, stopping at every human gate (terraform applies,
+  narrative-db migrations, app registration, prod promotion).
+  Use when: "build a connector for <platform> end to end", "run the whole
+  connector build", "orchestrate the connector from spec to deploy", "take
+  the connector from spec to prod".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. An orchestrator: it sequences the other
+  skills and pauses at every human gate rather than doing destructive work
+  itself. Reads and writes connector-spec.yaml as shared state. Recommends
+  AskUserQuestion. Runs on any agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:spec-connector
+        - narrative-connector-dev:preflight-connector
+        - narrative-connector-dev:scaffold-connector
+        - narrative-connector-dev:define-connector-interface
+        - narrative-connector-dev:add-connector-oauth
+        - narrative-connector-dev:implement-partner-client
+        - narrative-connector-dev:implement-delivery-executor
+        - narrative-connector-dev:add-measurement-ingestion
+        - narrative-connector-dev:test-connector
+        - narrative-connector-dev:scaffold-connector-infra
+        - narrative-connector-dev:provision-connector-db
+        - narrative-connector-dev:register-connector-app
+        - narrative-connector-dev:add-connector-listing
+        - narrative-connector-dev:add-connector-app-ui
+        - narrative-connector-dev:deploy-connector
+        - narrative-connector-dev:verify-connector
+      tools:
+        - AskUserQuestion
+---
+
+# Build Connector
+
+> **Status: stub — implementation pending.** Contract only. This is the
+> orchestrator that ties the plugin's phases together; the per-phase logic
+> lives in the individual skills it sequences.
+
+## Purpose
+
+Drive a connector from an empty idea to a verified prod deployment by
+sequencing the plugin's skills against one shared `connector-spec.yaml`.
+The orchestrator never does destructive work itself — it runs the
+non-destructive steps and **stops at every human gate**, handing control to
+the operator for the irreversible ones.
+
+## Sequence
+
+1. **spec** — `/spec-connector` → `/preflight-connector` (go/no-go).
+2. **service** — `/scaffold-connector`, `/define-connector-interface`,
+   `/add-connector-oauth` (if OAuth), `/implement-partner-client`,
+   `/implement-delivery-executor`, `/add-measurement-ingestion` (if
+   measurement), `/test-connector`.
+3. **infra / registration** — `/scaffold-connector-infra`,
+   `/provision-connector-db`, `/register-connector-app`.
+4. **frontend** — `/add-connector-listing`, `/add-connector-app-ui`.
+5. **deploy / verify** — `/deploy-connector` → `/verify-connector`.
+
+## Inputs / outputs
+
+- **Input/output:** `connector-spec.yaml` — read at every step, written back
+  as each phase resolves values. It is the only state passed between skills.
+
+## Human gates (the orchestrator always stops here)
+
+- **terraform applies** — shared ECR, connector infra, KMS/IAM, RDS,
+  measurement inbox bucket.
+- **narrative-db migrations** — running any migration, in the separate
+  narrative-db repo.
+- **app registration** — the `bootstrap-app.py` marketplace/SSM/DSM flow.
+- **prod promotion** — every prod `terraform apply` and the final
+  `/verify-connector` sign-off.
+
+At each gate the orchestrator summarizes what is about to happen and waits
+for explicit confirmation before the owning skill proceeds.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

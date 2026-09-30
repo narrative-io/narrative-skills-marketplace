@@ -1,0 +1,75 @@
+---
+name: spec-connector
+description: |
+  Research and author a Narrative connector spec for a new destination
+  platform — interview, prior-art recon, vendor-doc research, and a
+  differentiator pass — then emit the machine-readable connector-spec.yaml
+  (plus a prose spec.md) that the rest of the plugin builds from.
+  Use when: "spec out a connector for <platform>", "start a new connector",
+  "research the <platform> connector", "write the connector spec".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. No hard requirements: a research +
+  authoring skill that writes connector-spec.yaml and spec.md; no infra
+  or destructive ops. Recommends AskUserQuestion for the one-question-at-a-
+  time interview. Runs on any agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:preflight-connector
+      tools:
+        - AskUserQuestion
+---
+
+# Spec Connector
+
+> **Status: stub — implementation pending.** This file defines the
+> skill's contract (purpose, inputs, outputs, gates). The phased body is
+> authored in follow-up work. Source material to consolidate:
+> `ai-tools/plugins/product/skills/product-build-connector-spec/`
+> (SKILL.md + connector-spec-template.md).
+
+## Purpose
+
+Turn "we want to build a connector for `<platform>`" into a complete,
+reviewed spec before any engineering starts. Runs a one-question-at-a-time
+interview, does prior-art recon against existing connectors, reads the
+vendor's developer docs as the source of truth, runs the 5-axis
+differentiator pass (auth, taxonomy, delivery semantics, quick settings,
+app-review quirks), and synthesizes the result into
+**`connector-spec.yaml`** — the composition contract every other skill in
+this plugin reads.
+
+Phase: **spec** (pure upstream — feeds `/preflight-connector`).
+
+## Inputs
+
+- Destination platform name and use-case shape (audience / conversion API
+  / measurement / combined).
+- Starting customer + hard deadline; existing platform relationship.
+- Vendor developer documentation (primary source of truth).
+
+## Outputs (writes the spec)
+
+- `connector-spec.yaml` — the machine-readable contract, populated as far
+  as the research allows; unknowns left as `TODO`.
+- `spec.md` — the prose product spec (problem, goals, appetite, connector
+  setup, identifiers, delivery API).
+- Research notes (interview.md, prior-art.md, vendor-notes.md,
+  uniqueness.md) under the project's `connector-spec/` tree.
+
+## Human gates
+
+- **DO NOT GUESS.** Unknown identifiers, rate limits, or opt-out behavior
+  are escalated to the user or partner, never invented (the Pinterest
+  invented-"1P/3P flag" incident is the cautionary tale). Every such
+  unknown lands in the spec as `TODO`, not a plausible-looking value.
+- A quality bar is walked *with* the human before the spec is considered
+  done. No downstream skill runs off an unreviewed spec.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

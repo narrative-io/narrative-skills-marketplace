@@ -1,0 +1,54 @@
+---
+name: add-connector-listing
+description: |
+  Add the connector's marketplace listing to narrative-platform-ui — display
+  name, logo, description, and categories — from connector-spec.yaml, as a
+  reviewable UI change.
+  Use when: "add the connector listing", "list the connector in the
+  marketplace UI", "add the connector card", "register the connector in the
+  catalog UI".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. No hard requirements: local UI edits in the
+  narrative-platform-ui working tree, PR-reviewed; no infra or destructive
+  ops. Reads connector-spec.yaml. Runs on any agentskills.io-compliant
+  harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:register-connector-app
+---
+
+# Add Connector Listing
+
+> **Status: stub — implementation pending.** Contract only. Targets the
+> `narrative-platform-ui` working tree (present at
+> `~/dev/narrative-platform-ui`).
+
+## Purpose
+
+Surface the connector in the marketplace catalog UI: its display name,
+logo, description, and categories, so customers can discover and select it.
+Purely presentational metadata + assets.
+
+Phase: **frontend**.
+
+## Inputs (from connector-spec.yaml)
+
+- `slug`, `display_name`, `destination_type` (use-case shape → categories).
+
+## Outputs
+
+- The catalog listing entry + logo/asset, in narrative-platform-ui.
+
+## Human gates
+
+- Local UI edits only — shipped through the normal narrative-platform-ui PR
+  review; no direct deploy from this skill.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

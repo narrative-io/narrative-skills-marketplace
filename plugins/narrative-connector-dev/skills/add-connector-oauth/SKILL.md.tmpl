@@ -1,0 +1,78 @@
+---
+name: add-connector-oauth
+description: |
+  Add a third-party OAuth 2.0 authorization-code flow with KMS-encrypted
+  token storage to a scaffolded connector — domains, stores, api client,
+  oauth service, callback + authorize routes, the token-table migration,
+  and the KMS/IAM/SSM plumbing — all driven by the auth.oauth block of
+  connector-spec.yaml.
+  Use when: "add OAuth to the connector", "wire up the <platform> OAuth
+  flow", "the connector needs authorization-code auth", "add token storage".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. Mostly local codegen, but reaches the DB
+  (token-table migration) and infra (KMS/IAM/SSM) at human gates. Reads the
+  auth.oauth block of connector-spec.yaml. Recommends AskUserQuestion for
+  gate confirmations. Runs on any agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:scaffold-connector
+        - narrative-connector-dev:provision-connector-db
+      tools:
+        - AskUserQuestion
+---
+
+# Add Connector OAuth
+
+> **Status: stub — implementation pending.** Contract only. Consolidates
+> `narrative-connectors/.claude/skills/add-connector-oauth`.
+>
+> **Name-collision note.** A repo-local skill of the same name lives at
+> `narrative-connectors/.claude/skills/add-connector-oauth`. This plugin's
+> copy is intended to become the canonical one; the repo-local copy becomes
+> a thin pointer once the plugin is adopted. See the plugin README for the
+> decision. (There is no collision inside this marketplace — the flat
+> portable build only dedupes within the marketplace's own skills.)
+
+## Purpose
+
+Bolt a provider OAuth 2.0 authorization-code flow onto an already-scaffolded
+connector, with company-scoped, KMS-encrypted token storage. Runs *after*
+`/scaffold-connector`.
+
+Phase: **service** (+ DB + infra at gates).
+
+## Inputs (from connector-spec.yaml `auth.oauth`)
+
+- `authorize_url`, `token_url`, `me_url`, `redirect_uri`.
+- `scopes`, `scope_encoding` (decides the pg column type: `text[]` vs
+  `integer[]`).
+- `token_response` (which of access/refresh/expires_in the endpoint
+  returns → decides the token-table columns).
+
+## Outputs
+
+- `<Slug>OAuthState` / `<Slug>OAuthToken` domains + company-scoped stores.
+- `TokenEncryptionService` (AWS KMS), `<Slug>ApiClient`
+  (authorize/exchange/refresh/me), `<Slug>OAuthService`.
+- Public `GET /callback` + authed `GET /profiles/{id}/authorize` routes.
+- V3/U3 narrative-db migrations; KMS key + IAM + SSM client-id/secret
+  terraform; oauth tests.
+
+## Human gates
+
+- **DB migration** (V3/U3) — applied via the `/provision-connector-db`
+  machinery, at that skill's gate.
+- **terraform apply** for the KMS key + IAM SSM statement — a *missing* SSM
+  statement silently wedges ECS rollout, so this is called out explicitly.
+- **Manual one-time SSM writes** of `client_id` / `client_secret` per stage
+  (needs AWS). Confirm before each.
+- Out of scope: access-token auto-refresh and token revocation.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

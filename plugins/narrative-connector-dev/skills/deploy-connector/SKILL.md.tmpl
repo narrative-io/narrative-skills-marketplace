@@ -1,0 +1,63 @@
+---
+name: deploy-connector
+description: |
+  Deploy the connector — quick-publish the image, terraform apply to dev,
+  then promote to prod — one gated step at a time, driven by
+  connector-spec.yaml.
+  Use when: "deploy the connector", "quick-publish and apply to dev",
+  "promote the connector to prod", "ship the connector image".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. Runs quick-publish, terraform apply, and
+  prod promotion — every one a hard human gate. Reads connector-spec.yaml.
+  Recommends AskUserQuestion for per-stage confirmation. Runs on any
+  agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:test-connector
+        - narrative-connector-dev:scaffold-connector-infra
+        - narrative-connector-dev:provision-connector-db
+        - narrative-connector-dev:register-connector-app
+      tools:
+        - AskUserQuestion
+---
+
+# Deploy Connector
+
+> **Status: stub — implementation pending.** Contract only. Consolidates the
+> deploy steps across `create-connector`, `add-connector-oauth`, and the
+> two-PR promotion discipline from `migrate-connector-to-arrow`.
+
+## Purpose
+
+Get the connector running: quick-publish the image, `terraform apply` to
+dev, and — after dev is verified — promote to prod. This skill owns the
+applies that the scaffold/provision skills deliberately left un-run.
+
+Phase: **deploy/verify**.
+
+## Inputs (from connector-spec.yaml)
+
+- `slug` — image, service, and resource names.
+- `stages` — the dev → prod promotion order.
+- `delivery.path` — Arrow migrations follow two-PR discipline.
+
+## Outputs
+
+- Deployed dev and (after promotion) prod services.
+
+## Human gates
+
+- **quick-publish force-push**, **`terraform apply` dev**, and **prod
+  promotion** are each hard human gates, confirmed per stage.
+- **Two-PR discipline** where it applies: add-then-verify before any
+  delete/cutover; no fix-forward across a correctness gate.
+- Prod is never applied before `/verify-connector` passes on dev.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}
