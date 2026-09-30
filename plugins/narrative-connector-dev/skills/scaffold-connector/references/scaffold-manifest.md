@@ -111,7 +111,10 @@ components:
   service_api: "{slug}-api"
   credential_store: "{slug}-stores"
   background_worker: "{slug}-worker"
-  measurement_poller: "{slug}-poller"   # generated only when the spec includes measurement_ingestion
+  measurement_poller: "{slug}-poller"   # measurement_ingestion with ingestion_mode: bucket_inbox
+  measurement_receiver: "{slug}-api"    # measurement_ingestion with ingestion_mode: partner_webhook.
+                                        # Often shares the service_api unit — the receiver is a route
+                                        # on the connector's public HTTP surface, not a loop.
 
 # ── Build wiring ────────────────────────────────────────────
 # Files outside the copied tree that need entries for the new units.

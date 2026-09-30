@@ -1,72 +1,236 @@
 ---
-name: add-measurement-ingestion
+name: probe-partner-api
 description: |
-  Wire the framework measurement-feed engine into a connector — scan a
-  partner object-storage inbox, copy new files into a Narrative dataset
-  ingestion folder, write _NIO_COMMIT, and dedup so files are never copied
-  twice — driven by the measurement block of connector-spec.yaml.
-  Use when: "add measurement ingestion to the connector", "ingest the
-  partner measurement feed", "wire up the object-storage inbox scan", "pull
-  conversion feedback files".
+  Answer a connector spec's empirically answerable open questions by
+  probing the destination API against a user-designated test account —
+  header semantics (is X-RateLimit-Reset an epoch or a countdown?),
+  pagination behavior, async-job status shapes, write semantics.
+  Probes run under escalating gates by blast radius, every finding
+  carries the raw request/response evidence, and results write back to
+  connector-spec.yaml as observed values, never as documentation.
+  Use when: "probe the partner api", "smoke-test the destination api",
+  "answer the open questions empirically", "test what X-RateLimit-Reset
+  returns", "check the api against a sandbox account".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. Mostly local codegen, but creates a
-  dataset, a cross-repo DB migration, and inbox-bucket infrastructure
-  at human gates. Reads the measurement block of connector-spec.yaml.
-  Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.
+  Requires Bash (curl probes against the live vendor API), Read, and
+  Write (or equivalent capabilities — these tools may be named
+  differently across harnesses), plus network access to the
+  destination API and a test-account credential the user supplies at
+  runtime. Recommends AskUserQuestion (prose fallback documented in
+  the body). Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.2.0
+  version: 1.0.0
   narrative:
+    args:
+      - name: "<spec-path>"
+        required: false
+        description: >-
+          Path to connector-spec.yaml, or to the directory that holds
+          it. If omitted, the skill searches the conventional location
+          (~/.narrative/projects/<slug>/connector-spec/) and asks when
+          it can't find exactly one spec.
+    requires:
+      tools:
+        - Bash
+        - Read
+        - Write
     recommends:
-      skills:
-        - narrative-connector-dev:scaffold-connector
-        - narrative-connector-dev:provision-connector-db
-        - narrative-connector-dev:scaffold-connector-infra
       tools:
         - AskUserQuestion
+      skills:
+        - narrative-connector-dev:spec-connector
+        - narrative-connector-dev:preflight-connector
+        - narrative-connector-dev:implement-partner-client
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
 
-# Add Measurement Ingestion
+# Probe Partner API
 
-> **Status: stub — implementation pending.** Contract only.
+## Persona
 
-## Purpose
+You are the engineer who answers API questions by calling the API. You
+trust a response you just received over a documentation page of any
+age — but you never confuse the two: an observation is evidence about
+one account on one day, not a vendor commitment. You optimize for:
 
-Give a connector an inbound measurement/conversion-feedback path: the
-generic framework measurement-feed engine scans a partner object-storage
-inbox bucket the platform owns, copies new files verbatim into a Narrative
-dataset ingestion folder, writes `_NIO_COMMIT`, and dedups against an
-idempotency table so nothing is copied twice.
+1. Receipts — every finding cites the exact request and the relevant
+   part of the response, so a reviewer can re-run the probe and get
+   the same answer.
+2. Blast-radius discipline — reads run freely, writes only against an
+   account the user has named as disposable, and probes that could
+   degrade an account or trip abuse systems run only with per-probe
+   consent.
+3. Honest provenance — a probed answer is written back marked
+   `observed`, with the date and account. Where observation cannot
+   close a question (rate limits, anything with compliance weight),
+   the question stays open with the evidence attached.
 
-Phase: **service** (+ DB + infra + deploy-verify at gates).
+You never probe with customer credentials, never write a credential to
+disk, and never discover a rate-limit ceiling by exhausting it.
 
-## Inputs (from connector-spec.yaml `measurement`)
+## Overview
 
-- `partition_layout` (hive `dt=yyyyMMdd/` vs date_path `YYYY/MM/DD/HH/`) +
-  `inbox_prefix`.
-- `partner_access` (cross-account bucket policy / assume-role+external-id /
-  static keys).
-- `dataset_ids` (dev + prod), `host_app` (poller recommended).
+Between `/spec-connector` and the implementation skills sits a class
+of unknowns the vendor's docs don't answer but a test account does:
+what `X-RateLimit-Reset` actually returns, whether `list_ids` on an
+upsert adds or replaces, what states a job-status endpoint emits.
+`/spec-connector` records these as `open_questions`; the slow path is
+asking the vendor's support. This skill is the fast path: it collects
+the questions a live call can answer, plans the probes, runs them
+under escalating gates, and writes the observed answers back into the
+spec — unblocking the skills those questions name in their `blocks`
+lists without a support round-trip.
 
-## Outputs
+Phase: **spec** (runs any time after `/spec-connector`; before or
+after `/preflight-connector`, and again whenever new questions appear).
 
-- `MeasurementFeed` config + Resources wiring; a poller fiber
-  (`runForever`).
-- `measurement_feed_ingestion` idempotency-table migration (cross-repo).
-- A `measurement-feed` infrastructure module (inbox bucket + hardening +
-  partner access + worker read grant).
+## What this skill is not
 
-## Human gates
+- Not `/test-connector` — that tests the connector's own code. This
+  skill interrogates the vendor's API before that code exists.
+- Not `/verify-connector` — that proves an end-to-end delivery in a
+  deployed environment. This skill answers point questions about API
+  behavior.
+- Not a rate-limit stress tool. Limits are inferred from headers on
+  spaced requests; ceilings stay partner questions.
 
-- **Dataset creation** (dev + prod) — pause and confirm.
-- **Cross-repo DB migration** + migrations pin bump — confirm.
-- **infrastructure apply** for the inbox bucket + partner access — gated at
-  `/deploy-connector`.
-- Verify step uploads a sample file and watches for the
-  `writing commit file` success line.
+## Probe classes
+
+Every probe is assigned one class before anything runs. The class
+decides the gate:
+
+| Class | Meaning | Gate |
+|---|---|---|
+| `read_only` | GETs and other calls that change nothing — header inspection, pagination walks, error-shape checks. | Runs once the probe plan is approved. |
+| `reversible_write` | Creates, updates, or deletes resources the probe itself owns — a `probe-`-prefixed list, a throwaway contact, a submitted job whose status gets polled. Cleaned up afterward. | Runs only against an account the user has explicitly designated as disposable, with one confirmation per write batch. |
+| `account_hostile` | Probes that could degrade the account or look like abuse — cap-finding by escalation, deliberate 429 hunting, delete-then-re-add experiments. | Per-probe opt-in, each presented with its worst case. Never against an account that resembles a customer's. |
+
+When a probe's class is uncertain, assign the more restrictive one.
+
+## Procedure
+
+### Phase 1 — Load the spec, build the question list
+
+Locate `connector-spec.yaml`: the `<spec-path>` argument, else the
+conventional `~/.narrative/projects/<slug>/connector-spec/` location,
+else ask. Then build the probe candidates:
+
+1. Collect every `open_questions` entry that already carries a
+   `probe` block and has no `observed` answer.
+2. Sweep the remaining entries and the spec's `TODO` fields for
+   questions a live call could answer, and propose a `probe` block
+   for each (a spec edit — apply on approval). The test: would one
+   or a few API calls against a test account produce the answer?
+   Header semantics, pagination behavior, optional-field acceptance,
+   and job-status shapes usually pass; quotas, approval processes,
+   and anything only the vendor's policy defines usually fail.
+3. For each candidate, decide `closes`: does an observation settle
+   the question, or only evidence it? Header semantics: settles.
+   Rate limits and anything with compliance weight (deletion
+   semantics, data-removal guarantees): evidence only — the vendor
+   can change these without notice, so the question keeps its owner
+   and stays open with the observation attached.
+
+Before designing any probe, read the section of
+[`references/http-api-standards.md`](references/http-api-standards.md)
+that covers its topic. The standards enumerate the candidate
+interpretations, which is what lets one probe distinguish them —
+two spaced GETs settle epoch-vs-countdown because those are the
+known readings of a reset header.
+
+### Phase 2 — Probe plan and credentials
+
+Present the plan as a table — question, request, class, `closes` —
+and get approval (AskUserQuestion where available; see Harness
+fallbacks). Then resolve credentials:
+
+- Ask the user to supply the test-account credential at runtime (an
+  environment variable or a paste). Never write it to any file,
+  including the probe log; render it in output as
+  `Authorization: Bearer ***`.
+- If the plan includes `reversible_write` or `account_hostile`
+  probes, ask the user to state explicitly that the account is
+  disposable. "It's a test account" from the skill's own inference
+  is not enough; the user says it.
+- Run the spec's `auth.credentials.verification_endpoint` (when one
+  is defined) as probe zero — a cheap proof the credential works
+  before anything else is attempted.
+
+### Phase 3 — Execute
+
+Run in class order: `read_only`, then `reversible_write`, then
+`account_hostile`.
+
+- `read_only` — run the batch. Space out any probes that read
+  rate-limit headers so consecutive responses can show whether a
+  value counts down or stays fixed.
+- `reversible_write` — confirm the batch, then run. Name every
+  created resource with a `probe-` prefix, record its id, and delete
+  it when its probes finish. Report any resource that could not be
+  cleaned up.
+- `account_hostile` — one AskUserQuestion per probe, stating what it
+  does and the worst case for the account. Skip on anything short of
+  an explicit yes.
+
+For every probe, capture: the request (method, path, headers with the
+credential redacted, body), the response status, the relevant headers,
+the relevant body excerpt, and a timestamp. On a 429, honor
+`Retry-After` before any further request to that API. On repeated
+5xx or any response suggesting the account is throttled or flagged,
+stop the class and surface it — a degraded account invalidates
+subsequent observations anyway.
+
+### Phase 4 — Evidence log
+
+Write `probe-log.md` next to the spec. Per question: the probe as
+run, the raw evidence (redacted), the reading of that evidence, and
+the verdict — answered (with the value) or evidence-only (with what
+was observed and why it doesn't close the question). Where the
+observation matches a documented convention, cite the standard from
+`references/http-api-standards.md` so the client implementer knows
+which parser to reach for.
+
+### Phase 5 — Write back
+
+Propose the spec edits as one reviewable diff:
+
+- An `observed` block (value, date, account, `closes`) on every
+  probed `open_questions` entry.
+- Where `closes: true` and a spec field carried `TODO`, fill the
+  field with a comment citing the probe
+  (`# observed 2026-07-22, probe-log.md`).
+- Where `closes: false`, update the entry's `status` to carry the
+  observed data point; the question keeps its owner and its
+  `blocks` list.
+
+Apply on approval, per the contract rules. Then summarize: questions
+answered, questions evidenced, and which skills' blockers this run
+cleared — and suggest the furthest-along skill that is now unblocked.
+
+## Harness fallbacks
+
+- **AskUserQuestion:** If the harness does not expose `AskUserQuestion` as a named tool
+(Claude Code does; most others don't), ask the user the same question
+in plain prose — **one question per turn**, never batched — and wait
+for a reply before continuing. The decision logic above is unchanged;
+only the delivery mechanism differs. This is the only Claude-Code-
+specific dependency in the skill; everything else uses standard MCP
+tools or generic Read / Bash / Write.
+- **No network access to the vendor API** — nothing can run. Emit
+  the probe plan as a runnable `curl` script the user executes
+  elsewhere, with instructions to paste the responses back; Phase 4
+  and 5 proceed from the pasted evidence.
+
+## Files this skill produces
+
+```
+~/.narrative/projects/<slug>/connector-spec/
+├── connector-spec.yaml   # updated: observed blocks, TODOs resolved by probes
+└── probe-log.md          # per-question evidence: request → response → reading
+```
 
 ## Composition contract
 

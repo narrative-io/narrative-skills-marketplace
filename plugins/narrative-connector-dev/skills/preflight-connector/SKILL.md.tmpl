@@ -20,7 +20,7 @@ compatibility: >-
   the marketplace app; both degrade to blocking open questions when
   unavailable.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
   narrative:
     args:
       - name: "<spec-path>"
@@ -72,9 +72,12 @@ approval, apply a spec edit or create anything in a live system.
 
 The gate between spec and code. Reads `connector-spec.yaml`, proves
 it is complete and internally consistent enough to build from,
-resolves the fuzzy values into exact ones, and delivers a single
-verdict: **go** (every downstream skill can run without guessing or
-re-asking) or **no-go** (at least one blocker remains). What is
+resolves the fuzzy values into exact ones, and delivers a
+**per-skill verdict**: for each downstream skill, either it can run
+without guessing or re-asking, or specific named blockers stand in
+its way. The overall verdict is **GO** when no blockers remain
+anywhere, and **NO-GO otherwise — but NO-GO names which skills are
+blocked, and every skill not named runs freely**. What is
 missing rather than fuzzy (a Rosetta attribute the catalog lacks,
 the marketplace app itself) is created with the user's approval,
 not just flagged. The verdict
@@ -87,10 +90,13 @@ Two rules are non-negotiable and apply to every phase:
 - **DO NOT GUESS.** A field this skill can't verify stays as it is
   and gains an `open_questions` entry. This skill exists to catch
   invented values, not to add its own.
-- **A no-go halts the pipeline.** When the verdict is no-go, say so
-  explicitly and do not suggest running `/scaffold-connector` or any
-  later skill. The pipeline resumes by resolving the blockers and
-  re-running this skill. Blockers cannot be waived.
+- **Blocking is skill-scoped.** Every blocker names the skills it
+  blocks in its `open_questions` entry's `blocks` list, and it halts
+  exactly those skills — a blocker cannot be waived for a skill it
+  names, and it never stops a skill it doesn't. A spec can be no-go
+  for `/implement-delivery-executor` and simultaneously ready for
+  `/scaffold-connector`; say both plainly and suggest the skills
+  that are clear to run.
 
 ## Arguments
 
@@ -264,23 +270,33 @@ Sweep the spec for every remaining `TODO`, `null`, and unresolved
 finding from Phases 2–6, and rank each one:
 
 - **Blocking** — some downstream skill cannot proceed without the
-  answer. The test: would `/scaffold-connector`,
-  `/add-connector-oauth`, or any later phase have to guess or
-  re-ask? Unverified or missing identifier attributes, a null
-  `app_id`, missing OAuth URLs under `auth.model: oauth2`, and
-  unknown rate limits are always blocking.
+  answer. The test, applied per skill: would that skill have to
+  guess or re-ask? Record the result in the entry's `blocks` list —
+  the specific skills that need the answer, not "the pipeline".
+  A blocker scoped to no consuming skill is misranked; a blocker
+  scoped to every skill is almost always misranked too. Examples:
+  unverified identifier attributes block
+  `/define-connector-interface` onward; a null `app_id` blocks
+  `/register-connector-app`; missing OAuth URLs under
+  `auth.model: oauth2` block `/add-connector-oauth`; unknown rate
+  limits block `/implement-partner-client`. None of these block
+  `/scaffold-connector`, which needs only `slug`, `package_slug`,
+  and `delivery.directions`.
 - **Non-blocking** — every downstream skill can run; the answer only
   refines behavior later (a partner question about raising an
-  already-documented limit, an unsettled display-name wording).
+  already-documented limit, an unsettled display-name wording). The
+  entry carries no `blocks` list.
 
 Then:
 
 1. **Write the report.** Save `preflight-report.md` next to the
    spec. Verdict first (**GO** or **NO-GO** on the first line),
-   then the findings as a table (field, blocking or non-blocking,
-   detail), the identifier resolution results, the values enriched,
-   and every `open_questions` entry added or updated. The report is
-   the artifact a reviewer reads instead of re-deriving the walk.
+   then a per-skill readiness table (skill, ready / blocked, the
+   blockers that name it), then the findings as a table (field,
+   blocking or non-blocking, which skills it blocks, detail), the
+   identifier resolution results, the values enriched, and every
+   `open_questions` entry added or updated. The report is the
+   artifact a reviewer reads instead of re-deriving the walk.
 2. **Propose the spec edits.** Present every enrichment as one
    reviewable diff: resolved attribute URIs, the pinned `app_id`,
    the confirmed slugs, and the new `open_questions` entries. Apply
@@ -289,10 +305,13 @@ Then:
    the declined edits.
 3. **Deliver the verdict.** Go: tell the user the spec is ready and
    suggest `/scaffold-connector` with the spec path. No-go: name
-   each blocker, say explicitly that the pipeline is halted here,
-   and instruct the user to resolve the blockers and re-run
-   `/preflight-connector`. Never soften a no-go into "you could
-   probably proceed."
+   each blocker and the skills it blocks, then say which skills are
+   clear and suggest the next one — a no-go for the executor is not
+   a reason to sit on a scaffold that's ready. For the skills a
+   blocker does name, never soften the answer into "you could
+   probably proceed"; those resume by resolving the blocker and
+   re-running `/preflight-connector` (or `/probe-partner-api`, when
+   the blocker carries a probe).
 
 ## Files this skill produces
 
@@ -334,13 +353,14 @@ Then:
 - **AskUserQuestion:** {{SNIPPET:askuserquestion-fallback}}
 - **`narrative-common:find-attribute` unavailable (no narrative-mcp
   server)** — identifier URIs cannot be verified. Every unverified
-  group becomes a blocking open question, which forces a no-go.
-  Tell the user why the gate holds. An unverified identifier
+  group becomes a blocking open question scoped to
+  `/define-connector-interface` and later, which forces a no-go for
+  those skills. Tell the user why the gate holds. An unverified identifier
   surfaces later as a delivery failure in a built and deployed
   connector, which is the failure this gate exists to prevent.
 - **`narrative_attribute_create` unavailable** — missing attributes
   cannot be created in this run; each one stays a blocking open
-  question, which forces a no-go.
+  question scoped to the skills that consume the attribute.
 - **`narrative_app_create` unavailable** — fall back to Phase 5's
   manual path (the user runs the marketplace app query). If that is
   also impossible, `app_id` stays `null` with a blocking open

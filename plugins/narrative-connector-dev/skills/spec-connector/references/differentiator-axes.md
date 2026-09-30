@@ -8,7 +8,8 @@ is unusual and that's the headline of the spec.
 The precedents below span the portfolio's destination flavors: ad
 platforms (TikTok, Meta, Pinterest, Yahoo DSP, PubMatic/Magnite),
 raw storage (object stores), model registries (Hugging Face), and — validated
-during this skill's design — email/CRM platforms (Mailchimp, HubSpot).
+during this skill's design and its first spec runs — email/CRM platforms
+(Mailchimp, HubSpot, SendGrid).
 Ad platforms are one flavor, not the frame: an axis answer like
 "audience TTL" or "app review" only applies where the destination
 actually has the concept.
@@ -36,6 +37,10 @@ to.
 * **Magnite / PubMatic** — SFTP key or partner-ID header; Narrative
   is always the data provider; per-client folders.
 * **Hugging Face** — static access token; many profiles per company.
+* **SendGrid** — customer-minted static API key as a bearer token; the
+  vendor's API offers no OAuth at all. The only OAuth in the picture
+  runs the other way: SendGrid can authenticate *itself to us* on its
+  Event Webhook, which is axis 6's territory.
 
 ## 2. Destination data model
 
@@ -74,6 +79,12 @@ the destination matches/dedupes**:
   to create a member; the member key is `md5(lowercase(email))`.
   Hashed-only datasets cannot be delivered at all — a gap customers
   coming from ad platforms will not expect.
+* **Raw email only, no hash surface anywhere** (SendGrid) — a contact
+  is created from the raw address, which SendGrid lower-cases and
+  matches on itself. Unlike Mailchimp there is not even an md5 member
+  key: a hashed-only dataset gets a 0% match rate, not a degraded one.
+  Updating an existing contact requires resending **all** of its
+  existing identifiers.
 * **Configurable/multi-key matching** (HubSpot) — contacts dedupe on
   email by default; other keys need explicit handling.
 
@@ -101,6 +112,13 @@ the single most consequential thing in the whole spec. It lives in
   by API**; HubSpot: list removal vs contact deletion). Opt-out
   handling must name which operation is used and why.
 * **Late-arrival windows for events** (Meta 7 days, Yahoo 30 days).
+* **Asynchronous writes** (SendGrid) — every marketing write returns
+  202 + a job id and explicitly no per-record feedback; delivery
+  success exists only by polling a job-status endpoint. The delivery
+  response means "queued", not "delivered", which breaks the
+  per-row-error assumption every synchronous executor makes. Pin down
+  the status endpoint, its terminal states, and any poll-cadence
+  guidance; their absence is a partner question, not a blank.
 
 ## 5. Operational constraints
 
@@ -117,6 +135,38 @@ the single most consequential thing in the whole spec. It lives in
   separately. **Mailchimp and HubSpot have no app review for basic
   API access** — record "none" explicitly; absence is information.
 * **Sandbox** — available (Yahoo) or absent; say which.
+
+## 6. Inbound direction
+
+Does the destination send data back to us — and if so, does it write
+files we pull, or push events we receive? Most connectors are outbound
+only; when an inbound leg exists, its shape decides an entire component
+and can invert the auth relationship, so answer this axis explicitly
+rather than folding it into sync semantics.
+
+* **None** (TikTok, Meta, Pinterest audience delivery) — record "none"
+  explicitly; absence is information.
+* **Files pulled from an inbox we own** (Yahoo hive layout, PubMatic
+  `YYYY/MM/DD/HH` paths) — the partner writes files into
+  object storage the platform controls; a poll loop ingests them. Pin
+  down the partition layout and how the partner gets write access
+  (bucket policy, assumed role, static keys).
+* **Events pushed to an endpoint we expose** (SendGrid Event Webhook) —
+  the partner POSTs event batches to a receiver the connector hosts.
+  This inverts the auth relationship: instead of the connector holding
+  the partner's credentials, the connector verifies the partner's calls
+  (SendGrid signs with ECDSA over the raw body bytes) or issues
+  credentials to the partner (client-credentials tokens, making the
+  platform an authorization server). Pin down the retry contract
+  (SendGrid retries for a rolling 24 hours until it gets a 2xx), the
+  dedupe key (`sg_event_id`), the payload shape, and any size cap.
+
+For the push shape, also decide who registers the webhook — the
+connector via the partner's API with the customer's credentials, or the
+customer pasting the receiver URL into the partner's console — and
+whether the pull alternative is viable at volume (SendGrid's Email
+Activity API is a paid add-on capped at 6 requests/minute, so for it
+the answer is no).
 
 ## Anti-pattern: don't flag these as "unique"
 

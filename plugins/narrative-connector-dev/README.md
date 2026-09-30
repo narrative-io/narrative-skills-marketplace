@@ -6,12 +6,12 @@ one spec-driven skill set that carries a connector from an idea to a
 verified production deployment — stopping at every human gate along the way.
 
 > **Status: in progress.** Skills are implemented one at a time
-> (`/spec-connector`, `/preflight-connector`, `/scaffold-connector`,
-> `/create-scaffold-manifest`, and `/define-connector-interface` so
-> far); the rest are **stubs** — frontmatter, purpose, inputs,
-> outputs, and human-gate boundaries defined, with the phased
-> implementation authored in follow-up work. Each stub's `SKILL.md`
-> says so at the top.
+> (`/spec-connector`, `/preflight-connector`, `/probe-partner-api`,
+> `/scaffold-connector`, `/create-scaffold-manifest`, and
+> `/define-connector-interface` so far); the rest are **stubs** —
+> frontmatter, purpose, inputs, outputs, and human-gate boundaries
+> defined, with the phased implementation authored in follow-up work.
+> Each stub's `SKILL.md` says so at the top.
 
 ## Entry paths
 
@@ -20,7 +20,10 @@ Every connector build starts the same way, wherever the code will live:
 1. `/spec-connector` researches the destination platform and authors
    `connector-spec.yaml`.
 2. `/preflight-connector` validates the spec and resolves blockers before
-   any code is generated.
+   any code is generated. Blockers are skill-scoped: each one names the
+   skills it blocks, and every other skill runs freely. When a blocker
+   is empirically answerable, `/probe-partner-api` resolves it against
+   a test account instead of waiting on vendor support.
 
 Scaffolding then depends on the state of the target repo.
 `/scaffold-connector` reads the spec's `target` block to decide, and asks
@@ -72,7 +75,7 @@ The rest are organized into five phases plus an orchestrator:
 | Phase | Skills | What happens |
 |-------|--------|--------------|
 | **onboard** (once per repo) | `/create-scaffold-manifest` | Author the repo's `connector-scaffold.yaml` so `/scaffold-connector` can execute it. Applies to `template-repo` mode only; every later connector built in that repo skips this row. |
-| **spec** | `/spec-connector`, `/preflight-connector` | Research and author `connector-spec.yaml`; validate it and resolve identifiers/`app_id` before any code. |
+| **spec** | `/spec-connector`, `/preflight-connector`, `/probe-partner-api` | Research and author `connector-spec.yaml`; validate it and resolve identifiers/`app_id` before any code; probe the destination API against a test account to answer open questions empirically. |
 | **service** | `/scaffold-connector`, `/define-connector-interface`, `/add-connector-oauth`, `/implement-partner-client`, `/implement-delivery-executor`, `/add-measurement-ingestion`, `/test-connector` | Generate the code skeleton and the data contract in the scaffold target; add OAuth, the partner client, the delivery executor, and measurement ingestion; test and compile. |
 | **infra / registration** | `/scaffold-connector-infra`, `/provision-connector-db`, `/register-connector-app` | Write the `<slug>-infra` infrastructure code and CI; author the database migrations + managed-database infrastructure code; register the marketplace app. |
 | **frontend** | `/add-connector-listing`, `/add-connector-app-ui` | Add the catalog listing and the profile / quick-settings app UI in the frontend. |

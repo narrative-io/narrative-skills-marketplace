@@ -30,14 +30,16 @@ which real connectors vary are covered in
 | `service_api` | The connector's own HTTP surface: profile and connection lifecycle, quick-settings validation against `quick_settings`, and (when `auth.model: oauth2`) the OAuth authorize/callback exchange. | Always. |
 | `credential_store` | Persistence for partner credentials shaped by `auth`: token tables or key-value entries whose columns/fields follow `auth.oauth.token_response` (or the static-credential shape for other auth models). | `auth.model` is present. |
 | `background_worker` | Async job loop for deliveries too long for a request/response cycle: claims delivery jobs, drives the `delivery_executor`, reports status. | The target's runtime separates long-running work from the service API (the target decides; the spec only supplies the delivery semantics). |
-| `measurement_poller` | Inbound ingestion loop for partner-pushed measurement data, per the `measurement` block: watches the inbox, normalizes partitions, lands datasets. | `delivery.directions` includes `measurement_ingestion`. |
+| `measurement_poller` | Polling loop for measurement data the partner writes into an object-store inbox: scans the inbox per `measurement.partition_layout`, copies new files into the dataset ingestion path, dedups so no file lands twice. | `delivery.directions` includes `measurement_ingestion` and `measurement.ingestion_mode` is `bucket_inbox` (the default). |
+| `measurement_receiver` | HTTP endpoint for measurement events the partner pushes to the connector, per `measurement.webhook`: verifies the inbound call per `auth.inbound`, persists the raw payload, acknowledges before any processing, and dedups on `measurement.webhook.dedupe_key`. A buffer-flush step then lands the persisted events on the same dataset ingestion path the poller uses. | `delivery.directions` includes `measurement_ingestion` and `measurement.ingestion_mode` is `partner_webhook`. |
 
 ## Derivation rules
 
-- Read `delivery.directions`, `auth.model`, and `destination_type` from
-  the spec; select components per the table. Never generate a component
-  the spec doesn't call for. An empty poller is noise, not
-  future-proofing.
+- Read `delivery.directions`, `auth.model`, `destination_type`, and
+  `measurement.ingestion_mode` (when the directions include
+  `measurement_ingestion`) from the spec; select components per the
+  table. Never generate a component the spec doesn't call for. An empty
+  poller is noise, not future-proofing.
 - Every selected component maps to at least one code unit in the
   target. The mapping comes from the target, in priority order: the
   scaffold manifest's `components` block, the inferred layout of the
