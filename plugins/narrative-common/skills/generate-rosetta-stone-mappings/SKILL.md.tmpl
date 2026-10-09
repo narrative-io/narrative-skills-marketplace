@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.6.0
+  version: 0.6.1
   narrative:
     args:
       - name: "<free-text>"
@@ -276,17 +276,11 @@ filters on them. So:
 - **Do transform values so they pass.** A validation only rejects; it doesn't
   fix. Lower-case a hex hash or a device id the validation expects in lower
   case, or every upper-case value turns into NULL.
-- **Do drop values that pass but mean nothing.** The all-zero opt-out device
-  id `00000000-0000-0000-0000-000000000000`, the hash of an empty string (MD5
-  `d41d8cd98f00b204e9800998ecf8427e`, SHA-256
-  `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`) and
-  filler like `0000000000` are all well-formed, so no validation catches them.
 - **A check that chooses between source columns isn't a repeat.**
   `CASE WHEN <col_a is valid> THEN col_a WHEN <col_b is valid> THEN col_b END`
   picks a different column on some rows without it. Keep it.
 - **Only some properties have validations.** Read them before relying on
-  them. Where a property has none, the expression has to drop bad values
-  itself.
+  them. A property without one keeps whatever value the expression gives it.
 
 ### 6. Validate every expression with NQL
 

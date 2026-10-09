@@ -82,8 +82,7 @@ An attribute property's `validations` (from `narrative_attributes_describe`)
 are applied to every mapped value when it's read: a value that fails becomes
 NULL. Don't repeat them in the expression — `LOWER(hashed_email_sha256)` is
 enough for a `^[a-f0-9]{64}$` validation. Still transform values so they pass
-(lower-case them), and still drop well-formed placeholders such as the hash of
-an empty string. SKILL.md step 5 has the full rule.
+(lower-case them). SKILL.md step 5 has the full rule.
 
 ## Type discriminators in object_mappings
 
