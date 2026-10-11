@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.6.1
+  version: 0.6.2
   narrative:
     args:
       - name: "<free-text>"
@@ -292,11 +292,23 @@ ranking machinery.
 
 #### Don't repeat the attribute's validations
 
-Some attribute properties carry `validations` — `narrative_attributes_describe`
-lists them per property. `md5_hashed_email.value`, for example, must match
-`^[a-f0-9]{32}$`. The platform applies them whenever a mapped value is read:
-a value that fails becomes NULL, and a query that requires the property
-filters on them. So:
+The platform applies an attribute's `validations` every time it reads a mapped
+value: a value that fails any of them becomes NULL, and a query that requires
+the property filters on them. `$this` in a validation is the mapped value.
+
+Read them from the `schema` section of
+`narrative_attributes_describe(attribute_ids: [<id>, ...])`:
+
+- **Scalar attribute:** a `- validations:` line. `age` has
+  `- validations: $this >= 0`.
+- **Object attribute:** a `"validations"` array on the property, inside the
+  `properties` JSON. `md5_hashed_email` has
+  `"validations": ["$this.\"value\" RLIKE '^[a-f0-9]{32}$'"]` on `value`.
+- **Property that references another attribute:** describe returns it with
+  that attribute's type filled in, its validations included. Read them there;
+  no extra call is needed.
+
+Then:
 
 - **Don't copy a validation into the expression.** `LOWER(email_md5)` is
   enough; `CASE WHEN LOWER(email_md5) RLIKE '^[a-f0-9]{32}$' THEN

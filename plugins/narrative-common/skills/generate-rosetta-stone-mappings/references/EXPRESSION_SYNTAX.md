@@ -78,9 +78,13 @@ strings break enum matching and identifier comparison.
 
 ## Validations the platform applies
 
-An attribute property's `validations` (from `narrative_attributes_describe`)
-are applied to every mapped value when it's read: a value that fails becomes
-NULL. Don't repeat them in the expression — `LOWER(hashed_email_sha256)` is
+The platform applies an attribute's `validations` every time it reads a mapped
+value: a value that fails any of them becomes NULL. Read them from the
+`schema` section of `narrative_attributes_describe`: a `- validations:` line
+for a scalar attribute, a `"validations"` array on each property inside the
+`properties` JSON for an object attribute. A property that references another
+attribute comes back with that attribute's type filled in, its validations
+included. Don't repeat them in the expression — `LOWER(hashed_email_sha256)` is
 enough for a `^[a-f0-9]{64}$` validation. Still transform values so they pass
 (lower-case them). SKILL.md step 5 has the full rule.
 
