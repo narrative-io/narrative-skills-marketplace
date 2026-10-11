@@ -21,7 +21,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.7.4
+  version: 0.7.5
   narrative:
     args:
       - name: "--dataset"
@@ -671,8 +671,11 @@ spurious "Unknown Table" errors.
 If validation fails:
 
 1. Read the error message and pointer.
-2. Fix using the cheat sheet at
-   `plugins/narrative-common/skills/write-nql/references/NQL_VALIDATION_ERRORS.md`.
+2. Fix using the `write-nql` skill's error cheat sheet,
+   `references/NQL_VALIDATION_ERRORS.md` relative to that skill's
+   root (in `write-nql` itself, this skill's own `references/`).
+   If `write-nql` isn't installed, fix from the error's pointer and
+   the identifier it names.
 3. Re-validate. Repeat up to 3 times — but only if your skill
    *generates* the NQL. If your skill *templates* the NQL (the YAML
    is an external artifact you macro-substitute), do not auto-fix;
