@@ -7,7 +7,7 @@ is unusual and that's the headline of the spec.
 
 The precedents below span the portfolio's destination flavors: ad
 platforms (TikTok, Meta, Pinterest, Yahoo DSP, PubMatic/Magnite),
-raw storage (S3), model registries (Hugging Face), and — validated
+raw storage (object stores), model registries (Hugging Face), and — validated
 during this skill's design — email/CRM platforms (Mailchimp, HubSpot).
 Ad platforms are one flavor, not the frame: an axis answer like
 "audience TTL" or "app review" only applies where the destination
@@ -54,8 +54,8 @@ What a delivered record *becomes*, and where it lands:
 * **CRM object + list association** (HubSpot) — the record is a CRM
   contact; list membership is an association on top of it, and the
   contact persists after removal from the list.
-* **Dataset/file rows** (S3, Hugging Face) — the record is a row in
-  a file; the container is a path or repo.
+* **Dataset/file rows** (object stores, Hugging Face) — the record is a row
+  in a file; the container is a path or repo.
 
 The engineering consequence: when the record is an independent object
 (CRM contact, list member), "remove from the connection" and "delete

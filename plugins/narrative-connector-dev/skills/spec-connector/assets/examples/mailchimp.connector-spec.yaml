@@ -125,7 +125,18 @@ open_questions:
     owner: internal
     status: "decide with legal/compliance before build"
 
-# ── Build & deploy targets ──────────────────────────────────
+# ── Scaffold target ───────────────────────────────────────────
+target:
+  mode: template-repo
+  repo_path: "~/dev/connectors"
+  manifest_path: null            # default <repo_path>/connector-scaffold.yaml
+  reference_connector: null
+  runtime: null
+
+# ── Build & deploy stages ───────────────────────────────────────
 stages: [dev, prod]
-modules_omitted: []
-narrative_db_path: "~/projects/narrative-db"
+
+# ── Deployment extension ────────────────────────────────────────
+deployment:
+  migrations_path: "~/projects/db-migrations"
+  modules_omitted: []

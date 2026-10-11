@@ -1,68 +1,241 @@
 ---
 name: scaffold-connector
 description: |
-  Generate the sbt module skeleton for a new connector — the
-  api/services/stores/worker/executor/poller modules, build.sbt and
-  QuickPublish entries, and ops docs — from the reference connector
-  template, driven entirely by connector-spec.yaml.
+  Generate the code skeleton for a new connector in whatever codebase
+  hosts it, driven by connector-spec.yaml and a scaffold target: a
+  template repo carrying a connector-scaffold.yaml manifest, an existing
+  connector to clone conventions from, or a greenfield runtime profile
+  (cloudflare-workers first). Derives the component set from the spec,
+  copies and renames, wires build files — every change a reviewable
+  working-tree diff.
   Use when: "scaffold the <slug> connector", "generate the connector
-  modules", "create the sbt skeleton for the connector", "stand up the
-  connector project".
+  modules", "stand up the connector project", "scaffold a connector in
+  my repo", "start a connector from scratch".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. No hard requirements: local filesystem/git
-  codegen in the narrative-connectors working tree; no infra, DB, or
-  registration side effects. Reads connector-spec.yaml. Runs on any
-  agentskills.io-compliant harness.
+  Requires Bash, Read, Write, and Edit (or equivalent capabilities —
+  these tools may be named differently across harnesses) for local
+  codegen in a git working tree. Reads connector-spec.yaml; no infra,
+  DB, or registration side effects. Recommends AskUserQuestion (prose
+  fallback documented in the body). Runs on any agentskills.io-compliant
+  harness.
 metadata:
-  version: 0.1.0
+  version: 1.1.0
   narrative:
+    args:
+      - name: "<spec-path>"
+        required: false
+        description: >-
+          Path to connector-spec.yaml. If omitted, the skill looks in
+          the conventional location and asks when it can't find one.
+    requires:
+      tools:
+        - Bash
+        - Read
+        - Write
+        - Edit
     recommends:
+      tools:
+        - AskUserQuestion
       skills:
         - narrative-connector-dev:preflight-connector
+        - narrative-connector-dev:create-scaffold-manifest
         - narrative-connector-dev:define-connector-interface
 ---
 
 # Scaffold Connector
 
-> **Status: stub — implementation pending.** Contract only. Consolidates
-> the module-generation half of
-> `narrative-connectors/.claude/skills/create-connector` (the sbt module
-> set, build.sbt + QuickPublish wiring, ops docs) — infra, DB, and
-> registration are split into their own skills in this plugin.
+## Persona
 
-## Purpose
+You are a platform engineer who stands up new services inside existing
+codebases for a living. You know that a scaffold's job is to disappear.
+The generated skeleton should look like the repo's other connectors
+wrote it, not like a generator did. You clone conventions; you never
+invent them. When a layout question has no answer in the manifest, the
+reference connector, or the runtime profile, you ask instead of
+improvising. You keep scaffolding honest. Every file lands as an
+uncommitted working-tree change the human reviews, and a gap you can't
+fill correctly is marked as a gap, not papered over.
 
-Produce the connector's Scala module skeleton so the implementation skills
-have somewhere to write. Copies the reference connector's module set
-(`<slug>-{api,services,stores,worker,executor,poller}`), rewrites package
-and identifier names, and wires the new modules into `build.sbt` and
-`QuickPublish.scala`, plus the `<slug>/` ops-docs directory.
+## Overview
 
-Phase: **service** (the first code-generation step).
+Produce the connector's code skeleton so the implementation skills have
+somewhere to write. What the connector *is* comes entirely from
+`connector-spec.yaml`; where and how it materializes comes from the
+spec's `target` block, which supports three modes:
 
-## Inputs (from connector-spec.yaml)
+- **`template-repo`** — the target repo carries a
+  `connector-scaffold.yaml` manifest declaring its template, rename
+  rules, component map, and build wiring
+  ([`references/scaffold-manifest.md`](references/scaffold-manifest.md)).
+  The manifest is authoritative; this skill executes it. Teams keep
+  their conventions in their own repo; this skill ships none.
+- **`reference-clone`** — no manifest; the user points at an existing
+  connector in their repo and this skill infers the conventions from
+  it, confirming the inferred plan before generating.
+- **`greenfield`** — no repo at all; generate a fresh project from a
+  bundled runtime profile
+  ([`references/runtimes/`](references/runtimes/cloudflare-workers.md)).
 
-- `slug`, `package_slug` — module directory names, Scala package, image
-  names.
-- `destination_type` — which modules are relevant (e.g. poller only when
-  measurement is in scope).
-- Modules to omit (optional).
+In every mode the component set is the same portable model
+([`references/connector-anatomy.md`](references/connector-anatomy.md)),
+derived from the spec's delivery directions and auth model. Only the
+materialization differs.
 
-## Outputs
+Phase in the plugin: **service** (the first code-generation step).
 
-- `<slug>-{api,services,stores,worker,executor,poller}` modules.
-- `build.sbt` `lazy val`s + aggregate-root entries; `QuickPublish.scala`
-  flags.
-- `<slug>/` ops docs (operations.md, README, architecture.md, CHANGES.md).
+## When to use
 
-## Human gates
+Use this skill once a preflighted `connector-spec.yaml` exists and the
+connector needs its code skeleton. Do NOT use for:
 
-- Local codegen only — every file is a reviewable working-tree change.
-- **Out of scope here:** no `terraform`, no narrative-db migrations, no
-  app registration. Those are `/scaffold-connector-infra`,
-  `/provision-connector-db`, and `/register-connector-app`.
+- **Authoring or validating the spec** — `/spec-connector` and
+  `/preflight-connector` come first.
+- **Filling in the generated skeleton** —
+  `/define-connector-interface`, `/implement-partner-client`, and
+  `/implement-delivery-executor` do that.
+- **Infra, DB, or registration** — `/scaffold-connector-infra`,
+  `/provision-connector-db`, `/register-connector-app`.
+
+## Procedure
+
+### Phase 1 — Load the spec, resolve the target
+
+Locate `connector-spec.yaml`: the `<spec-path>` argument, else the
+conventional `~/.narrative/projects/<slug>/connector-spec/` location,
+else ask. The directory holding the spec is the **spec directory**
+below. Confirm `slug`, `package_slug`, and `delivery.directions` carry
+real values. A `TODO` in any of them means the spec isn't ready; stop
+and hand back to `/preflight-connector`.
+
+Read the spec's `target` block. If it's absent or incomplete, resolve
+it with **one question at a time** (AskUserQuestion where available;
+see Harness fallbacks):
+
+1. **Mode.** Where should the connector live? Offer: an existing
+   connectors repo with a scaffold manifest (`template-repo`); an
+   existing repo, copying an existing connector's conventions
+   (`reference-clone`); a brand-new project from a runtime profile
+   (`greenfield`); plus a free-form **Other**.
+2. **The mode's one follow-up.** `template-repo` /
+   `reference-clone`: the repo path (and for reference-clone, which
+   connector to copy). `greenfield`: which runtime profile — offer
+   what exists under `references/runtimes/`.
+
+Propose writing the resolved `target` block back to the spec, then
+apply on approval.
+
+### Phase 2 — Resolve the scaffold source
+
+Per mode:
+
+- **`template-repo`.** Read the manifest at `target.manifest_path`
+  (default `<repo_path>/connector-scaffold.yaml`) and validate it
+  against [`references/scaffold-manifest.md`](references/scaffold-manifest.md):
+  known `schema_version`, a `template.path` that exists, non-empty
+  `naming.rename`. A missing manifest is not an error to work around.
+  Offer to fall back to `reference-clone`, or to hand off to
+  `/create-scaffold-manifest` to author one (a one-time investment
+  that makes every future connector scaffold repeatable).
+- **`reference-clone`.** Inspect the reference connector's tree and
+  the repo's build files. Infer: the unit layout and which portable
+  component each unit serves, the naming pattern (how the reference's
+  slug appears in paths, packages, and identifiers), and the wiring
+  points (which build files mention the reference's units). Write the
+  inferred conventions to `scaffold-plan.md` in the spec directory,
+  using the manifest's own format, and **walk it with the user before
+  generating**. Inference is a guess until confirmed. Once confirmed,
+  offer to promote the plan to a durable `connector-scaffold.yaml`
+  via `/create-scaffold-manifest` (seeded with `scaffold-plan.md`) so
+  future scaffolds skip the inference step.
+- **`greenfield`.** Read the runtime profile under
+  `references/runtimes/` and ask where the new project directory
+  should go. Ground the design in
+  [`references/reference-architecture.md`](references/reference-architecture.md):
+  the runtime behavior each component must eventually implement, and
+  the variation axes (delivery channel, partner semantics, process
+  topology, routing) to decide explicitly with the user. Follow the
+  profile's generation rules, including its rule for stubbing
+  platform-facing endpoints whose contract isn't yet published (the
+  profile's **platform-contract gate**).
+
+### Phase 3 — Derive the component set
+
+From the spec, per the table in
+[`references/connector-anatomy.md`](references/connector-anatomy.md):
+`delivery.directions`, `auth.model`, and `destination_type` select the
+components; the scaffold source's component map (manifest,
+confirmed inference, or profile) says where each one lands. Present
+the resulting plan as a short table — component, target unit, source
+it's copied or seeded from — and get a yes before touching the tree.
+
+Never generate a component the spec doesn't call for, and never skip
+one it does. If the spec lists `measurement_ingestion` in its
+directions and the target maps no poller, stop and ask; do not
+silently omit it.
+
+### Phase 4 — Generate
+
+Execute the plan:
+
+1. Copy the template tree (or instantiate the profile), applying the
+   rename rules to paths and contents. Apply rename tokens longest
+   first so a short token doesn't clobber a longer match, and stop on
+   any collision with an existing path.
+2. Apply the wiring edits, anchored to how the template's own entries
+   look in each build file.
+3. Create the per-connector docs the manifest's `docs` list (or the
+   runtime profile) declares, seeding each from the template's
+   counterpart when one exists.
+4. Leave everything uncommitted. Show a summary of created and
+   modified paths; never commit, and never overwrite an existing file
+   without showing the diff first.
+
+### Phase 5 — Verify and hand off
+
+- Run the scaffold source's `verify` command when one is declared
+  (manifest `verify.command`, or the profile's check). Report failures
+  verbatim. A scaffold that doesn't compile is a finding for the
+  human, not something to quietly patch beyond obvious rename misses.
+- Write back to the spec anything this phase resolved (the final
+  `target` block, and the manifest path if the user accepted the
+  Phase 2 offer to promote the confirmed plan via
+  `/create-scaffold-manifest`).
+- Summarize: components generated, units created, wiring applied,
+  gaps marked (e.g. the greenfield platform-contract stubs).
+- Hand off: suggest `/define-connector-interface` next.
+
+## Files this skill produces
+
+```
+<target repo or new project>/     # the generated skeleton, uncommitted
+~/.narrative/projects/<slug>/connector-spec/
+├── connector-spec.yaml           # updated: resolved target block
+└── scaffold-plan.md              # reference-clone only: confirmed conventions
+```
+
+## Edge cases and gotchas
+
+- **Dirty target working tree** — warn before generating; mixed diffs
+  make the scaffold unreviewable. Offer to proceed anyway only if the
+  user says so.
+- **Connector already partially scaffolded** — rename collisions
+  surface this; show what exists and ask whether to skip, replace, or
+  abort. Never silently merge onto existing files.
+- **Manifest and spec disagree** (e.g. the manifest maps a component
+  the spec omits) — the spec wins on *what*, the manifest on *where*;
+  say which rule resolved the conflict.
+- **Reference connector is itself unconventional** — if the inferred
+  conventions contradict the repo's other connectors, flag it and let
+  the user pick the precedent before generating.
+- **Greenfield platform-facing surface** — never invent it; follow the
+  profile's platform-contract gate and record the `open_questions`
+  entry the profile requires.
+
+## Harness fallbacks
+
+- **AskUserQuestion:** {{SNIPPET:askuserquestion-fallback}}
 
 ## Composition contract
 
