@@ -373,6 +373,19 @@ lives on each row and the executor partitions rows by destination at delivery
 time. Per-row routing keeps connections minimal and lets customers drive
 routing from their own data, at the cost of per-partition dedup state.
 
+**App UI: platform-rendered vs connector-served.**
+When the connector ships inside the platform's own repos, the platform
+frontend renders profile creation and the settings forms from the
+settings-form contract, and the connector ships no UI code of its own. An
+externally hosted connector serves its own configuration UI as part of its
+surface, rendering the same settings-form contract so its forms cannot drift
+from its codecs. How the platform puts a connector-served UI in front of
+customers (an embed, a link-out, or rendering the schema in the platform
+frontend anyway) stays an open question until the platform publishes its
+contract for externally hosted connectors. The settings-form contract is
+what makes the two hostings interchangeable: either renderer consumes the
+same schema.
+
 **Measurement intake: files pulled vs events pushed.**
 When the partner writes measurement files into an object store the platform
 owns, the ingestion inbox scanner covers intake, and the design work is the
