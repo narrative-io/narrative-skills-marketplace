@@ -29,6 +29,7 @@
 | **Identifiers & matching** *(match key; notable gaps)* | | |
 | **Sync semantics** *(update model / TTL / deletion & opt-out)* | | |
 | **Operational constraints** *(limits / batching / pagination / approvals)* | | |
+| **Inbound direction** *(none / pulled files / pushed events; who authenticates to whom)* | | |
 
 ---
 
