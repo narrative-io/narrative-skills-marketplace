@@ -1,0 +1,63 @@
+---
+name: register-connector-app
+description: |
+  Register the connector as a Narrative marketplace app — the marketplace-db
+  app row, SSM credentials, the DSM installation, and the bearer token — via
+  the bootstrap-app flow, driven by connector-spec.yaml and gated on human
+  confirmation.
+  Use when: "register the connector app", "bootstrap the marketplace app",
+  "create the app row for the connector", "run bootstrap-app for the
+  connector".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. Mutates marketplace-db, SSM, S3, and DSM and
+  needs a browser-copied DSM token — a hard human gate, per stage. Reads
+  connector-spec.yaml. Recommends AskUserQuestion. Runs on any
+  agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:provision-connector-db
+        - narrative-connector-dev:scaffold-connector-infra
+      tools:
+        - AskUserQuestion
+---
+
+# Register Connector App
+
+> **Status: stub — implementation pending.** Contract only. Consolidates
+> the app-registration step of `create-connector` (the `bootstrap-app.py`
+> flow).
+
+## Purpose
+
+Make the connector a real marketplace app: create its marketplace-db row,
+write its SSM credentials, create the DSM installation, and mint the bearer
+token. This is the most side-effect-heavy registration step and is fully
+gated.
+
+Phase: **registration**.
+
+## Inputs (from connector-spec.yaml)
+
+- `app_id` (pinned by `/preflight-connector`), `slug`, `display_name`.
+- `quick_settings[]`, `identifier_groups[]` — what the app advertises.
+- `stages` — which environments to register.
+
+## Outputs
+
+- Marketplace app row, SSM credentials, DSM app installation, bearer token —
+  per stage.
+
+## Human gates
+
+- **`bootstrap-app.py` mutates marketplace-db, SSM, S3, and DSM** and needs
+  a **browser-copied DSM token**. Hard human gate, run per stage on explicit
+  confirmation — never unattended.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

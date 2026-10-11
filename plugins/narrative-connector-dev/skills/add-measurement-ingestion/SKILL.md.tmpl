@@ -1,0 +1,72 @@
+---
+name: add-measurement-ingestion
+description: |
+  Wire the framework measurement-feed engine into a connector — scan a
+  partner S3 inbox, copy new files into a Narrative dataset ingestion
+  folder, write _NIO_COMMIT, and dedup so files are never copied twice —
+  driven by the measurement block of connector-spec.yaml.
+  Use when: "add measurement ingestion to the connector", "ingest the
+  partner measurement feed", "wire up the S3 inbox scan", "pull conversion
+  feedback files".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. Mostly local codegen, but creates a
+  dataset, a cross-repo DB migration, and an inbox-bucket terraform module
+  at human gates. Reads the measurement block of connector-spec.yaml.
+  Recommends AskUserQuestion. Runs on any agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:scaffold-connector
+        - narrative-connector-dev:provision-connector-db
+        - narrative-connector-dev:scaffold-connector-infra
+      tools:
+        - AskUserQuestion
+---
+
+# Add Measurement Ingestion
+
+> **Status: stub — implementation pending.** Contract only. Consolidates
+> `narrative-connectors/.claude/skills/add-measurement-feed-ingestion`.
+
+## Purpose
+
+Give a connector an inbound measurement/conversion-feedback path: the
+generic framework measurement-feed engine scans a partner S3 inbox bucket
+we own, copies new files verbatim into a Narrative dataset ingestion
+folder, writes `_NIO_COMMIT`, and dedups against an idempotency table so
+nothing is copied twice.
+
+Phase: **service** (+ DB + infra + deploy-verify at gates).
+
+## Inputs (from connector-spec.yaml `measurement`)
+
+- `partition_layout` (hive `dt=yyyyMMdd/` vs date_path `YYYY/MM/DD/HH/`) +
+  `inbox_prefix`.
+- `partner_access` (cross-account bucket policy / assume-role+external-id /
+  static keys).
+- `dataset_ids` (dev + prod), `host_app` (poller recommended).
+
+## Outputs
+
+- `MeasurementFeed` config + Resources wiring; a poller fiber
+  (`runForever`).
+- `measurement_feed_ingestion` idempotency-table migration (cross-repo).
+- A `measurement-feed` terraform module (inbox bucket + hardening + partner
+  access + worker read grant).
+
+## Human gates
+
+- **Dataset creation** (dev + prod) — pause and confirm.
+- **Cross-repo DB migration** + `shared-db-migrations` pin bump — confirm.
+- **terraform apply** for the inbox bucket + partner access — gated at
+  `/deploy-connector`.
+- Verify step uploads a sample file and watches for the
+  `writing commit file` success line.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}
