@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.0
+  version: 0.7.1
   narrative:
     args:
       - name: "<free-text>"
@@ -252,10 +252,17 @@ from Y. Then, for each column:
   `normalized_email`, keep `raw_email`. The dataset's existing
   mappings count too: when `email` already maps to `raw_email`, don't
   propose `normalized_email` for it.
-- **Map a derived attribute directly only when the column holds
-  nothing but the derived form.** An `email_sha256` column of stored
-  hashes maps to `sha256_hashed_email`, even next to an `email` column
-  mapped to `raw_email`, because no rule can produce those hashes.
+- **Leave a derived column unmapped when the dataset maps its
+  source.** A stored mapping replaces the rule on every row of the
+  dataset, not only where the stored value exists. Next to an `email`
+  column mapped to `raw_email`, an `email_sha256` column of stored
+  hashes stays unmapped: mapping it would drop the hashes the rule
+  computes from `email`. Don't fold the rule into the mapping either,
+  as in `COALESCE(email_sha256, SHA2(NORMALIZE_EMAIL(email), 256))`;
+  that copies a formula the rule owns.
+- **Map a derived attribute directly only when the dataset has nothing
+  it derives from.** A dataset of stored hashes and no plain addresses
+  maps its hash column to `sha256_hashed_email`.
 - **When a rule fits the data poorly, say so instead of adding a
   mapping.** The `telephone_number` → `e164_phone_number` rule only
   handles numbers that start with `+`. Put that in the `telephone_number`
