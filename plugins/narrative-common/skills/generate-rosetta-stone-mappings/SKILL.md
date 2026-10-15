@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.1
+  version: 0.7.2
   narrative:
     args:
       - name: "<free-text>"
@@ -374,6 +374,25 @@ Then:
   picks a different column on some rows without it. Keep it.
 - **Only some properties have validations.** Read them before relying on
   them. A property without one keeps whatever value the expression gives it.
+
+#### Transform values; don't filter them
+
+An expression says how to read the column as the attribute: trim, change
+case, parse, pad, convert units, extract a part, translate the dataset's
+codes into the attribute's enum. It doesn't drop values because they look
+invalid or look like placeholders. Deciding what to reject is the
+attribute's job.
+
+- **No validity checks.** Don't wrap the value in a format check such as
+  `CASE WHEN TRIM(email) RLIKE '^[^@ ]+@[^@ ]+[.][^@ ]{2,}$' THEN TRIM(email) END`.
+  It runs on every row, and it withdraws raw data the attribute may
+  accept. If the attribute has no validation for clearly broken values, map
+  them anyway and name the missing validation in `warnings`.
+- **Keep values that look like placeholders.** `0000000000`, an all-zero
+  device id, the hash of `''`, `-` or `?` stay as they are, unless the
+  attribute's description or validations state a convention for them.
+  Mention them in `warnings` when they are common.
+- **A blank string isn't a value.** `NULLIF(TRIM(col), '')` is fine.
 
 ### 6. Validate every expression with NQL
 
