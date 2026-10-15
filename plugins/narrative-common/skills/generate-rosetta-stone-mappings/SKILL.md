@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.2
+  version: 0.7.3
   narrative:
     args:
       - name: "<free-text>"
@@ -392,7 +392,16 @@ attribute's job.
   device id, the hash of `''`, `-` or `?` stay as they are, unless the
   attribute's description or validations state a convention for them.
   Mention them in `warnings` when they are common.
+- **Trim with `TRIM`, and keep other whitespace.** `TRIM(col)` removes
+  surrounding spaces. A tab or other whitespace around a value is raw data;
+  don't strip it with a regex.
 - **A blank string isn't a value.** `NULLIF(TRIM(col), '')` is fine.
+- **No backslash escapes in string literals.** `'\s'`, `'\d'` and `'\w'`
+  reach Spark as the bare letters `s`, `d` and `w`, so
+  `REGEXP_REPLACE(email, '^\s+|\s+$', '')` strips the letter `s` from
+  `susan@example.com`, and validation doesn't catch it. Write a character
+  class instead: `[0-9]` for a digit, `[ ]` for a space. See
+  [`references/EXPRESSION_SYNTAX.md`](references/EXPRESSION_SYNTAX.md).
 
 ### 6. Validate every expression with NQL
 

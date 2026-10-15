@@ -31,6 +31,18 @@ Safe column names can be unquoted: `email_address`, `user_name`,
 Double quotes = identifier. Single quotes = string literal. Mixing them
 up is the #1 cause of NQL validation errors.
 
+### Backslash escapes
+
+Don't put backslash escapes in string literals. NQL passes `'\s'` to
+Spark, which reads an escape it doesn't know as the bare letter: `\s`
+becomes `s`, `\d` becomes `d`, `\w` becomes `w`. The expression still
+validates and then changes data on every row.
+
+| Wrong | What Spark runs | Right |
+| --- | --- | --- |
+| `REGEXP_REPLACE(email, '^\s+\|\s+$', '')` | strips a leading or trailing `s` | `TRIM(email)` |
+| `zip RLIKE '^\d{5}$'` | five letters `d` | `zip RLIKE '^[0-9]{5}$'` |
+
 ## Functions
 
 Common, NQL-supported:
@@ -109,7 +121,7 @@ attribute's enum? If not, you need a CASE WHEN — see `ENUM_HANDLING.md`.
 ```json
 {
   "type": "value_mapping",
-  "expression": "LOWER(TRIM(email_address))"
+  "expression": "NULLIF(TRIM(email_address), '')"
 }
 ```
 
