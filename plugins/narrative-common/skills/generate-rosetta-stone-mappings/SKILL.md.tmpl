@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.6.2
+  version: 0.7.0
   narrative:
     args:
       - name: "<free-text>"
@@ -51,6 +51,7 @@ metadata:
       mcp-servers:
         - narrative-knowledge-base
       mcp-tools:
+        - narrative_derivations_describe
         - search_narrative_i_o_knowledge_base
         - query_docs_filesystem_narrative_i_o_knowledge_base
 ---
@@ -220,6 +221,50 @@ explicitly, or you are evaluating existing mappings — see
 and call `narrative_attributes_describe(attribute_ids: [<id>, ...])`
 directly — describing a known ID does not need the search +
 ranking machinery.
+
+#### Map the source of a derivation, not what it derives
+
+Derivation rules compute one attribute from another, up to three rules
+deep. A dataset mapped to `raw_email` also answers queries for
+`normalized_email` and the email hashes, so mapping the same column to
+those as well adds nothing. It also does harm. A stored mapping
+replaces the rule for its attribute on that dataset, and the
+attributes further down are then derived from the stored mapping
+instead. An inferred `normalized_email` that cleans addresses up
+differently from the rule changes every hash derived after it.
+
+Once every cluster has its candidates, describe them all in one call:
+
+```
+narrative_attributes_describe(attribute_ids: [<id>, ...])
+```
+
+The default `include` returns each attribute's `derivations` lines:
+`derives X` means a rule computes X from this attribute, possibly
+through others, and `derived from Y` means this attribute is computed
+from Y. Then, for each column:
+
+- **Map it to the attribute closest to the root that the column
+  holds.** An `email` column of plain addresses maps to `raw_email`
+  only.
+- **Drop a candidate that another candidate on the same columns
+  derives.** If `email` has the candidates `raw_email` and
+  `normalized_email`, keep `raw_email`. The dataset's existing
+  mappings count too: when `email` already maps to `raw_email`, don't
+  propose `normalized_email` for it.
+- **Map a derived attribute directly only when the column holds
+  nothing but the derived form.** An `email_sha256` column of stored
+  hashes maps to `sha256_hashed_email`, even next to an `email` column
+  mapped to `raw_email`, because no rule can produce those hashes.
+- **When a rule fits the data poorly, say so instead of adding a
+  mapping.** The `telephone_number` → `e164_phone_number` rule only
+  handles numbers that start with `+`. Put that in the `telephone_number`
+  mapping's `warnings`; don't add an `e164_phone_number` mapping from
+  the same column.
+
+To read what a rule computes, call
+`narrative_derivations_describe(derivation_ids: [<id>])` with the
+derivation id from the line.
 
 ### 5. Decide value_mapping vs object_mapping
 

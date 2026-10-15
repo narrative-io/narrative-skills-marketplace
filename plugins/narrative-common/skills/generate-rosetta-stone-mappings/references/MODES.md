@@ -37,6 +37,12 @@ returns a non-empty `mappings[]` array, or the user said "evaluate" /
 5. Include a `suggested_fix` on any recommendation that has a concrete,
    testable replacement expression. Validate every `suggested_fix`
    expression with `narrative_nql_validate` first.
+6. Flag a mapping whose attribute a derivation rule reaches from
+   another mapping on the same columns, using the `derivations` lines
+   from step 1. Recommend deleting it: the rule already gives the
+   dataset that attribute, and the stored mapping replaces the rule.
+   SKILL.md step 4 ("Map the source of a derivation") has the rules
+   for when a direct mapping is still right.
 
 ## Improve a single mapping expression
 
