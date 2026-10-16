@@ -121,7 +121,7 @@ attribute's enum? If not, you need a CASE WHEN — see `ENUM_HANDLING.md`.
 ```json
 {
   "type": "value_mapping",
-  "expression": "NULLIF(TRIM(email_address), '')"
+  "expression": "TRIM(email_address)"
 }
 ```
 

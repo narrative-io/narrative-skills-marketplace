@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.3
+  version: 0.7.4
   narrative:
     args:
       - name: "<free-text>"
@@ -365,7 +365,9 @@ Then:
 - **Don't copy a validation into the expression.** `LOWER(email_md5)` is
   enough; `CASE WHEN LOWER(email_md5) RLIKE '^[a-f0-9]{32}$' THEN
   LOWER(email_md5) END` gives the same values and only makes the mapping
-  longer.
+  longer. The same goes for a blank check: `raw_email` has
+  `"validations": ["TRIM($this.\"value\") <> ''"]` on `value`, so
+  `TRIM(email)` is enough, and `NULLIF(TRIM(email), '')` repeats it.
 - **Do transform values so they pass.** A validation only rejects; it doesn't
   fix. Lower-case a hex hash or a device id the validation expects in lower
   case, or every upper-case value turns into NULL.
@@ -395,7 +397,9 @@ attribute's job.
 - **Trim with `TRIM`, and keep other whitespace.** `TRIM(col)` removes
   surrounding spaces. A tab or other whitespace around a value is raw data;
   don't strip it with a regex.
-- **A blank string isn't a value.** `NULLIF(TRIM(col), '')` is fine.
+- **A blank string isn't a value.** Turn it into NULL with
+  `NULLIF(TRIM(col), '')`, unless the attribute already has a validation
+  that rejects a blank (see "Don't repeat the attribute's validations").
 - **No backslash escapes in string literals.** `'\s'`, `'\d'` and `'\w'`
   reach Spark as the bare letters `s`, `d` and `w`, so
   `REGEXP_REPLACE(email, '^\s+|\s+$', '')` strips the letter `s` from
