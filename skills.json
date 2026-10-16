@@ -448,7 +448,7 @@
     },
     {
       "name": "generate-rosetta-stone-mappings",
-      "version": "0.6.2",
+      "version": "0.7.4",
       "description": "Generate, evaluate, and improve Rosetta Stone attribute mappings for\na Narrative dataset.\nUse when: \"map this dataset to Rosetta Stone\", \"suggest normalized\nattributes for dataset N\", \"evaluate the mappings on dataset N\", \"why\nis this mapping low confidence\", \"fix this expression\", \"improve this\nNQL mapping expression\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md",
@@ -486,6 +486,7 @@
             "narrative-knowledge-base"
           ],
           "mcp-tools": [
+            "narrative_derivations_describe",
             "search_narrative_i_o_knowledge_base",
             "query_docs_filesystem_narrative_i_o_knowledge_base"
           ]
