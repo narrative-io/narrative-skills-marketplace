@@ -14,6 +14,33 @@ the two views are deliberately redundant.
 
 <!-- RELEASES BELOW -->
 
+## [2026.10.0] - 2026-10-19
+
+### ✨ Features
+
+- **generate-rosetta-stone-mappings:** map derivation sources and transform values only (#136) (fc381c7)
+- **scripts:** publish a skills snapshot from a branch and pin it to a company [sc-77080] (#135) (831c554)
+- **generate-rosetta-stone-mappings:** don't repeat attribute validations in expressions (#134) (d652e93)
+- **narrative-common:** add /register-snowflake-dataset skill [SC-73495] (#116) (9bae3ff)
+
+### 🐛 Bug Fixes
+
+- resolve issue #119 (#123) (0c73e15)
+
+### 🤖 CI / Tooling
+
+- add weekly repo audit and daily issue burndown (#117) (b3ebdc0)
+- fix zizmor findings and run zizmor in CI (#108) (3c16ea4)
+
+### 🧹 Maintenance
+
+- **deps:** update minor and patch updates (#131) (d9e9501)
+- **ci:** [SC-73841] remove per-repo backup workflow (#125) (b011216)
+- **deps:** update minor and patch updates (#110) (22362d6)
+- **deps:** bump zizmorcore/zizmor-action from 0.6.1 to 0.6.4 (#115) (4640c96)
+- **deps:** update minor and patch updates (#106) (dcf43eb)
+
+
 ## [2026.08.0] - 2026-08-17
 
 ### ✨ Features
