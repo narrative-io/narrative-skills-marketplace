@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.4
+  version: 0.7.5
   narrative:
     args:
       - name: "<free-text>"
@@ -250,6 +250,39 @@ explicitly, or you are evaluating existing mappings — see
 and call `narrative_attributes_describe(attribute_ids: [<id>, ...])`
 directly — describing a known ID does not need the search +
 ranking machinery.
+
+#### Map every attribute the column holds
+
+A column can hold several attributes. Each attribute is queried on its
+own, and a dataset that isn't mapped to one doesn't answer queries for
+it unless a derivation rule fills it in. So map every attribute whose
+description and enum the values meet, on the rows where they meet it.
+Some of the shapes this takes:
+
+- **Parts of one value.** A `geo_location` of `US>TX>623` holds a
+  country, a state and a DMA: map `iso_3166_1_country`,
+  `usps_state_abbreviation` and `designated_market_area`.
+- **The same value, two attributes.** A `sex` column of `M`/`F` fits
+  both `hl7_gender` and `iab_gender`, and no rule derives one from the
+  other: map both.
+- **The same value on a subset of rows.** `state` ("a state or region
+  within a country") takes the second part from every row (`TX`, `ON`,
+  `H9`). `usps_state_abbreviation` takes it from the `US` rows only, and
+  no rule derives one from the other, so map both:
+
+```sql
+CASE WHEN geo_location LIKE 'US>%'
+  THEN SUBSTRING_INDEX(SUBSTRING_INDEX(geo_location, '>', 2), '>', -1) END
+```
+
+Leaving out the rows that don't hold an attribute isn't filtering (see
+"Transform values; don't filter them"). A value on a `US` row that the
+enum doesn't list, such as `AE`, stays.
+
+Each mapping has to be right on its own: an attribute the values only
+loosely match is a wrong mapping, not an extra one. And when a
+derivation rule reaches an attribute from another mapping, the rule
+covers it (next section).
 
 #### Map the source of a derivation, not what it derives
 
