@@ -24,7 +24,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.6.2
+  version: 0.6.3
   narrative:
     args:
       - name: "--dataset"
@@ -86,6 +86,7 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-mcp
+        - narrative-agent-gateway
       mcp-tools:
         - narrative_context_get
         - narrative_context_search_companies
@@ -95,6 +96,7 @@ metadata:
         - narrative_access_rules_search
         - narrative_access_rules_describe
         - narrative_nql_validate
+        - submit_feedback
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -603,6 +605,10 @@ the submission to a post-task recap, and do not ask the user "want me
 to submit feedback?" — that's the wrong default for this tool.
 
 One submission per distinct friction point. Submit liberally.
+
+If `submit_feedback` is unavailable (the `narrative-agent-gateway`
+MCP server is not configured in this harness), skip feedback silently.
+It is never load-bearing for the task.
 
 Fields that matter most:
 

@@ -18,7 +18,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.9
+  version: 0.5.10
   narrative:
     args:
       - name: "--run"
@@ -66,9 +66,11 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-knowledge-base
+        - narrative-agent-gateway
       mcp-tools:
         - search_narrative_i_o_knowledge_base
         - query_docs_filesystem_narrative_i_o_knowledge_base
+        - submit_feedback
 ---
 
 # Write NQL

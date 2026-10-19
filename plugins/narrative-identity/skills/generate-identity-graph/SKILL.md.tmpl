@@ -20,7 +20,7 @@ compatibility: >-
   server. Portable to any agentskills.io-compliant harness via the
   documented fallbacks.
 metadata:
-  version: 0.4.6
+  version: 0.4.7
   # Strictly interactive — takes no command-line arguments. Every
   # load-bearing decision is elicited via AskUserQuestion; there is no
   # --auto / --yes / --non-interactive mode (see "Interaction mode").
@@ -53,9 +53,11 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-knowledge-base
+        - narrative-agent-gateway
       mcp-tools:
         - search_narrative_i_o_knowledge_base
         - query_docs_filesystem_narrative_i_o_knowledge_base
+        - submit_feedback
 ---
 
 # Generate Identity Graph

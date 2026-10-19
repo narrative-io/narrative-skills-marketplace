@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.4
+  version: 0.7.5
   narrative:
     args:
       - name: "<free-text>"
@@ -50,10 +50,12 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-knowledge-base
+        - narrative-agent-gateway
       mcp-tools:
         - narrative_derivations_describe
         - search_narrative_i_o_knowledge_base
         - query_docs_filesystem_narrative_i_o_knowledge_base
+        - submit_feedback
 ---
 
 # Generate Rosetta Stone Mappings

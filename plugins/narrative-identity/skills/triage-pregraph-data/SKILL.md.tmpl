@@ -24,7 +24,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.6.2
+  version: 0.6.3
   narrative:
     args:
       - name: "--dataset"
@@ -86,6 +86,7 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-mcp
+        - narrative-agent-gateway
       mcp-tools:
         - narrative_context_get
         - narrative_context_search_companies
@@ -95,6 +96,7 @@ metadata:
         - narrative_access_rules_search
         - narrative_access_rules_describe
         - narrative_nql_validate
+        - submit_feedback
 ---
 
 # Triage Pre-Graph Data

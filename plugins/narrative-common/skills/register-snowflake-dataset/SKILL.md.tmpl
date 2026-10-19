@@ -19,7 +19,7 @@ compatibility: >-
   token. Recommends AskUserQuestion, a Claude Code primitive with a
   prose fallback documented in the body.
 metadata:
-  version: 0.1.0
+  version: 0.1.1
   narrative:
     args:
       - name: "--object"
@@ -61,6 +61,10 @@ metadata:
         - narrative-common:profile-dataset
       tools:
         - AskUserQuestion
+      mcp-servers:
+        - narrative-agent-gateway
+      mcp-tools:
+        - submit_feedback
 ---
 
 # Register Snowflake Dataset

@@ -23,7 +23,7 @@ compatibility: >-
   Portable to any agentskills.io-compliant harness via the documented
   fallbacks.
 metadata:
-  version: 0.1.4
+  version: 0.1.5
   narrative:
     args:
       - name: "--dataset"
@@ -92,12 +92,14 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-knowledge-base
+        - narrative-agent-gateway
       mcp-tools:
         - narrative_context_search_companies
         - narrative_context_set_company
         - narrative_access_rules_describe
         - narrative_nql_validate
         - narrative_nql_execute
+        - submit_feedback
 ---
 
 # Profile Dataset
