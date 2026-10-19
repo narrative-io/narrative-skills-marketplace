@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.6.2
+  version: 0.7.4
   narrative:
     args:
       - name: "<free-text>"
@@ -51,6 +51,7 @@ metadata:
       mcp-servers:
         - narrative-knowledge-base
       mcp-tools:
+        - narrative_derivations_describe
         - search_narrative_i_o_knowledge_base
         - query_docs_filesystem_narrative_i_o_knowledge_base
 ---
@@ -221,6 +222,57 @@ and call `narrative_attributes_describe(attribute_ids: [<id>, ...])`
 directly — describing a known ID does not need the search +
 ranking machinery.
 
+#### Map the source of a derivation, not what it derives
+
+Derivation rules compute one attribute from another, up to three rules
+deep. A dataset mapped to `raw_email` also answers queries for
+`normalized_email` and the email hashes, so mapping the same column to
+those as well adds nothing. It also does harm. A stored mapping
+replaces the rule for its attribute on that dataset, and the
+attributes further down are then derived from the stored mapping
+instead. An inferred `normalized_email` that cleans addresses up
+differently from the rule changes every hash derived after it.
+
+Once every cluster has its candidates, describe them all in one call:
+
+```
+narrative_attributes_describe(attribute_ids: [<id>, ...])
+```
+
+The default `include` returns each attribute's `derivations` lines:
+`derives X` means a rule computes X from this attribute, possibly
+through others, and `derived from Y` means this attribute is computed
+from Y. Then, for each column:
+
+- **Map it to the attribute closest to the root that the column
+  holds.** An `email` column of plain addresses maps to `raw_email`
+  only.
+- **Drop a candidate that another candidate on the same columns
+  derives.** If `email` has the candidates `raw_email` and
+  `normalized_email`, keep `raw_email`. The dataset's existing
+  mappings count too: when `email` already maps to `raw_email`, don't
+  propose `normalized_email` for it.
+- **Leave a derived column unmapped when the dataset maps its
+  source.** A stored mapping replaces the rule on every row of the
+  dataset, not only where the stored value exists. Next to an `email`
+  column mapped to `raw_email`, an `email_sha256` column of stored
+  hashes stays unmapped: mapping it would drop the hashes the rule
+  computes from `email`. Don't fold the rule into the mapping either,
+  as in `COALESCE(email_sha256, SHA2(NORMALIZE_EMAIL(email), 256))`;
+  that copies a formula the rule owns.
+- **Map a derived attribute directly only when the dataset has nothing
+  it derives from.** A dataset of stored hashes and no plain addresses
+  maps its hash column to `sha256_hashed_email`.
+- **When a rule fits the data poorly, say so instead of adding a
+  mapping.** The `telephone_number` → `e164_phone_number` rule only
+  handles numbers that start with `+`. Put that in the `telephone_number`
+  mapping's `warnings`; don't add an `e164_phone_number` mapping from
+  the same column.
+
+To read what a rule computes, call
+`narrative_derivations_describe(derivation_ids: [<id>])` with the
+derivation id from the line.
+
 ### 5. Decide value_mapping vs object_mapping
 
 | Source shape | Target attribute | Use |
@@ -284,7 +336,9 @@ Then:
 - **Don't copy a validation into the expression.** `LOWER(email_md5)` is
   enough; `CASE WHEN LOWER(email_md5) RLIKE '^[a-f0-9]{32}$' THEN
   LOWER(email_md5) END` gives the same values and only makes the mapping
-  longer.
+  longer. The same goes for a blank check: `raw_email` has
+  `"validations": ["TRIM($this.\"value\") <> ''"]` on `value`, so
+  `TRIM(email)` is enough, and `NULLIF(TRIM(email), '')` repeats it.
 - **Do transform values so they pass.** A validation only rejects; it doesn't
   fix. Lower-case a hex hash or a device id the validation expects in lower
   case, or every upper-case value turns into NULL.
@@ -293,6 +347,36 @@ Then:
   picks a different column on some rows without it. Keep it.
 - **Only some properties have validations.** Read them before relying on
   them. A property without one keeps whatever value the expression gives it.
+
+#### Transform values; don't filter them
+
+An expression says how to read the column as the attribute: trim, change
+case, parse, pad, convert units, extract a part, translate the dataset's
+codes into the attribute's enum. It doesn't drop values because they look
+invalid or look like placeholders. Deciding what to reject is the
+attribute's job.
+
+- **No validity checks.** Don't wrap the value in a format check such as
+  `CASE WHEN TRIM(email) RLIKE '^[^@ ]+@[^@ ]+[.][^@ ]{2,}$' THEN TRIM(email) END`.
+  It runs on every row, and it withdraws raw data the attribute may
+  accept. If the attribute has no validation for clearly broken values, map
+  them anyway and name the missing validation in `warnings`.
+- **Keep values that look like placeholders.** `0000000000`, an all-zero
+  device id, the hash of `''`, `-` or `?` stay as they are, unless the
+  attribute's description or validations state a convention for them.
+  Mention them in `warnings` when they are common.
+- **Trim with `TRIM`, and keep other whitespace.** `TRIM(col)` removes
+  surrounding spaces. A tab or other whitespace around a value is raw data;
+  don't strip it with a regex.
+- **A blank string isn't a value.** Turn it into NULL with
+  `NULLIF(TRIM(col), '')`, unless the attribute already has a validation
+  that rejects a blank (see "Don't repeat the attribute's validations").
+- **No backslash escapes in string literals.** `'\s'`, `'\d'` and `'\w'`
+  reach Spark as the bare letters `s`, `d` and `w`, so
+  `REGEXP_REPLACE(email, '^\s+|\s+$', '')` strips the letter `s` from
+  `susan@example.com`, and validation doesn't catch it. Write a character
+  class instead: `[0-9]` for a digit, `[ ]` for a space. See
+  [`references/EXPRESSION_SYNTAX.md`](references/EXPRESSION_SYNTAX.md).
 
 ### 6. Validate every expression with NQL
 
