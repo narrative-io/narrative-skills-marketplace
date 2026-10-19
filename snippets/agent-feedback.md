@@ -14,6 +14,10 @@ to submit feedback?" — that's the wrong default for this tool.
 
 One submission per distinct friction point. Submit liberally.
 
+If `submit_feedback` is unavailable (the `narrative-agent-gateway`
+MCP server is not configured in this harness), skip feedback silently.
+It is never load-bearing for the task.
+
 Fields that matter most:
 
 - `skill_name`: `{{SKILL_ID}}` (use this verbatim).

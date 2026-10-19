@@ -4,7 +4,7 @@
   "plugins": [
     {
       "name": "narrative-audience",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Audience-building workflows backed by the narrative-mcp server — turning marketing briefs into filtered, materialized audience datasets and activating them to downstream advertising connectors.",
       "mcpServers": [
         "narrative-agent-gateway",
@@ -14,7 +14,7 @@
     },
     {
       "name": "narrative-common",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Common Narrative workflows backed by the narrative-mcp server — starting with Rosetta Stone attribute mapping generation, evaluation, and improvement.",
       "mcpServers": [
         "narrative-agent-gateway",
@@ -24,7 +24,7 @@
     },
     {
       "name": "narrative-identity",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Identity-graph workflows backed by the narrative-mcp server — pre-graph data-quality auditing, edge-quality analysis, and graph-build hygiene.",
       "mcpServers": [
         "narrative-agent-gateway",
@@ -36,7 +36,7 @@
   "skills": [
     {
       "name": "create-lookalike",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "Create a look-alike audience from a seed audience and a candidate\npopulation dataset. Classifies Rosetta Stone attributes, generates\nthe same materialized-view scoring pipeline Lookalike Studio emits\n(Naive-Bayes categorical weights + Gaussian continuous similarity),\ngates on approval, submits via `narrative_workflows_create`, and\nmonitors the build to completion.\nUse when: \"create a lookalike audience\", \"find more users like this\nsegment\", \"expand my seed audience to 500k similar users\", \"score\nthe population against my customers\", \"build a look-alike of\ndataset X\".\n(narrative-audience)",
       "plugin": "narrative-audience",
       "path": "plugins/narrative-audience/skills/create-lookalike/SKILL.md",
@@ -73,12 +73,14 @@
             "Write"
           ],
           "mcp-servers": [
-            "narrative-knowledge-base"
+            "narrative-knowledge-base",
+            "narrative-agent-gateway"
           ],
           "mcp-tools": [
             "narrative_context_search_companies",
             "narrative_context_set_company",
-            "search_narrative_i_o_knowledge_base"
+            "search_narrative_i_o_knowledge_base",
+            "submit_feedback"
           ]
         }
       },
@@ -154,7 +156,7 @@
     },
     {
       "name": "apply-rosetta-stone-mappings",
-      "version": "0.3.8",
+      "version": "0.3.9",
       "description": "Apply a set of Rosetta Stone attribute mappings to a Narrative\ndataset by wrapping them in a one-shot workflow that calls the\n`CreateRosettaStoneMappingsIfNotExist` task. Consumes the structured\noutput of `/generate-rosetta-stone-mappings`, normalizes the\ngenerator's snake_case to the workflow task's camelCase, re-validates\nevery expression against the dataset's current schema, gates on\nuser approval, submits via `narrative_workflows_create`, polls the\ntriggered run, and reports per-mapping created / conflict / failed.\nUse when: \"apply these mappings to dataset N\", \"create the\nRosetta Stone mappings I just generated\", \"push the mappings I\nsaved earlier to <dataset>\", \"productionize this mapping list\",\n\"submit the suggested_mappings array\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/apply-rosetta-stone-mappings/SKILL.md",
@@ -185,6 +187,12 @@
           ],
           "tools": [
             "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-agent-gateway"
+          ],
+          "mcp-tools": [
+            "submit_feedback"
           ]
         }
       },
@@ -243,7 +251,7 @@
     },
     {
       "name": "create-workflow",
-      "version": "0.6.5",
+      "version": "0.6.6",
       "description": "Author and submit a Narrative workflow from a natural-language\nintent. Picks the closest example from `assets/examples/`, adapts\nit to the user's case, walks the YAML against the spec, resolves\nthe data plane, and submits via `narrative_workflows_create` only\nafter the user has approved the rendered spec.\nUse when: \"create a workflow that does X\", \"schedule a daily\nrefresh of dataset Y\", \"wrap this NQL as a workflow\", \"build a\npipeline that creates view A then refreshes view B\", \"submit this\nworkflow YAML\", \"productionize this query as a recurring job\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/create-workflow/SKILL.md",
@@ -275,14 +283,16 @@
             "AskUserQuestion"
           ],
           "mcp-servers": [
-            "narrative-knowledge-base"
+            "narrative-knowledge-base",
+            "narrative-agent-gateway"
           ],
           "mcp-tools": [
             "search_narrative_i_o_knowledge_base",
             "query_docs_filesystem_narrative_i_o_knowledge_base",
             "narrative_datasets_search",
             "narrative_datasets_describe",
-            "narrative_nql_validate"
+            "narrative_nql_validate",
+            "submit_feedback"
           ]
         }
       },
@@ -334,7 +344,7 @@
     },
     {
       "name": "design-analysis",
-      "version": "0.3.5",
+      "version": "0.3.6",
       "description": "Translate a fuzzy analytical question into a rigorous investigation\nplan. Interrogates the ask, grounds the plan in the available data\ndictionary, applies analytical best practices, and produces a\nstructured brief of query specifications for a downstream\nquery-writing skill. Plans, does not write SQL.\nUse when: \"why did X drop\", \"is there a relationship between A and B\",\n\"who are our highest-value customers\", \"what's driving the change\nin Y\", \"investigate this trend\", \"design an analysis for\", \"scope\nthis analytical question\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/design-analysis/SKILL.md",
@@ -348,7 +358,8 @@
             "AskUserQuestion"
           ],
           "mcp-servers": [
-            "narrative-mcp"
+            "narrative-mcp",
+            "narrative-agent-gateway"
           ],
           "mcp-tools": [
             "narrative_context_get",
@@ -356,7 +367,8 @@
             "narrative_context_set_company",
             "narrative_datasets_search",
             "narrative_datasets_describe",
-            "narrative_dataset_get_column_stats"
+            "narrative_dataset_get_column_stats",
+            "submit_feedback"
           ]
         }
       },
@@ -386,7 +398,7 @@
     },
     {
       "name": "find-attribute",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "description": "Find the canonical Rosetta Stone attribute that best matches a\nfuzzy description, semantic phrase, or required schema shape.\nSearches the catalog with pagination, describes the shortlist in\none batched call, ranks candidates by name + shape match, and\nreturns the canonical attribute ID plus close alternatives.\nUse when: \"find the X attribute\", \"what's the graph-edge attribute\nID\", \"look up the email Rosetta Stone attribute\", \"search the\nattribute catalog for Y\", \"which attribute has SOURCE_ID +\nTARGET_ID + IS_DIRECTED\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/find-attribute/SKILL.md",
@@ -404,6 +416,12 @@
         "recommends": {
           "tools": [
             "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-agent-gateway"
+          ],
+          "mcp-tools": [
+            "submit_feedback"
           ]
         }
       },
@@ -448,7 +466,7 @@
     },
     {
       "name": "generate-rosetta-stone-mappings",
-      "version": "0.7.4",
+      "version": "0.7.5",
       "description": "Generate, evaluate, and improve Rosetta Stone attribute mappings for\na Narrative dataset.\nUse when: \"map this dataset to Rosetta Stone\", \"suggest normalized\nattributes for dataset N\", \"evaluate the mappings on dataset N\", \"why\nis this mapping low confidence\", \"fix this expression\", \"improve this\nNQL mapping expression\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md",
@@ -483,12 +501,14 @@
             "AskUserQuestion"
           ],
           "mcp-servers": [
-            "narrative-knowledge-base"
+            "narrative-knowledge-base",
+            "narrative-agent-gateway"
           ],
           "mcp-tools": [
             "narrative_derivations_describe",
             "search_narrative_i_o_knowledge_base",
-            "query_docs_filesystem_narrative_i_o_knowledge_base"
+            "query_docs_filesystem_narrative_i_o_knowledge_base",
+            "submit_feedback"
           ]
         }
       },
@@ -502,7 +522,7 @@
     },
     {
       "name": "profile-dataset",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "Produce a coverage & quality profile of a Narrative dataset (or access\nrule): row count, per-column null/fill rate, cardinality, ranges,\ntop-values, inferred column shape, and quality flags. Reads bundled\nstats + sample first, recovers missing/stale stats by configuring and\nrecalculating them, and escalates to a cheap `/write-nql` query only\nfor a measure no stat can provide. Descriptive, not prescriptive.\nUse when: \"profile dataset N\", \"what does dataset N look like\",\n\"coverage and quality of <dataset>\", \"what id types does N emit\",\n\"null rates / cardinality for <dataset>\", \"is this dataset's stats\nfresh\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/profile-dataset/SKILL.md",
@@ -530,14 +550,16 @@
             "AskUserQuestion"
           ],
           "mcp-servers": [
-            "narrative-knowledge-base"
+            "narrative-knowledge-base",
+            "narrative-agent-gateway"
           ],
           "mcp-tools": [
             "narrative_context_search_companies",
             "narrative_context_set_company",
             "narrative_access_rules_describe",
             "narrative_nql_validate",
-            "narrative_nql_execute"
+            "narrative_nql_execute",
+            "submit_feedback"
           ]
         }
       },
@@ -589,7 +611,7 @@
     },
     {
       "name": "register-snowflake-dataset",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Register a Snowflake table or view as a Narrative dataset from SQL,\nwith no Configuration screen and no browser. Not for installing or\nconfiguring the native app, and not for querying a dataset that\nalready exists.\nUse when: \"register this table as a dataset\", \"register a Snowflake\ndataset from SQL\", \"onboard my_table to Narrative\", \"script dataset\nregistration\", \"add this view to my data plane\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/register-snowflake-dataset/SKILL.md",
@@ -607,6 +629,12 @@
           ],
           "tools": [
             "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-agent-gateway"
+          ],
+          "mcp-tools": [
+            "submit_feedback"
           ]
         }
       },
@@ -646,7 +674,7 @@
     },
     {
       "name": "write-nql",
-      "version": "0.5.9",
+      "version": "0.5.10",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/write-nql/SKILL.md",
@@ -674,11 +702,13 @@
             "AskUserQuestion"
           ],
           "mcp-servers": [
-            "narrative-knowledge-base"
+            "narrative-knowledge-base",
+            "narrative-agent-gateway"
           ],
           "mcp-tools": [
             "search_narrative_i_o_knowledge_base",
-            "query_docs_filesystem_narrative_i_o_knowledge_base"
+            "query_docs_filesystem_narrative_i_o_knowledge_base",
+            "submit_feedback"
           ]
         }
       },
@@ -714,7 +744,7 @@
     },
     {
       "name": "generate-identity-graph",
-      "version": "0.4.6",
+      "version": "0.4.7",
       "description": "Interactively build a Narrative identity graph workflow from one or\nmore first-party datasets and (optionally) third-party data sources.\nConfirms each input dataset is mapped to the Rosetta Stone graph\nedge attribute (mapping it via /generate-rosetta-stone-mappings if\nnot), then composes and submits a workflow that unions every edge\nsource and labels connected components.\nUse when: \"build an identity graph\", \"generate an identity graph\",\n\"create an identity graph\", \"stitch these datasets into a graph\",\n\"make a graph workflow\", \"label connected components on these\ndatasets\", \"I want a person graph / household graph / device graph\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-identity-graph/SKILL.md",
@@ -749,11 +779,13 @@
             "AskUserQuestion"
           ],
           "mcp-servers": [
-            "narrative-knowledge-base"
+            "narrative-knowledge-base",
+            "narrative-agent-gateway"
           ],
           "mcp-tools": [
             "search_narrative_i_o_knowledge_base",
-            "query_docs_filesystem_narrative_i_o_knowledge_base"
+            "query_docs_filesystem_narrative_i_o_knowledge_base",
+            "submit_feedback"
           ]
         }
       },
@@ -849,7 +881,7 @@
     },
     {
       "name": "triage-pregraph-data",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "description": "Audit a dataset or access rule before it joins an identity-graph\nbuild (access rules behave like datasets in NQL here). Enumerates\nfailure modes (hub identifiers, high-degree nodes, suspicious\nvalues, over-connected identifiers), tests hypotheses in parallel,\nquantifies damage by rows / edges / entities, and proposes minimal\nfilters ranked by severity. When issues are found, returns a\nvalidated `CREATE MATERIALIZED VIEW` NQL the caller can run to\nproduce a graph-ready clean source; if the data passes, says so and\nrecommends it unchanged. Plans and authors the clean-view NQL; does\nnot execute it.\nUse when: \"audit this dataset before the graph build\", \"find bad\nedges in <source>\", \"check identity data quality\", \"recommend\nfilters for the graph build\", \"quantify damage from\n<identifier_type>\", \"pre-graph DQ\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/triage-pregraph-data/SKILL.md",
@@ -870,7 +902,8 @@
             "AskUserQuestion"
           ],
           "mcp-servers": [
-            "narrative-mcp"
+            "narrative-mcp",
+            "narrative-agent-gateway"
           ],
           "mcp-tools": [
             "narrative_context_get",
@@ -880,7 +913,8 @@
             "narrative_datasets_describe",
             "narrative_access_rules_search",
             "narrative_access_rules_describe",
-            "narrative_nql_validate"
+            "narrative_nql_validate",
+            "submit_feedback"
           ]
         }
       },

@@ -22,7 +22,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.3.8
+  version: 0.3.9
   narrative:
     args:
       - name: "--dataset"
@@ -96,6 +96,10 @@ metadata:
         - narrative-common:generate-rosetta-stone-mappings
       tools:
         - AskUserQuestion
+      mcp-servers:
+        - narrative-agent-gateway
+      mcp-tools:
+        - submit_feedback
 ---
 
 # Apply Rosetta Stone Mappings

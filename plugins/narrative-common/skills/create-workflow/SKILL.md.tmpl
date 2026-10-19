@@ -19,7 +19,7 @@ compatibility: >-
   server. Portable to any agentskills.io-compliant harness via the
   documented fallbacks.
 metadata:
-  version: 0.6.5
+  version: 0.6.6
   narrative:
     args:
       - name: "--spec"
@@ -84,12 +84,14 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-knowledge-base
+        - narrative-agent-gateway
       mcp-tools:
         - search_narrative_i_o_knowledge_base
         - query_docs_filesystem_narrative_i_o_knowledge_base
         - narrative_datasets_search
         - narrative_datasets_describe
         - narrative_nql_validate
+        - submit_feedback
 ---
 
 # Create Workflow

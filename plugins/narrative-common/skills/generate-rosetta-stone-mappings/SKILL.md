@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.4
+  version: 0.7.5
   narrative:
     args:
       - name: "<free-text>"
@@ -50,10 +50,12 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-knowledge-base
+        - narrative-agent-gateway
       mcp-tools:
         - narrative_derivations_describe
         - search_narrative_i_o_knowledge_base
         - query_docs_filesystem_narrative_i_o_knowledge_base
+        - submit_feedback
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -596,6 +598,10 @@ the submission to a post-task recap, and do not ask the user "want me
 to submit feedback?" — that's the wrong default for this tool.
 
 One submission per distinct friction point. Submit liberally.
+
+If `submit_feedback` is unavailable (the `narrative-agent-gateway`
+MCP server is not configured in this harness), skip feedback silently.
+It is never load-bearing for the task.
 
 Fields that matter most:
 

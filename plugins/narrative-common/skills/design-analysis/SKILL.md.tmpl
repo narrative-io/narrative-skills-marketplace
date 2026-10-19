@@ -19,7 +19,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.3.5
+  version: 0.3.6
   narrative:
     args:
       - name: "--dataset"
@@ -49,6 +49,7 @@ metadata:
         - AskUserQuestion
       mcp-servers:
         - narrative-mcp
+        - narrative-agent-gateway
       mcp-tools:
         - narrative_context_get
         - narrative_context_search_companies
@@ -56,6 +57,7 @@ metadata:
         - narrative_datasets_search
         - narrative_datasets_describe
         - narrative_dataset_get_column_stats
+        - submit_feedback
 ---
 
 # Design Analysis

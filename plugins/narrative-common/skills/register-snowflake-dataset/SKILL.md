@@ -19,7 +19,7 @@ compatibility: >-
   token. Recommends AskUserQuestion, a Claude Code primitive with a
   prose fallback documented in the body.
 metadata:
-  version: 0.1.0
+  version: 0.1.1
   narrative:
     args:
       - name: "--object"
@@ -61,6 +61,10 @@ metadata:
         - narrative-common:profile-dataset
       tools:
         - AskUserQuestion
+      mcp-servers:
+        - narrative-agent-gateway
+      mcp-tools:
+        - submit_feedback
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -332,6 +336,10 @@ the submission to a post-task recap, and do not ask the user "want me
 to submit feedback?" — that's the wrong default for this tool.
 
 One submission per distinct friction point. Submit liberally.
+
+If `submit_feedback` is unavailable (the `narrative-agent-gateway`
+MCP server is not configured in this harness), skip feedback silently.
+It is never load-bearing for the task.
 
 Fields that matter most:
 
