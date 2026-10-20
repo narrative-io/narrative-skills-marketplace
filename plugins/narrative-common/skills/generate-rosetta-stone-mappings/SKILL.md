@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.6
+  version: 0.7.7
   narrative:
     args:
       - name: "<free-text>"
@@ -366,7 +366,7 @@ derivation id from the line.
 | Source shape | Target attribute | Use |
 | --- | --- | --- |
 | Single column → primitive attribute (email, phone, age, country) | Primitive | `value_mapping` |
-| Single column → object attribute where only `value` matters | Object with type/value | `object_mapping` with literal `type` + `value` |
+| Single column → object attribute where only `value` matters | Object with type/value | `object_mapping` with `value`, and a `type` set where `value` is |
 | Multiple columns → one structured attribute (e.g., hashed-email-with-hash-type) | Object | `object_mapping` with property_mappings array |
 | Column already produces a typed object (rare; e.g., a struct column) | Object | `object_mapping` mirroring the struct |
 
@@ -393,13 +393,40 @@ derivation id from the line.
   "mapping": {
     "type": "object_mapping",
     "property_mappings": [
-      { "path": "type",  "expression": "'sha256_email'", "confidence": 100, "reasoning": "Literal discriminator; all sampled hashes are 64 chars." },
+      { "path": "type",  "expression": "CASE WHEN hashed_email IS NOT NULL THEN 'sha256_email' END", "confidence": 100, "reasoning": "Discriminator, set only where there is a hash; all sampled hashes are 64 chars." },
       { "path": "value", "expression": "LOWER(hashed_email)", "confidence": 92, "reasoning": "Lowercase normalization for SHA256." }
     ]
   },
   "warnings": []
 }
 ```
+
+#### Set a discriminator only where there is a value
+
+A property that says what the value is (`type`, `ad_platform`, a
+`context` naming the source) belongs to the value. On a row with no
+value it would describe nothing, and the row would still read as a
+data point of that kind. So give it the same condition as the value:
+NULL wherever the value is NULL. Some examples:
+
+- **A blank id.** `person_id` from `member_id`:
+
+```
+value: NULLIF(TRIM(member_id), '')
+type:  CASE WHEN NULLIF(TRIM(member_id), '') IS NOT NULL THEN 'person_id' END
+```
+
+- **A value on some rows only.** `apple_idfa` from a mixed `device_id`
+  column takes the same `platform` condition in both properties:
+
+```
+value: CASE WHEN LOWER(platform) = 'ios' THEN TRIM(device_id) END
+type:  CASE WHEN LOWER(platform) = 'ios' THEN 'idfa' END
+```
+
+- **A constant that isn't called `type`.** A Facebook ad report's
+  `campaign` mapping sets `ad_platform` only where `campaign_id` is:
+  `CASE WHEN campaign_id IS NOT NULL THEN 'facebook' END`.
 
 #### Don't repeat the attribute's validations
 
