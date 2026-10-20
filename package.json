@@ -1,14 +1,14 @@
 {
   "name": "narrative-skills-marketplace",
   "devDependencies": {
-    "@biomejs/biome": "^2.5.14",
+    "@biomejs/biome": "^2.5.15",
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
     "@types/bun": "latest",
     "@typesafe-ai/sdk": "^0.6.0",
     "gray-matter": "^4.0.3",
-    "knip": "^6.38.0",
-    "lefthook": "^2.1.14",
+    "knip": "^6.40.0",
+    "lefthook": "^2.1.17",
     "typescript": "^7.0.2"
   },
   "private": true,
