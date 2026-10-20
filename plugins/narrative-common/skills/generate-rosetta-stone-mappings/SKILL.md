@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.5
+  version: 0.7.6
   narrative:
     args:
       - name: "<free-text>"
@@ -308,7 +308,33 @@ from Y. Then, for each column:
 
 - **Map it to the attribute closest to the root that the column
   holds.** An `email` column of plain addresses maps to `raw_email`
-  only.
+  only. That is usually the raw, free-form attribute: you read the
+  column into it, and the rules derive the normalized and structured
+  attributes from it. Choose the mappings that let the rules give the
+  dataset the most attributes.
+- **Map the specific attribute, and let a rule give the general one.**
+  `sha256_hashed_email` derives `hashed_email` with `type`
+  `sha256_email`, so a column of SHA-256 hashes maps to
+  `sha256_hashed_email`, not to `hashed_email`. The specific attribute
+  says what the value is; the general one needs a `type` to say it, and
+  no rule runs back from it. If two attributes ever derive each other,
+  map the more specific one for the same reason.
+- **A column can hold different specific attributes on different
+  rows.** A `device_id` column next to a `platform` column holds IDFAs
+  on `ios` rows and Android advertising ids on `android` rows. When
+  `apple_idfa` and `android_advertising_id` each derive
+  `mobile_id_unique_identifier`, map the column twice, each on its
+  rows, and let the rules give the general id:
+
+```sql
+-- apple_idfa.value
+CASE WHEN LOWER(platform) = 'ios' THEN TRIM(device_id) END
+-- android_advertising_id.value
+CASE WHEN LOWER(platform) = 'android' THEN LOWER(TRIM(device_id)) END
+```
+
+  Without those rules, map `mobile_id_unique_identifier` once, with its
+  `type` taken from `platform`.
 - **Drop a candidate that another candidate on the same columns
   derives.** If `email` has the candidates `raw_email` and
   `normalized_email`, keep `raw_email`. The dataset's existing
