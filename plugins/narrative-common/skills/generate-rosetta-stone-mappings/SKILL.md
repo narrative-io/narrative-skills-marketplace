@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.4
+  version: 0.7.7
   narrative:
     args:
       - name: "<free-text>"
@@ -251,6 +251,39 @@ and call `narrative_attributes_describe(attribute_ids: [<id>, ...])`
 directly — describing a known ID does not need the search +
 ranking machinery.
 
+#### Map every attribute the column holds
+
+A column can hold several attributes. Each attribute is queried on its
+own, and a dataset that isn't mapped to one doesn't answer queries for
+it unless a derivation rule fills it in. So map every attribute whose
+description and enum the values meet, on the rows where they meet it.
+Some of the shapes this takes:
+
+- **Parts of one value.** A `geo_location` of `US>TX>623` holds a
+  country, a state and a DMA: map `iso_3166_1_country`,
+  `usps_state_abbreviation` and `designated_market_area`.
+- **The same value, two attributes.** A `sex` column of `M`/`F` fits
+  both `hl7_gender` and `iab_gender`, and no rule derives one from the
+  other: map both.
+- **The same value on a subset of rows.** `state` ("a state or region
+  within a country") takes the second part from every row (`TX`, `ON`,
+  `H9`). `usps_state_abbreviation` takes it from the `US` rows only, and
+  no rule derives one from the other, so map both:
+
+```sql
+CASE WHEN geo_location LIKE 'US>%'
+  THEN SUBSTRING_INDEX(SUBSTRING_INDEX(geo_location, '>', 2), '>', -1) END
+```
+
+Leaving out the rows that don't hold an attribute isn't filtering (see
+"Transform values; don't filter them"). A value on a `US` row that the
+enum doesn't list, such as `AE`, stays.
+
+Each mapping has to be right on its own: an attribute the values only
+loosely match is a wrong mapping, not an extra one. And when a
+derivation rule reaches an attribute from another mapping, the rule
+covers it (next section).
+
 #### Map the source of a derivation, not what it derives
 
 Derivation rules compute one attribute from another, up to three rules
@@ -275,7 +308,33 @@ from Y. Then, for each column:
 
 - **Map it to the attribute closest to the root that the column
   holds.** An `email` column of plain addresses maps to `raw_email`
-  only.
+  only. That is usually the raw, free-form attribute: you read the
+  column into it, and the rules derive the normalized and structured
+  attributes from it. Choose the mappings that let the rules give the
+  dataset the most attributes.
+- **Map the specific attribute, and let a rule give the general one.**
+  `sha256_hashed_email` derives `hashed_email` with `type`
+  `sha256_email`, so a column of SHA-256 hashes maps to
+  `sha256_hashed_email`, not to `hashed_email`. The specific attribute
+  says what the value is; the general one needs a `type` to say it, and
+  no rule runs back from it. If two attributes ever derive each other,
+  map the more specific one for the same reason.
+- **A column can hold different specific attributes on different
+  rows.** A `device_id` column next to a `platform` column holds IDFAs
+  on `ios` rows and Android advertising ids on `android` rows. When
+  `apple_idfa` and `android_advertising_id` each derive
+  `mobile_id_unique_identifier`, map the column twice, each on its
+  rows, and let the rules give the general id:
+
+```sql
+-- apple_idfa.value
+CASE WHEN LOWER(platform) = 'ios' THEN TRIM(device_id) END
+-- android_advertising_id.value
+CASE WHEN LOWER(platform) = 'android' THEN LOWER(TRIM(device_id)) END
+```
+
+  Without those rules, map `mobile_id_unique_identifier` once, with its
+  `type` taken from `platform`.
 - **Drop a candidate that another candidate on the same columns
   derives.** If `email` has the candidates `raw_email` and
   `normalized_email`, keep `raw_email`. The dataset's existing
@@ -307,7 +366,7 @@ derivation id from the line.
 | Source shape | Target attribute | Use |
 | --- | --- | --- |
 | Single column → primitive attribute (email, phone, age, country) | Primitive | `value_mapping` |
-| Single column → object attribute where only `value` matters | Object with type/value | `object_mapping` with literal `type` + `value` |
+| Single column → object attribute where only `value` matters | Object with type/value | `object_mapping` with `value`, and a `type` set where `value` is |
 | Multiple columns → one structured attribute (e.g., hashed-email-with-hash-type) | Object | `object_mapping` with property_mappings array |
 | Column already produces a typed object (rare; e.g., a struct column) | Object | `object_mapping` mirroring the struct |
 
@@ -334,13 +393,40 @@ derivation id from the line.
   "mapping": {
     "type": "object_mapping",
     "property_mappings": [
-      { "path": "type",  "expression": "'sha256_email'", "confidence": 100, "reasoning": "Literal discriminator; all sampled hashes are 64 chars." },
+      { "path": "type",  "expression": "CASE WHEN hashed_email IS NOT NULL THEN 'sha256_email' END", "confidence": 100, "reasoning": "Discriminator, set only where there is a hash; all sampled hashes are 64 chars." },
       { "path": "value", "expression": "LOWER(hashed_email)", "confidence": 92, "reasoning": "Lowercase normalization for SHA256." }
     ]
   },
   "warnings": []
 }
 ```
+
+#### Set a discriminator only where there is a value
+
+A property that says what the value is (`type`, `ad_platform`, a
+`context` naming the source) belongs to the value. On a row with no
+value it would describe nothing, and the row would still read as a
+data point of that kind. So give it the same condition as the value:
+NULL wherever the value is NULL. Some examples:
+
+- **A blank id.** `person_id` from `member_id`:
+
+```
+value: NULLIF(TRIM(member_id), '')
+type:  CASE WHEN NULLIF(TRIM(member_id), '') IS NOT NULL THEN 'person_id' END
+```
+
+- **A value on some rows only.** `apple_idfa` from a mixed `device_id`
+  column takes the same `platform` condition in both properties:
+
+```
+value: CASE WHEN LOWER(platform) = 'ios' THEN TRIM(device_id) END
+type:  CASE WHEN LOWER(platform) = 'ios' THEN 'idfa' END
+```
+
+- **A constant that isn't called `type`.** A Facebook ad report's
+  `campaign` mapping sets `ad_platform` only where `campaign_id` is:
+  `CASE WHEN campaign_id IS NOT NULL THEN 'facebook' END`.
 
 #### Don't repeat the attribute's validations
 
