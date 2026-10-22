@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.7.7
+  version: 0.7.8
   narrative:
     args:
       - name: "<free-text>"
@@ -328,7 +328,7 @@ from Y. Then, for each column:
 
 ```sql
 -- apple_idfa.value
-CASE WHEN LOWER(platform) = 'ios' THEN TRIM(device_id) END
+CASE WHEN LOWER(platform) = 'ios' THEN NULLIF(TRIM(device_id), '') END
 -- android_advertising_id.value
 CASE WHEN LOWER(platform) = 'android' THEN LOWER(TRIM(device_id)) END
 ```
@@ -417,11 +417,12 @@ type:  CASE WHEN NULLIF(TRIM(member_id), '') IS NOT NULL THEN 'person_id' END
 ```
 
 - **A value on some rows only.** `apple_idfa` from a mixed `device_id`
-  column takes the same `platform` condition in both properties:
+  column takes the `platform` condition and the blank check in both
+  properties:
 
 ```
-value: CASE WHEN LOWER(platform) = 'ios' THEN TRIM(device_id) END
-type:  CASE WHEN LOWER(platform) = 'ios' THEN 'idfa' END
+value: CASE WHEN LOWER(platform) = 'ios' THEN NULLIF(TRIM(device_id), '') END
+type:  CASE WHEN LOWER(platform) = 'ios' AND NULLIF(TRIM(device_id), '') IS NOT NULL THEN 'idfa' END
 ```
 
 - **A constant that isn't called `type`.** A Facebook ad report's
@@ -454,6 +455,21 @@ Then:
   longer. The same goes for a blank check: `raw_email` has
   `"validations": ["TRIM($this.\"value\") <> ''"]` on `value`, so
   `TRIM(email)` is enough, and `NULLIF(TRIM(email), '')` repeats it.
+- **A format check rejects a blank too.** `android_advertising_id` has
+  `"validations": ["$this.\"value\" RLIKE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'"]`
+  on `value`, and `''` can't match it, so `LOWER(TRIM(device_id))` is
+  enough. `apple_idfa` has no validation, so its blank needs `NULLIF`.
+- **A discriminator repeats the check its value relies on.** A validation
+  applies only to the property it is on: a blank email turns `raw_email`'s
+  `value` into NULL and leaves `type` as the expression gives it. So `type`
+  makes the check itself, as "Set a discriminator only where there is a
+  value" asks. That isn't a repeat; keep it:
+
+```
+value: TRIM(email)
+type:  CASE WHEN TRIM(email) <> '' THEN 'raw_email' END
+```
+
 - **Do transform values so they pass.** A validation only rejects; it doesn't
   fix. Lower-case a hex hash or a device id the validation expects in lower
   case, or every upper-case value turns into NULL.
