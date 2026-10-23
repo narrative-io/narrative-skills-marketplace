@@ -242,8 +242,123 @@
       ]
     },
     {
+      "name": "create-cached-mapping",
+      "version": "0.1.0",
+      "description": "Set up a Rosetta Stone cached mapping that normalizes messy free-text\nvalues into an attribute's enum, and the scheduled workflow that\nfills its cache. Generates the rules / ML classifier / LLM waterfall\nNQL, creates the mapping, activates the cache, and hands the fill\nworkflow to /create-workflow.\nUse when: \"normalize these messy values into <attribute>\", \"set up a\ncached mapping\", \"clean up free-text <field> with an LLM\", \"fill the\ncache for <attribute>\", \"map raw values to the <attribute> enum\".\n(narrative-common)",
+      "plugin": "narrative-common",
+      "path": "plugins/narrative-common/skills/create-cached-mapping/SKILL.md",
+      "compatibility": "Requires the narrative-mcp MCP server, local file Read, and Bash with NIO_API_TOKEN set (cache activation has no MCP equivalent; a manual fallback is documented in references/HARNESS_FALLBACK.md). Recommends AskUserQuestion (a Claude Code primitive; prose fallback documented in the same file) and the narrative-knowledge-base MCP server. Snowflake data planes only — AI_COMPLETE and CALL_MODEL_FUNCTION do not exist on AWS planes.",
+      "requirements": {
+        "requires": {
+          "tools": [
+            "Bash",
+            "Read"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_datasets_search",
+            "narrative_datasets_describe",
+            "narrative_attributes_describe",
+            "narrative_nql_validate",
+            "narrative_mapping_create",
+            "narrative_data_planes_list"
+          ],
+          "skills": [
+            "narrative-common:create-workflow"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-knowledge-base"
+          ],
+          "mcp-tools": [
+            "narrative_context_search_companies",
+            "narrative_context_set_company",
+            "narrative_attributes_search",
+            "narrative_dataset_get_column_stats",
+            "narrative_jobs_search",
+            "narrative_jobs_describe",
+            "search_narrative_i_o_knowledge_base"
+          ],
+          "skills": [
+            "narrative-common:find-attribute"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "--dataset",
+          "value": "<id|name>",
+          "required": false,
+          "description": "The source dataset holding the messy raw values. If omitted, the skill asks and resolves the name via search."
+        },
+        {
+          "name": "--attribute",
+          "value": "<id|name>",
+          "required": false,
+          "description": "The target Rosetta Stone attribute. Must have an enum. If omitted, the skill asks and delegates resolution to /find-attribute."
+        },
+        {
+          "name": "--tiers",
+          "value": "<rules,ml,llm>",
+          "required": false,
+          "default": "rules,ml,llm",
+          "description": "Which resolution tiers to emit, comma-separated. Always applied in the fixed order rules -> ml -> llm regardless of how they are listed."
+        },
+        {
+          "name": "--classifier",
+          "value": "<name:version>",
+          "required": false,
+          "description": "Registered model name and version for the ML tier. Pass `name:` alone to use the model's default version."
+        },
+        {
+          "name": "--threshold",
+          "value": "<0.0-1.0>",
+          "required": false,
+          "default": "0.5",
+          "description": "Minimum classifier confidence for the ML tier to win a key."
+        },
+        {
+          "name": "--llm-model",
+          "value": "<id>",
+          "required": false,
+          "default": "openai-gpt-5",
+          "description": "Cortex model id for the LLM tier."
+        },
+        {
+          "name": "--cap",
+          "value": "<n>",
+          "required": false,
+          "default": "10000",
+          "description": "Maximum LLM calls per refresh. A cost ceiling: keys beyond it stay unresolved and are retried next run."
+        },
+        {
+          "name": "--cron",
+          "value": "<expr>",
+          "required": false,
+          "description": "Cron expression (UTC) for the fill workflow's schedule. If omitted, the skill asks; declining produces a manual-trigger workflow."
+        },
+        {
+          "name": "--dry-run",
+          "required": false,
+          "description": "Generate and display everything — waterfall NQL, fill INSERT, workflow spec — but create nothing server-side."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "What the user wants normalized, e.g. \"clean up the breed field in vet_intake_raw\"."
+        }
+      ]
+    },
+    {
       "name": "create-workflow",
-      "version": "0.6.5",
+      "version": "0.7.0",
       "description": "Author and submit a Narrative workflow from a natural-language\nintent. Picks the closest example from `assets/examples/`, adapts\nit to the user's case, walks the YAML against the spec, resolves\nthe data plane, and submits via `narrative_workflows_create` only\nafter the user has approved the rendered spec.\nUse when: \"create a workflow that does X\", \"schedule a daily\nrefresh of dataset Y\", \"wrap this NQL as a workflow\", \"build a\npipeline that creates view A then refreshes view B\", \"submit this\nworkflow YAML\", \"productionize this query as a recurring job\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/create-workflow/SKILL.md",
