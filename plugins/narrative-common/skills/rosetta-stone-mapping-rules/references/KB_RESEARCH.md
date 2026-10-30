@@ -48,7 +48,7 @@ and `/getting-started/`. Useful pages:
 | `/concepts/rosetta-stone/overview.mdx` | First time you're explaining what Rosetta Stone is in a summary or warning |
 | `/concepts/rosetta-stone/how-it-works.mdx` | Confirming the attribute → mapping → normalized-output pipeline before generating a mapping |
 | `/concepts/rosetta-stone/normalization-model.mdx` | Choosing between `value_mapping` and `object_mapping`; understanding property paths |
-| `/concepts/rosetta-stone/confidence-scoring.mdx` | Calibrating the confidence ranges in step 7 against the official rubric |
+| `/concepts/rosetta-stone/confidence-scoring.mdx` | Calibrating the confidence ranges in section 4 against the official rubric |
 | `/getting-started/normalize-data.mdx` | End-to-end walkthrough — sanity-check the procedure if a flow feels off |
 | `/getting-started/evaluate-mappings.mdx` | Worked example of the evaluation flow |
 | `/api-reference/dataset-mappings/` | Underlying REST contract for the mapping objects you emit |

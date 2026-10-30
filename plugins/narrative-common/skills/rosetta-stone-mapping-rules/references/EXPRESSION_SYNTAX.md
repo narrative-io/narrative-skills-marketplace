@@ -98,7 +98,7 @@ for a scalar attribute, a `"validations"` array on each property inside the
 attribute comes back with that attribute's type filled in, its validations
 included. Don't repeat them in the expression — `LOWER(hashed_email_sha256)` is
 enough for a `^[a-f0-9]{64}$` validation. Still transform values so they pass
-(lower-case them). SKILL.md step 5 has the full rule.
+(lower-case them). SKILL.md section 2 has the full rule.
 
 ## Type discriminators in object_mappings
 

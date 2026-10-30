@@ -448,7 +448,7 @@
     },
     {
       "name": "generate-rosetta-stone-mappings",
-      "version": "0.7.7",
+      "version": "0.8.0",
       "description": "Generate, evaluate, and improve Rosetta Stone attribute mappings for\na Narrative dataset.\nUse when: \"map this dataset to Rosetta Stone\", \"suggest normalized\nattributes for dataset N\", \"evaluate the mappings on dataset N\", \"why\nis this mapping low confidence\", \"fix this expression\", \"improve this\nNQL mapping expression\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md",
@@ -457,7 +457,7 @@
         "requires": {
           "skills": [
             "narrative-common:profile-dataset",
-            "narrative-common:find-attribute"
+            "narrative-common:rosetta-stone-mapping-rules"
           ],
           "mcp-servers": [
             "narrative-mcp"
@@ -645,8 +645,40 @@
       ]
     },
     {
+      "name": "rosetta-stone-mapping-rules",
+      "version": "0.1.0",
+      "description": "The rules for mapping a Narrative dataset's columns to Rosetta Stone\nattributes: choosing the attribute, mapping the source of a derivation,\nvalue_mapping vs object_mapping, discriminators, validating each\nexpression with NQL, and scoring confidence. No flow of its own; the\nskills that generate or infer mappings read it.\nUse when: another skill tells you to apply the mapping rules, \"which\nRosetta Stone attribute should this column map to\", \"is this mapping\nexpression right\".\n(narrative-common)",
+      "plugin": "narrative-common",
+      "path": "plugins/narrative-common/skills/rosetta-stone-mapping-rules/SKILL.md",
+      "compatibility": "Requires the narrative-mcp MCP server. Recommends the narrative-knowledge-base MCP server. Portable to any agentskills.io-compliant harness.",
+      "requirements": {
+        "requires": {
+          "skills": [
+            "narrative-common:find-attribute"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_attributes_describe",
+            "narrative_nql_validate"
+          ]
+        },
+        "recommends": {
+          "mcp-servers": [
+            "narrative-knowledge-base"
+          ],
+          "mcp-tools": [
+            "narrative_derivations_describe",
+            "search_narrative_i_o_knowledge_base",
+            "query_docs_filesystem_narrative_i_o_knowledge_base"
+          ]
+        }
+      }
+    },
+    {
       "name": "write-nql",
-      "version": "0.5.9",
+      "version": "0.5.10",
       "description": "Write, validate, and (optionally) execute an NQL query against a\nNarrative dataset. Drafts the query from the user's question, runs\n`narrative_nql_validate` until it compiles, explains the query in\nplain English, and only runs it on explicit approval (or when\ninvoked with `--run`).\nUse when: \"write an NQL query for X\", \"query this dataset\",\n\"validate this NQL\", \"run NQL against dataset <id>\", \"how many rows\nmatch Y\", \"show me the top N records from <dataset>\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/write-nql/SKILL.md",

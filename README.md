@@ -152,6 +152,7 @@ Common Narrative workflows backed by the narrative-mcp server — starting with 
 | `/generate-rosetta-stone-mappings` | "map this dataset to Rosetta Stone", "suggest normalized attributes for dataset N", "evaluate the mappings on dataset N", "why is this mapping low confidence", "fix this expression", "improve this NQL mapping expression". |
 | `/profile-dataset` | "profile dataset N", "what does dataset N look like", "coverage and quality of <dataset>", "what id types does N emit", "null rates / cardinality for <dataset>", "is this dataset's stats fresh". |
 | `/register-snowflake-dataset` | "register this table as a dataset", "register a Snowflake dataset from SQL", "onboard my_table to Narrative", "script dataset registration", "add this view to my data plane". |
+| `/rosetta-stone-mapping-rules` | another skill tells you to apply the mapping rules, "which Rosetta Stone attribute should this column map to", "is this mapping expression right". |
 | `/write-nql` | "write an NQL query for X", "query this dataset", "validate this NQL", "run NQL against dataset <id>", "how many rows match Y", "show me the top N records from <dataset>". |
 
 ### `narrative-identity`
