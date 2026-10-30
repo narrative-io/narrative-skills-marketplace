@@ -501,6 +501,35 @@
       ]
     },
     {
+      "name": "infer-rosetta-stone-mappings",
+      "version": "0.1.0",
+      "description": "Propose changes to a Narrative dataset's Rosetta Stone mappings as\nstructured output, for a workflow run with no person in the loop.\nReads the dataset as it is, applies the mapping rules, and returns\nadds, replaces and removes, the mappings it keeps, and the columns it\nleaves unmapped. Writes nothing.\nUse when: a workflow task asks you to infer or propose Rosetta Stone\nmappings for a dataset and answer with structured output.\n(narrative-common)",
+      "plugin": "narrative-common",
+      "path": "plugins/narrative-common/skills/infer-rosetta-stone-mappings/SKILL.md",
+      "compatibility": "Requires the narrative-mcp MCP server and a harness that accepts a structured-output schema. Needs read tools only. Portable to any agentskills.io-compliant harness.",
+      "requirements": {
+        "requires": {
+          "skills": [
+            "narrative-common:rosetta-stone-mapping-rules"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_datasets_describe",
+            "narrative_dataset_get_column_stats",
+            "narrative_attributes_describe",
+            "narrative_nql_validate"
+          ]
+        },
+        "recommends": {
+          "mcp-tools": [
+            "narrative_derivations_describe"
+          ]
+        }
+      }
+    },
+    {
       "name": "profile-dataset",
       "version": "0.1.4",
       "description": "Produce a coverage & quality profile of a Narrative dataset (or access\nrule): row count, per-column null/fill rate, cardinality, ranges,\ntop-values, inferred column shape, and quality flags. Reads bundled\nstats + sample first, recovers missing/stale stats by configuring and\nrecalculating them, and escalates to a cheap `/write-nql` query only\nfor a measure no stat can provide. Descriptive, not prescriptive.\nUse when: \"profile dataset N\", \"what does dataset N look like\",\n\"coverage and quality of <dataset>\", \"what id types does N emit\",\n\"null rates / cardinality for <dataset>\", \"is this dataset's stats\nfresh\".\n(narrative-common)",
