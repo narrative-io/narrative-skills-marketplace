@@ -91,7 +91,8 @@ questions. The main procedure does not require it.
 When unavailable:
 
 - Fall back to the local reference files (`EDGE_CASES.md`, the
-  rosetta-stone skill's `EXPRESSION_SYNTAX.md` and `ENUM_HANDLING.md`).
+  `rosetta-stone-mapping-rules` skill's `EXPRESSION_SYNTAX.md` and
+  `ENUM_HANDLING.md`).
 - Note in the final summary that KB lookups were skipped if any
   user question would normally have warranted one (e.g., the user
   asked "what does `maxDegreeThreshold` actually do" and the local
