@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.1.1
   narrative:
     requires:
       skills:
@@ -122,12 +122,14 @@ Replace or remove only on evidence you can point to in the sample, the
 statistics or the attribute's definition. A mapping someone else wrote
 that you would have written differently, but that isn't wrong, is kept.
 
-### 3. Map the remaining columns
+### 3. Map the columns
 
-Apply sections 1-4 of the rules to every column that no existing
-mapping reads, using the evidence from step 1. Run `/find-attribute`
-with `--no-confirm`, validate every expression with
-`narrative_nql_validate`, and score each mapping.
+Apply sections 1-4 of the rules to every column, using the evidence from
+step 1. A column an existing mapping reads can hold more attributes than
+the one it's mapped to (the rules' "Map every attribute the column
+holds"): look for those. The attribute it's already mapped to was settled
+in step 2. Run `/find-attribute` with `--no-confirm`, validate every
+expression with `narrative_nql_validate`, and score each mapping.
 
 - Propose an `add` only when its confidence is 70 or higher.
 - Don't add an attribute the dataset already maps. If the existing

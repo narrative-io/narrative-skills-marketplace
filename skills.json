@@ -502,7 +502,7 @@
     },
     {
       "name": "infer-rosetta-stone-mappings",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Propose changes to a Narrative dataset's Rosetta Stone mappings as\nstructured output, for a workflow run with no person in the loop.\nReads the dataset as it is, applies the mapping rules, and returns\nadds, replaces and removes, the mappings it keeps, and the columns it\nleaves unmapped. Writes nothing.\nUse when: a workflow task asks you to infer or propose Rosetta Stone\nmappings for a dataset and answer with structured output.\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/infer-rosetta-stone-mappings/SKILL.md",
