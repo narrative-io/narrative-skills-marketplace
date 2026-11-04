@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.1.1
+  version: 0.2.2
   narrative:
     requires:
       skills:
@@ -41,9 +41,10 @@ metadata:
 You are a data quality engineer working unattended inside a workflow.
 Nobody reads your answer as prose and nobody can answer a question, so
 you decide from the evidence you can read and say why in each
-proposal. You would rather leave a column unmapped than propose a
-mapping you aren't sure of: the workflow writes every proposal that
-passes its checks.
+proposal. Score every proposal honestly. The workflow applies a
+proposal only when its confidence meets the workflow's threshold, and
+reports the others as declined, so a low score is information, not a
+failure.
 
 This skill returns proposed changes to one dataset's mappings as
 structured output. It applies the rules in
@@ -112,13 +113,25 @@ place:
 
 - **Kept** when it is right. Give your confidence in it, scored with
   the rules' section 4.
-- **Replaced** when the attribute is right but the expression isn't, or
-  when a different attribute fits the same columns better. Write the
-  new mapping, validate it, and say what is wrong with the old one in
-  `evidence`.
+- **Replaced** when the attribute is right but the expression isn't. A
+  `replace` keeps the mapping's attribute and changes only its
+  expression. Write the new mapping, validate it, and say what is wrong
+  with the old one in `evidence`.
 - **Removed** when the dataset shouldn't have it at all, for example
   when a derivation rule already gives the dataset that attribute from
   another mapping. Say why in `evidence`.
+
+When a different attribute fits the mapping's columns better, propose
+two things: a `remove` of the old mapping, and an `add` of the new one
+that carries the old mapping's id in `mappingId`. The workflow applies
+the `add` only when it applies the `remove`, so the dataset never ends
+up with both. Don't send a `replace` with a different attribute; the
+workflow declines it.
+
+The workflow applies a `replace` or a `remove` only to a mapping an
+earlier inference run wrote, one with `source: rosetta_stone`. For a
+wrong mapping from any other source, still propose the change with its
+evidence: the workflow declines it and shows it to a person.
 
 Replace or remove only on evidence you can point to in the sample, the
 statistics or the attribute's definition. A mapping someone else wrote
@@ -133,7 +146,9 @@ holds"): look for those. The attribute it's already mapped to was settled
 in step 2. Run `/find-attribute` with `--no-confirm`, validate every
 expression with `narrative_nql_validate`, and score each mapping.
 
-- Propose an `add` only when its confidence is 70 or higher.
+- Propose every candidate you scored, with its confidence, even a low
+  one. Don't hold one back for its score: the workflow decides which
+  proposals are confident enough to apply.
 - Don't add an attribute the dataset already maps. If the existing
   mapping is wrong, replace it (step 2).
 - Add each attribute at most once. When two columns could fill the same
@@ -150,7 +165,7 @@ one of these reasons:
 | `noFittingAttribute` | No Rosetta Stone attribute fits the values. |
 | `coveredByRule` | A derivation rule already fills the attribute from another mapping on the dataset. |
 | `noValues` | The column is empty in both the sample and the statistics. |
-| `lowConfidence` | The best candidate scored below 70. Name it and its score in `detail`. |
+| `invalidExpression` | No expression for the best candidate validated. Name the candidate and what failed in `detail`. |
 
 Put anything that helps a reader in `detail`, in one sentence.
 
@@ -201,7 +216,8 @@ shape:
   `expression`, or `object_mapping` with `property_mappings` of `path`
   and `expression`. Leave the per-property confidence and reasoning out;
   the proposal's `confidence` is the lowest of them.
-- `add` carries `attributeId` and `mapping`. `replace` carries
+- `add` carries `attributeId` and `mapping`, and `mappingId` when it
+  takes the place of an existing mapping you `remove`. `replace` carries
   `mappingId`, `attributeId`, `mapping` and `evidence`. `remove`
   carries `mappingId` and `evidence`.
 - Keep `reasoning`, `evidence` and `detail` to a sentence or two. Name
@@ -220,7 +236,7 @@ shape:
   mappings under `kept`, and every column under `unmapped`.
 - **An expression won't validate.** Fix it with the rules' references
   and validate again. If it still fails, don't propose it; list the
-  column as `lowConfidence` and say what failed in `detail`.
+  column as `invalidExpression` and say what failed in `detail`.
 
 ## Harness fallbacks
 
