@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.0
+  version: 0.2.1
   narrative:
     requires:
       skills:
@@ -113,13 +113,23 @@ place:
 
 - **Kept** when it is right. Give your confidence in it, scored with
   the rules' section 4.
-- **Replaced** when the attribute is right but the expression isn't, or
-  when a different attribute fits the same columns better. Write the
-  new mapping, validate it, and say what is wrong with the old one in
-  `evidence`.
+- **Replaced** when the attribute is right but the expression isn't. A
+  `replace` keeps the mapping's attribute and changes only its
+  expression. Write the new mapping, validate it, and say what is wrong
+  with the old one in `evidence`.
 - **Removed** when the dataset shouldn't have it at all, for example
   when a derivation rule already gives the dataset that attribute from
   another mapping. Say why in `evidence`.
+
+When a different attribute fits the mapping's columns better, propose
+two things: a `remove` of the old mapping, and an `add` of the new one.
+Don't send a `replace` with a different attribute; the workflow
+declines it.
+
+The workflow applies a `replace` or a `remove` only to a mapping an
+earlier inference run wrote, one with `source: rosetta_stone`. For a
+wrong mapping from any other source, still propose the change with its
+evidence: the workflow declines it and shows it to a person.
 
 Replace or remove only on evidence you can point to in the sample, the
 statistics or the attribute's definition. A mapping someone else wrote
