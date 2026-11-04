@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.1
+  version: 0.2.2
   narrative:
     requires:
       skills:
@@ -122,9 +122,11 @@ place:
   another mapping. Say why in `evidence`.
 
 When a different attribute fits the mapping's columns better, propose
-two things: a `remove` of the old mapping, and an `add` of the new one.
-Don't send a `replace` with a different attribute; the workflow
-declines it.
+two things: a `remove` of the old mapping, and an `add` of the new one
+that carries the old mapping's id in `mappingId`. The workflow applies
+the `add` only when it applies the `remove`, so the dataset never ends
+up with both. Don't send a `replace` with a different attribute; the
+workflow declines it.
 
 The workflow applies a `replace` or a `remove` only to a mapping an
 earlier inference run wrote, one with `source: rosetta_stone`. For a
@@ -214,7 +216,8 @@ shape:
   `expression`, or `object_mapping` with `property_mappings` of `path`
   and `expression`. Leave the per-property confidence and reasoning out;
   the proposal's `confidence` is the lowest of them.
-- `add` carries `attributeId` and `mapping`. `replace` carries
+- `add` carries `attributeId` and `mapping`, and `mappingId` when it
+  takes the place of an existing mapping you `remove`. `replace` carries
   `mappingId`, `attributeId`, `mapping` and `evidence`. `remove`
   carries `mappingId` and `evidence`.
 - Keep `reasoning`, `evidence` and `detail` to a sentence or two. Name
