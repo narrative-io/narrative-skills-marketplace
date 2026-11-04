@@ -386,7 +386,7 @@
     },
     {
       "name": "find-attribute",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "description": "Find the canonical Rosetta Stone attribute that best matches a\nfuzzy description, semantic phrase, or required schema shape.\nSearches the catalog with pagination, describes the shortlist in\none batched call, ranks candidates by name + shape match, and\nreturns the canonical attribute ID plus close alternatives.\nUse when: \"find the X attribute\", \"what's the graph-edge attribute\nID\", \"look up the email Rosetta Stone attribute\", \"search the\nattribute catalog for Y\", \"which attribute has SOURCE_ID +\nTARGET_ID + IS_DIRECTED\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/find-attribute/SKILL.md",
@@ -775,7 +775,7 @@
     },
     {
       "name": "generate-identity-graph",
-      "version": "0.4.6",
+      "version": "0.4.7",
       "description": "Interactively build a Narrative identity graph workflow from one or\nmore first-party datasets and (optionally) third-party data sources.\nConfirms each input dataset is mapped to the Rosetta Stone graph\nedge attribute (mapping it via /generate-rosetta-stone-mappings if\nnot), then composes and submits a workflow that unions every edge\nsource and labels connected components.\nUse when: \"build an identity graph\", \"generate an identity graph\",\n\"create an identity graph\", \"stitch these datasets into a graph\",\n\"make a graph workflow\", \"label connected components on these\ndatasets\", \"I want a person graph / household graph / device graph\".\n(narrative-identity)",
       "plugin": "narrative-identity",
       "path": "plugins/narrative-identity/skills/generate-identity-graph/SKILL.md",

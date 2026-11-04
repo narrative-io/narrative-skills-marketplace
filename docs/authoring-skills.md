@@ -1101,7 +1101,7 @@ For a complete skill that exercises most of the patterns above, read:
   gated execution, common-cases section, harness fallback, plus the
   template / snippet system in use (`{{SNIPPET:pin-company-context}}`,
   `{{SNIPPET:nql-syntax-essentials}}`, `{{SNIPPET:nql-async-execution}}`).
-- [`plugins/narrative-common/skills/generate-rosetta-stone-mappings/`](../plugins/narrative-common/skills/generate-rosetta-stone-mappings/)
+- [`plugins/narrative-common/skills/rosetta-stone-mapping-rules/`](../plugins/narrative-common/skills/rosetta-stone-mapping-rules/)
   — same plugin, demonstrates tier-3 `references/` for
   `EXPRESSION_SYNTAX.md`, `ENUM_HANDLING.md`, and `KB_RESEARCH.md`.
 
