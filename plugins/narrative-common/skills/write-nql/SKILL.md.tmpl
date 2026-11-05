@@ -18,7 +18,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.9
+  version: 0.5.10
   narrative:
     args:
       - name: "--run"
@@ -499,6 +499,6 @@ keys with `CROSS JOIN UNNEST([...])` or `UNION` two single-key joins.
 - [`references/NQL_QUOTING_AND_TABLE_REFS.md`](references/NQL_QUOTING_AND_TABLE_REFS.md) — schema list (`company_data` / `<provider_slug>` / `narrative`), `unique_name`-vs-numeric-id rules, reserved-words catalog, Rosetta Stone scope syntax. Read when a happy-path `company_data.<dataset_name>` reference isn't enough.
 - [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md) — `completed` payload shape per job type, the materialize-view → sample → describe dance, sibling async tools. Read when a job finishes but you can't find the rows.
 - `narrative-knowledge-base` MCP — `/concepts/nql/…`, `/cookbooks/nql/…`, `/api-reference/nql/…`, `/reference/integrations/mcp-server` for parameter contracts (`data_plane_id`, `compute_pool_id`). For gotchas: `/guides/nql/troubleshooting`, `/nql/general/explicit-columns`, `/nql/general/reserved-keywords`, `/nql/commands/create-materialized-view`, `/concepts/primitives/data-planes`, `/guides/nql/query-optimization/avoid-or-in-join`, `/cookbooks/nql/performance-patterns`.
-- `plugins/narrative-common/skills/generate-rosetta-stone-mappings/references/EXPRESSION_SYNTAX.md` — sibling reference covering timestamp parsing, enum handling, reserved-name nesting.
+- `plugins/narrative-common/skills/rosetta-stone-mapping-rules/references/EXPRESSION_SYNTAX.md` — sibling reference covering timestamp parsing, enum handling, reserved-name nesting.
 
 {{SNIPPET:agent-feedback}}

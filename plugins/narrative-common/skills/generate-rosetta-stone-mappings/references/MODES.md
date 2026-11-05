@@ -6,7 +6,7 @@ This file covers two alternate entry points that short-circuit that
 flow when the user is touching up prior work rather than mapping a
 new dataset.
 
-Step 9 (the apply hand-off) is **skipped** for both modes below — the
+Step 6 (the apply hand-off) is **skipped** for both modes below — the
 output here is a scorecard or a one-line revision, not a deploy set.
 
 ## Evaluate existing mappings
@@ -41,8 +41,9 @@ returns a non-empty `mappings[]` array, or the user said "evaluate" /
    another mapping on the dataset, whatever columns it reads, using
    the `derivations` lines from step 1. Recommend deleting it: the rule already gives the
    dataset that attribute, and the stored mapping replaces the rule.
-   SKILL.md step 4 ("Map the source of a derivation") has the rules
-   for when a direct mapping is still right.
+   The rules skill's "Map the source of a derivation" section
+   (`../rosetta-stone-mapping-rules/SKILL.md`) says when a direct
+   mapping is still right.
 
 ## Improve a single mapping expression
 
