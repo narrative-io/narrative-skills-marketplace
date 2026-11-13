@@ -242,6 +242,51 @@
       ]
     },
     {
+      "name": "create-narrative-app",
+      "version": "0.1.0",
+      "description": "Guide a Narrative user through registering a new app on the platform:\ninterview for the manifest, check it, create the app as pending, and\nhand off credentials and activation. Not for installing an app or\nfor changing an app that is already active.\nUse when: \"create a Narrative app\", \"register my app with\nNarrative\", \"build an app on Narrative\", \"write an app manifest\",\n\"I want my app to show up in Narrative\".\n(narrative-common)",
+      "plugin": "narrative-common",
+      "path": "plugins/narrative-common/skills/create-narrative-app/SKILL.md",
+      "compatibility": "Requires the narrative-mcp MCP server in a session signed in to Narrative; sessions using an API token cannot write apps. Requires Write to save the draft manifest. Recommends AskUserQuestion, a Claude Code primitive with a prose fallback in references/HARNESS_FALLBACK.md.",
+      "requirements": {
+        "requires": {
+          "tools": [
+            "Write"
+          ],
+          "mcp-servers": [
+            "narrative-mcp"
+          ],
+          "mcp-tools": [
+            "narrative_context_get",
+            "narrative_apps_list",
+            "narrative_app_create",
+            "narrative_app_manifest_update"
+          ]
+        },
+        "recommends": {
+          "tools": [
+            "AskUserQuestion"
+          ],
+          "mcp-servers": [
+            "narrative-knowledge-base"
+          ]
+        }
+      },
+      "args": [
+        {
+          "name": "--slug",
+          "value": "<slug>",
+          "required": false,
+          "description": "The app's slug. Permanent once the app exists. If omitted, the skill proposes one from the display name and asks."
+        },
+        {
+          "name": "<free-text tail>",
+          "required": false,
+          "description": "What the app does, in the user's words."
+        }
+      ]
+    },
+    {
       "name": "create-workflow",
       "version": "0.6.5",
       "description": "Author and submit a Narrative workflow from a natural-language\nintent. Picks the closest example from `assets/examples/`, adapts\nit to the user's case, walks the YAML against the spec, resolves\nthe data plane, and submits via `narrative_workflows_create` only\nafter the user has approved the rendered spec.\nUse when: \"create a workflow that does X\", \"schedule a daily\nrefresh of dataset Y\", \"wrap this NQL as a workflow\", \"build a\npipeline that creates view A then refreshes view B\", \"submit this\nworkflow YAML\", \"productionize this query as a recurring job\".\n(narrative-common)",
