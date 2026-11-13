@@ -502,7 +502,7 @@
     },
     {
       "name": "infer-rosetta-stone-mappings",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "description": "Propose changes to a Narrative dataset's Rosetta Stone mappings as\nstructured output, for a workflow run with no person in the loop.\nReads the dataset as it is, applies the mapping rules, and returns\nadds, replaces and removes, the mappings it keeps, and the columns it\nleaves unmapped. Writes nothing.\nUse when: a workflow task asks you to infer or propose Rosetta Stone\nmappings for a dataset and answer with structured output.\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/infer-rosetta-stone-mappings/SKILL.md",
@@ -675,7 +675,7 @@
     },
     {
       "name": "rosetta-stone-mapping-rules",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "The rules for mapping a Narrative dataset's columns to Rosetta Stone\nattributes: choosing the attribute, mapping the source of a derivation,\nvalue_mapping vs object_mapping, discriminators, validating each\nexpression with NQL, and scoring confidence. No flow of its own; the\nskills that generate or infer mappings read it.\nUse when: another skill tells you to apply the mapping rules, \"which\nRosetta Stone attribute should this column map to\", \"is this mapping\nexpression right\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/rosetta-stone-mapping-rules/SKILL.md",
@@ -690,6 +690,7 @@
           ],
           "mcp-tools": [
             "narrative_attributes_describe",
+            "narrative_attributes_search",
             "narrative_nql_validate"
           ]
         },
