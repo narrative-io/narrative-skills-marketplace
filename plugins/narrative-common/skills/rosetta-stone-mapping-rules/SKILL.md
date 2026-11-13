@@ -16,7 +16,7 @@ compatibility: >-
   narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     requires:
       skills:
@@ -25,6 +25,7 @@ metadata:
         - narrative-mcp
       mcp-tools:
         - narrative_attributes_describe
+        - narrative_attributes_search
         - narrative_nql_validate
     recommends:
       mcp-servers:
@@ -111,6 +112,31 @@ explicitly, or you are checking an existing mapping), skip `/find-attribute`
 and call `narrative_attributes_describe(attribute_ids: [<id>, ...])`
 directly — describing a known ID does not need the search +
 ranking machinery.
+
+### Follow the attributes' hints
+
+An attribute can carry `when_to_map` hints: a condition, in plain words,
+saying when a dataset should be mapped to it. Describe and search output
+shows them as `[when_to_map, <level>] <condition>` lines under `hints`.
+
+- **`column`.** The condition is about one column. Treat it as part of
+  the attribute's description: map a column to the attribute only when
+  the condition holds for it.
+- **`dataset`.** The attribute isn't held by any one column. Its value is
+  built from several columns of a row, so no column cluster finds it.
+  Look for these attributes once per dataset, alongside the clusters:
+
+```
+narrative_attributes_search(hint_kind: "when_to_map", hint_level: "dataset")
+```
+
+  For each result, check its condition against the schema, sample and
+  stats. When the condition holds, describe the attribute and map it
+  like any other: each property's description says what its expression
+  must produce, and sections 2-4 apply. Create as many mappings as the
+  condition and the descriptions ask for; a dataset can map such an
+  attribute more than once. When the condition doesn't hold, leave the
+  attribute out.
 
 ### Map every attribute the column holds
 
