@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.3
+  version: 0.2.4
   narrative:
     requires:
       skills:
@@ -152,10 +152,13 @@ expression with `narrative_nql_validate`, and score each mapping.
 - Don't add an attribute the dataset already maps. If the existing
   mapping is wrong, replace it (step 2).
 - Add each attribute at most once. When two columns could fill the same
-  attribute, pick one, or combine them in one expression. The exception
-  is an attribute with a dataset-level `when_to_map` hint (the rules'
-  "Follow the attributes' hints"): add it as many times as its condition
-  and descriptions ask for.
+  attribute, pick one, or combine them in one expression.
+- An attribute with a dataset-level `when_to_map` hint (the rules'
+  "Follow the attributes' hints") is the exception to both. Work out
+  every mapping its condition and descriptions ask for, and add each one
+  no existing mapping of that attribute already covers. When the dataset
+  has gained an identifier column since the last run, that means one
+  more mapping, and the existing ones stay as they are.
 
 ### 4. Account for every column
 
