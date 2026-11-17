@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.8.0
+  version: 0.8.1
   narrative:
     args:
       - name: "<free-text>"
@@ -207,6 +207,11 @@ and apply its sections 1-4 to each column cluster: find the candidate
 attributes, decide `value_mapping` vs `object_mapping`, validate every
 expression with `narrative_nql_validate`, and score confidence. The
 profile from step 3 is the evidence for each decision.
+
+Also run the rules' search for dataset-level attributes ("Follow the
+attributes' hints") once for the whole dataset, here in the parent and
+not in a per-cluster sub-agent: these attributes read several columns at
+once, so no single cluster sees enough of the row to judge them.
 
 #### Test on real rows (optional)
 

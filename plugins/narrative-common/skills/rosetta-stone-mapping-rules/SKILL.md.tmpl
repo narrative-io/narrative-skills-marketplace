@@ -16,7 +16,7 @@ compatibility: >-
   narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.0
+  version: 0.2.1
   narrative:
     requires:
       skills:
@@ -52,7 +52,9 @@ These are the rules for turning a dataset's columns into mappings. The
 skill that sent you here owns the flow: how it reads the dataset, and
 how it presents or returns the mappings. Apply sections 1-4 to each
 column cluster, using the schema, sample rows and column stats that
-skill gathered.
+skill gathered. The one step that isn't per cluster is the search for
+dataset-level attributes in "Follow the attributes' hints": run it once
+for the whole dataset.
 
 When the platform-data tools aren't enough — e.g., you need official
 guidance on Rosetta Stone confidence scoring, the normalization model,

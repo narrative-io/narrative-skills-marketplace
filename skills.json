@@ -448,7 +448,7 @@
     },
     {
       "name": "generate-rosetta-stone-mappings",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "description": "Generate, evaluate, and improve Rosetta Stone attribute mappings for\na Narrative dataset.\nUse when: \"map this dataset to Rosetta Stone\", \"suggest normalized\nattributes for dataset N\", \"evaluate the mappings on dataset N\", \"why\nis this mapping low confidence\", \"fix this expression\", \"improve this\nNQL mapping expression\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/generate-rosetta-stone-mappings/SKILL.md",
@@ -675,7 +675,7 @@
     },
     {
       "name": "rosetta-stone-mapping-rules",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "description": "The rules for mapping a Narrative dataset's columns to Rosetta Stone\nattributes: choosing the attribute, mapping the source of a derivation,\nvalue_mapping vs object_mapping, discriminators, validating each\nexpression with NQL, and scoring confidence. No flow of its own; the\nskills that generate or infer mappings read it.\nUse when: another skill tells you to apply the mapping rules, \"which\nRosetta Stone attribute should this column map to\", \"is this mapping\nexpression right\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/rosetta-stone-mapping-rules/SKILL.md",
