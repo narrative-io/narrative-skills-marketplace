@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.2
+  version: 0.2.5
   narrative:
     requires:
       skills:
@@ -26,6 +26,7 @@ metadata:
         - narrative_datasets_describe
         - narrative_dataset_get_column_stats
         - narrative_attributes_describe
+        - narrative_attributes_search
         - narrative_nql_validate
     recommends:
       mcp-tools:
@@ -144,7 +145,10 @@ step 1. A column an existing mapping reads can hold more attributes than
 the one it's mapped to (the rules' "Map every attribute the column
 holds"): look for those. The attribute it's already mapped to was settled
 in step 2. Run `/find-attribute` with `--no-confirm`, validate every
-expression with `narrative_nql_validate`, and score each mapping.
+expression with `narrative_nql_validate`, and score each mapping. Once
+for the whole dataset, also run the rules' search for dataset-level
+attributes, `narrative_attributes_search(hint_kind: "when_to_map",
+hint_level: "dataset")`, and check each result's condition.
 
 - Propose every candidate you scored, with its confidence, even a low
   one. Don't hold one back for its score: the workflow decides which
@@ -153,6 +157,12 @@ expression with `narrative_nql_validate`, and score each mapping.
   mapping is wrong, replace it (step 2).
 - Add each attribute at most once. When two columns could fill the same
   attribute, pick one, or combine them in one expression.
+- An attribute with a dataset-level `when_to_map` hint (the rules'
+  "Follow the attributes' hints") is the exception to both. Work out
+  every mapping its condition and descriptions ask for, and add each one
+  no existing mapping of that attribute already covers. When the dataset
+  has gained an identifier column since the last run, that means one
+  more mapping, and the existing ones stay as they are.
 
 ### 4. Account for every column
 
