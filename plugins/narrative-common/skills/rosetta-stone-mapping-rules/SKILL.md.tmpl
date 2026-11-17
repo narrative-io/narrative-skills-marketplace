@@ -16,7 +16,7 @@ compatibility: >-
   narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.1
+  version: 0.2.2
   narrative:
     requires:
       skills:
@@ -126,9 +126,9 @@ shows them as `[when_to_map, <level>] <condition>` lines under `hints`.
   built from several columns of a row, so no column cluster finds it.
   Look for these attributes once per dataset, alongside the clusters:
 
-```
-narrative_attributes_search(hint_kind: "when_to_map", hint_level: "dataset")
-```
+  ```
+  narrative_attributes_search(hint_kind: "when_to_map", hint_level: "dataset")
+  ```
 
   For each result, check its condition against the schema, sample and
   stats. When the condition holds, describe the attribute and map it
