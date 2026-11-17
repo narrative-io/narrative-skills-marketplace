@@ -16,7 +16,7 @@ compatibility: >-
   narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.2
+  version: 0.2.3
   narrative:
     requires:
       skills:
@@ -91,10 +91,12 @@ display_name: <name>
 schema:
   - { name: <column>, type: <type>, enum: [<values>] | null }
   - …
+hints:
+  - "[when_to_map, <level>] <condition>"
 confidence: high | medium | low
 match_reason: <one-line>
 alternatives:
-  - { attribute_id: <id>, display_name: <name>, why: <one-line> }
+  - { attribute_id: <id>, display_name: <name>, why: <one-line>, hints: [...] }
   - …
 ```
 
@@ -123,7 +125,10 @@ shows them as `[when_to_map, <level>] <condition>` lines under `hints`.
 
 - **`column`.** The condition is about one column. Treat it as part of
   the attribute's description: map a column to the attribute only when
-  the condition holds for it.
+  the condition holds for it. `/find-attribute` returns the hints
+  of the primary and of each alternative in `hints`, and leaves this
+  check to you. When the primary's condition fails for the column, drop
+  it and take the next alternative, checking its hint the same way.
 - **`dataset`.** The attribute isn't held by any one column. Its value is
   built from several columns of a row, so no column cluster finds it.
   Look for these attributes once per dataset, alongside the clusters:
