@@ -3,8 +3,9 @@ name: spec-connector
 description: |
   Research and author a connector spec for a new destination platform —
   interview, prior-art recon, vendor-doc research, and a differentiator
-  walk across five axes (auth, destination data model, identifiers and
-  matching, sync semantics, operational constraints) — then emit the
+  walk across six axes (auth, destination data model, identifiers and
+  matching, sync semantics, operational constraints, inbound
+  direction) — then emit the
   machine-readable connector-spec.yaml the rest of the plugin builds
   from, plus a prose spec.md. Identifiers, rate limits, and data-removal
   semantics are never guessed; unknowns become partner questions.
@@ -23,7 +24,7 @@ compatibility: >-
   Shortcut or Notion MCP servers for publishing the finished spec —
   all degrade gracefully when absent.
 metadata:
-  version: 1.3.0
+  version: 1.4.0
   narrative:
     args:
       - name: "<platform>"
@@ -180,7 +181,7 @@ failure semantics → privacy/consent → multi-tenant model → sandbox →
 partner approval). Every claim gets a citation. Save to
 `$SPEC_DIR/vendor-notes.md`.
 
-### Phase 3 — Walk the five differentiator axes
+### Phase 3 — Walk the six differentiator axes
 
 Open [`references/differentiator-axes.md`](references/differentiator-axes.md).
 For each axis decide: **same as the precedent, or different — how?**
@@ -201,6 +202,10 @@ For each axis decide: **same as the precedent, or different — how?**
    pagination, failure semantics, and app-review / partner-approval
    processes **where the destination has them** (many don't — never
    invent one).
+6. **Inbound direction** — whether the destination sends data back to
+   us at all, and if so whether it writes files we pull or pushes
+   events we receive; who authenticates to whom; the retry and dedupe
+   contract. "None" is a real answer — record it.
 
 Save the populated table to `$SPEC_DIR/uniqueness.md`; it becomes §0
 of the prose spec. If the most consequential difference is an
@@ -280,7 +285,7 @@ formality**:
 
 Walk this six-point quality bar **with the user** before publishing:
 
-1. The §0 five-axis table is filled; every "different" row has a
+1. The §0 six-axis table is filled; every "different" row has a
    one-line explanation.
 2. The identifier matrix names every accepted identifier AND every
    notably-rejected one, each verified in Phase 5.
