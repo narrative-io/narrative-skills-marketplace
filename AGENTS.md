@@ -94,24 +94,33 @@ Every skill file starts with YAML frontmatter:
 
 ```yaml
 ---
-name: my-skill
-version: 1.0.0
+name: write-thing
 description: |
-  One- or two-sentence description.
-  Include trigger phrases: "use when X", "use when Y".
-allowed-tools:
-  - Bash
-  - Read
-  - Write
-  - AskUserQuestion
+  One- or two-sentence summary of what the skill does.
+  Use when: "<trigger phrase 1>", "<trigger phrase 2>".
+  (<plugin>)
+license: MIT
+compatibility: >-
+  Recommends AskUserQuestion (a Claude Code primitive; prose fallback
+  documented in references/HARNESS_FALLBACK.md).
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      tools:
+        - AskUserQuestion
 ---
 ```
 
 - **name** matches the slash command (no leading `/`).
-- **allowed-tools** lists every non-MCP tool the skill calls.
-  `AskUserQuestion` is required for interactive skills. MCP tools
-  declared in `plugin.json` are globally available and do not need to be
-  listed.
+- **version** lives under `metadata.version`, not at the top level;
+  `check:spec` enforces it.
+- **compatibility** is a free-text string; the structured
+  `requires`/`recommends` object lives under `metadata.narrative`. See
+  [§2](docs/authoring-skills.md#2-frontmatter) for every field and
+  [§10](docs/authoring-skills.md#10-declaring-requirements-explicitly)
+  for declaring requirements (including why `AskUserQuestion` goes under
+  `recommends`, not `requires`).
 - The body is a phased, interactive workflow. Number phases sequentially
   (Phase 1, Phase 2, …).
 
