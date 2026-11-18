@@ -1,0 +1,161 @@
+# connector-spec.yaml — worked example: TikTok (ad-platform flavor)
+#
+# Reverse-engineered from the shipped TikTok connector in
+# narrative-connectors (tiktok-stores QuickSettings + parser types,
+# tiktok-api audience-metaschema.json, tiktok-services TikTokApiClient /
+# TikTokOAuthService / TikTokBatchManager, tiktok/architecture.md).
+# Demonstrates the schema on a destination with custom audiences,
+# conversion events, and opt-out delivery.
+schema_version: 1
+
+# ── Identity ────────────────────────────────────────────────
+slug: tiktok
+package_slug: tiktok
+display_name: "TikTok"
+app_id: 19                        # scripts/populate-app-api-keys.py
+destination_type: combined        # audiences + conversion events + opt-out
+
+# ── Auth model ──────────────────────────────────────────────
+auth:
+  model: oauth2
+  oauth:
+    # Advertiser authorization portal; params: app_id, state, redirect_uri.
+    authorize_url: "https://business-api.tiktok.com/portal/auth"
+    token_url: "https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/"
+    me_url: "https://business-api.tiktok.com/open_api/v1.3/advertiser/info/"
+    redirect_uri: "https://tiktok.narrativeconnectors.com/tiktok/callback"
+    scopes: []                    # granted per-advertiser at authorization time;
+                                  # returned as numeric codes in the token response
+    scope_encoding: integer       # TikTok scopes are numeric codes → integer[]
+    token_response:
+      access_token: true          # long-lived; expiry optional in practice
+      refresh_token: false        # TikTok returns no refresh token
+      expires_in: false
+      # Also returns advertiser_ids: the ad accounts this token may act on.
+  account_binding: advertiser_id  # one audience container set per ad account
+
+# ── Identifier groups ───────────────────────────────────────
+# Mirrors tiktok-api/src/main/resources/schemas/audience-metaschema.json.
+# TikTok matches on SHA-256 hashes of the identifier values; raw phone
+# variants are accepted in the dataset and hashed at delivery.
+identifier_groups:
+  - name: sha256_hashed_email
+    attribute: "https://api.narrative.io/attributes/sha256_hashed_email"
+    ref_kind: attribute_value
+    hash: sha256
+    normalization: [lowercase, trim]
+  - name: hashed_email
+    attribute: "https://api.narrative.io/attributes/hashed_email"
+    ref_kind: attribute_typed_value
+    hash: sha256
+    normalization: [lowercase, trim]
+  - name: e164_phone_number
+    attribute: "https://api.narrative.io/attributes/e164_phone_number"
+    ref_kind: string_value_type
+    hash: sha256
+    normalization: [e164]
+  - name: telephone_number
+    attribute: "https://api.narrative.io/attributes/telephone_number"
+    ref_kind: string_value_type
+    hash: sha256
+    normalization: []
+  - name: apple_idfa
+    attribute: "https://api.narrative.io/attributes/apple_idfa"
+    ref_kind: attribute_value
+    hash: sha256
+    normalization: [lowercase]
+  - name: android_advertising_id
+    attribute: "https://api.narrative.io/attributes/android_advertising_id"
+    ref_kind: attribute_value
+    hash: sha256
+    normalization: [lowercase]
+  - name: mobile_id_unique_identifier
+    attribute: "https://api.narrative.io/attributes/mobile_id_unique_identifier"
+    ref_kind: attribute_typed_value
+    hash: sha256
+    normalization: [lowercase]
+  - name: unique_id
+    attribute: "https://api.narrative.io/attributes/unique_id"
+    ref_kind: attribute_typed_value
+    hash: none
+    normalization: []
+  - name: narrative_id
+    attribute: "https://api.narrative.io/attributes/narrative_id"
+    ref_kind: attribute_context_value
+    hash: none
+    normalization: []
+identifiers_not_accepted:
+  - raw_email                     # not in the metaschema: emails must arrive hashed
+  - ip_address
+  - postal_address
+
+# ── Destination data model ──────────────────────────────────
+destination:
+  record_becomes: audience_member
+  container: custom_audience      # one per (advertiser, audience)
+  container_provisioning: either  # create_new_for creates via /segment/audience/;
+                                  # existing_audiences reuses customer-created ones
+  match_key: "sha256(identifier) per id type"
+  associations: []
+
+# ── Quick settings ──────────────────────────────────────────
+quick_settings:
+  - type: audience_first_party
+    parser: AudienceParser        # audience-metaschema.json
+    fields:
+      - { name: existing_audiences, type: "map<advertiser_id, audience_id[]>", required: false, purpose: "Deliver to existing audiences, grouped by advertiser" }
+      - { name: create_new_for, type: "advertiser_id[]", required: false, purpose: "Advertisers in which to create a new audience" }
+      - { name: audience_name, type: string, required: false, purpose: "Name for newly created audiences" }
+      - { name: historical_data_enabled, type: boolean, required: false, purpose: "Deliver pre-existing dataset rows, not just new ones" }
+    # at least one of existing_audiences / create_new_for is required (schema anyOf)
+  - type: opt_out
+    parser: AudienceParser
+    fields:
+      - { name: historical_data_enabled, type: boolean, required: false, purpose: "Deliver pre-existing dataset rows" }
+  - type: conversion_events
+    parser: ConversionEventParser # conversion-event-metaschema.json
+    fields:
+      - { name: historical_data_enabled, type: boolean, required: false, purpose: "Deliver pre-existing dataset rows" }
+    # routing is row-level: each row carries tiktok_conversion_event.event_set_id
+
+# ── Partner delivery API ────────────────────────────────────
+partner_api:
+  endpoints:
+    - { method: POST, path: "/open_api/v1.3/segment/audience/", purpose: "create custom audience" }
+    - { method: POST, path: "/open_api/v1.3/segment/mapping/", purpose: "add/delete audience members (audience + opt-out)" }
+    - { method: GET,  path: "/open_api/v1.3/dmp/custom_audience/list/", purpose: "list audiences per advertiser" }
+    - { method: GET,  path: "/open_api/v1.3/advertiser/info/", purpose: "advertiser lookup after token exchange" }
+    - { method: POST, path: "/open_api/v1.3/event/track/", purpose: "offline conversion events" }
+    - { method: GET,  path: "/open_api/v1.3/offline/get/", purpose: "validate offline event sets" }
+  batch_limit: 1000               # identifiers per /segment/mapping/ request;
+                                  # also ≤10 audience ids per request and
+                                  # ≤1000 events per /event/track/ request
+  rate_limits:
+    - { scope: per_second, limit: 5000 }   # published cap for /segment/mapping/;
+                                           # connector self-limits to 2000 QPS
+    - { scope: per_second_events, limit: 2000 }  # /event/track/, confirmed by TikTok support
+    - { scope: per_day_identifiers_per_advertiser, limit: 1000000000 }
+  pagination: page_number         # page / page_size (max 100)
+  idempotency: "mapping add/delete is idempotent per identifier; conversion events deduped client-side on event_id (bloom filter)"
+  failure_semantics: whole_batch  # non-zero response code fails the request;
+                                  # code 40133 = advertiser-level rate limit (retriable)
+
+# ── Delivery semantics ──────────────────────────────────────
+delivery:
+  directions:
+    - outbound_membership
+    - conversion_events
+    - opt_out
+  path: arrow
+  update_model: add_then_remove   # Add actions for delivery, Delete for opt-outs
+  ttl: "P180D"                    # interface metadata refresh_schedule.max —
+                                  # re-deliver within 180 days to keep memberships live
+  optout_handling: "dedicated opt_out quick-settings type delivers Delete actions to /segment/mapping/"
+
+# ── Open questions ──────────────────────────────────────────
+open_questions: []                # shipped connector — none outstanding
+
+# ── Build & deploy targets ──────────────────────────────────
+stages: [dev, prod]
+modules_omitted: []
+narrative_db_path: "~/projects/narrative-db"
