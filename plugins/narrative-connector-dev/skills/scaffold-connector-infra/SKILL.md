@@ -1,21 +1,22 @@
 ---
 name: scaffold-connector-infra
 description: |
-  Generate the connector's <slug>-infra terraform (ECS service, ECR, security
-  groups, IAM) and CI workflows from connector-spec.yaml — writing the plans
-  locally without applying them.
-  Use when: "scaffold the connector infra", "generate the terraform for the
-  connector", "add the CI workflows for the connector", "set up the ECS
-  service for the connector".
+  Generate the connector's <slug>-infra infrastructure code (service
+  runtime, image registry, network rules, access policies) and CI workflows
+  from connector-spec.yaml — writing the plans locally without applying
+  them.
+  Use when: "scaffold the connector infra", "generate the infrastructure
+  code for the connector", "add the CI workflows for the connector", "set up
+  the service runtime for the connector".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. Writes terraform + CI locally in the
-  narrative-connectors working tree; does NOT run terraform apply (that is
+  Stub — implementation pending. Writes infrastructure code + CI locally in
+  the connector repo's working tree; does NOT apply infrastructure (that is
   /deploy-connector). Reads connector-spec.yaml. Recommends AskUserQuestion.
   Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -34,30 +35,31 @@ metadata:
 ## Purpose
 
 Generate the connector's infrastructure-as-code: the `<slug>-infra`
-terraform (ECS service, ECR repo, security groups, IAM roles/policies) and
-the CI workflows that build and publish it. This skill *writes* the plans;
-it deliberately does not *apply* them.
+modules (service runtime, image registry, network rules, access
+roles/policies) and the CI workflows that build and publish it. This skill
+*writes* the plans; it deliberately does not *apply* them.
 
 Phase: **infra**.
 
 ## Inputs (from connector-spec.yaml)
 
-- `slug` — resource names, ECR repo, image, service names.
-- `auth`, `measurement` presence — extra IAM (KMS/SSM) and bucket-access
-  statements.
+- `slug` — resource names, image registry, image, service names.
+- `auth`, `measurement` presence — extra access policies (encryption
+  key/secret store) and bucket-access statements.
 - `stages` — which environments to template.
 
 ## Outputs
 
-- `<slug>-infra/` terraform modules.
+- `<slug>-infra/` infrastructure modules.
 - The connector's CI workflows.
 
 ## Human gates
 
-- **No `terraform apply` here.** `terraform plan` for review only; applies
-  are owned by `/deploy-connector`.
-- The one-time **shared-ECR apply** (when a connector's first image needs a
-  new shared repo) is a hard human gate — flagged, not run.
+- **No infrastructure apply here.** Plan for review only; applies are owned
+  by `/deploy-connector`.
+- The one-time **shared image-registry apply** (when a connector's first
+  image needs a new shared registry) is a hard human gate — flagged, not
+  run.
 
 ## Composition contract
 
@@ -99,10 +101,10 @@ field values.
 schema_version: 1
 
 # ── Identity ────────────────────────────────────────────────
-slug: google-dv360            # lowercase, dashes ok. Drives module dirs,
-                              # SSM paths, deploy URLs, Docker image names.
-package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
-                              # + narrative-db dir names.
+slug: google-dv360            # lowercase, dashes ok. Drives directory names,
+                              # deploy names, image names.
+package_slug: googledv360     # dashes dropped — the identifier-safe variant
+                              # for code packages and database identifiers.
 display_name: "Display & Video 360"   # human-facing listing name
 app_id: 47                    # marketplace app id. null until
                               # /preflight-connector pins it.
@@ -180,9 +182,9 @@ destination:
                                     # (e.g. a CRM contact's list memberships)
 
 # ── Quick settings ──────────────────────────────────────────
-# One entry per QuickSettingsType the connector exposes. `type` is the
+# One entry per quick-settings type the connector exposes. `type` is the
 # JSON discriminator ("<platform>_<kind>_quick_settings"); fields drive
-# both the Scala codecs and the app-ui form.
+# both the connector's codecs and the settings form.
 quick_settings:
   - type: dv360_audience_quick_settings
     parser: Dv360AudienceParser
@@ -217,8 +219,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -232,11 +234,33 @@ open_questions:
     owner: partner              # partner | internal | customer
     status: "asked 2026-07-20; awaiting reply"
 
-# ── Build & deploy targets ──────────────────────────────────
+# ── Scaffold target ─────────────────────────────────────────
+# Where connector code materializes. The rest of the spec says what the
+# connector is; `target` says where and how it gets built.
+# /scaffold-connector resolves this block (asking when absent) and
+# writes it back; the implementation skills read it to know which
+# working tree and conventions they operate in.
+target:
+  mode: template-repo         # template-repo | reference-clone | greenfield
+  repo_path: "~/dev/my-connectors"   # working tree for template-repo / reference-clone
+  manifest_path: null         # template-repo: scaffold-manifest location; null means
+                              # <repo_path>/connector-scaffold.yaml
+  reference_connector: null   # reference-clone: path (inside repo_path) of the
+                              # existing connector to copy conventions from
+  runtime: null               # greenfield: runtime profile (cloudflare-workers)
+
+# ── Build & deploy stages ───────────────────────────────────
 stages: [dev, prod]
-modules_omitted: []            # of api|services|stores|worker|executor|poller|infra —
-                               # rare; empty means the standard full module set
-narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+
+# ── Deployment extension (optional) ─────────────────────────
+# Stack-specific paths and tuning the infra, DB, registration, and
+# deploy skills read. Values here are the target environment's, not the
+# connector's; a scaffold target that doesn't need them omits the block.
+# (Today these skills assume Narrative's stack; the values below are its
+# defaults.)
+deployment:
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
+  modules_omitted: []          # rare tuning of the template's module set
 ```
 
 Fields not yet known carry the literal `TODO` (or `null` where optional)

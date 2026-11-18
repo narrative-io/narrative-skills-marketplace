@@ -1,22 +1,22 @@
 ---
 name: provision-connector-db
 description: |
-  Author the connector's narrative-db migrations (V1/V2 + undo, plus the
-  OAuth and measurement tables when those are in scope) and the RDS
-  terraform, in the separate narrative-db repo — writing them for review,
-  stopping before any migration or apply is run.
-  Use when: "provision the connector database", "write the narrative-db
-  migrations for the connector", "set up the connector RDS", "add the
-  connector db terraform".
+  Author the connector's database migrations (V1/V2 + undo, plus the
+  OAuth and measurement tables when those are in scope) and the
+  managed-database infrastructure code — writing them for review, stopping
+  before any migration or apply is run.
+  Use when: "provision the connector database", "write the database
+  migrations for the connector", "set up the connector database", "add the
+  connector db infrastructure".
   (narrative-connector-dev)
 license: MIT
 compatibility: >-
-  Stub — implementation pending. Writes migrations + terraform into the
-  separate narrative-db repo; running migrations and terraform apply are
-  hard human gates. Reads connector-spec.yaml. Recommends AskUserQuestion.
+  Stub — implementation pending. Writes migrations + infrastructure code for
+  review; running migrations and infrastructure applies are hard human
+  gates. Reads connector-spec.yaml. Recommends AskUserQuestion.
   Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   narrative:
     recommends:
       skills:
@@ -30,17 +30,17 @@ metadata:
 # Provision Connector DB
 
 > **Status: stub — implementation pending.** Contract only. Consolidates
-> the narrative-db half of `create-connector` (V1/V2 + undo migrations,
-> RDS terraform, the multi-phase manual provisioning) and the V3/U3 OAuth
+> the database half of `create-connector` (V1/V2 + undo migrations,
+> managed-database infrastructure, the multi-phase manual provisioning) and the V3/U3 OAuth
 > and measurement-idempotency migrations added by the OAuth and measurement
 > skills.
 
 ## Purpose
 
-Stand up the connector's persistence: author the Flyway migrations and the
-RDS terraform. These live in a **separate repo** (`narrative-db`), which is
-not a sibling checkout by default — the skill asks for its path (the
-convention is `~/projects/narrative-db`).
+Stand up the connector's persistence: author the schema migrations and the
+managed-database infrastructure code. These may live in a **separate repo** or a path within a
+monorepo; either way the skill asks for the location rather than assuming a
+sibling checkout.
 
 Phase: **infra**.
 
@@ -51,21 +51,22 @@ Phase: **infra**.
   `auth.oauth.token_response` and `scope_encoding`).
 - `measurement` present → the `measurement_feed_ingestion` idempotency
   table.
-- `narrative_db_path` — where the narrative-db repo lives.
+- `deployment.migrations_path` — where the migrations live (separate repo
+  or a path within a monorepo).
 
 ## Outputs
 
 - V1/V2 (+ undo) migrations, plus V3/U3 and measurement migrations when in
-  scope, in the narrative-db repo.
-- Connector RDS terraform.
+  scope, at the migrations location.
+- Connector managed-database infrastructure code.
 
 ## Human gates
 
-- **Writes into the separate narrative-db repo** — confirm the path and the
-  edits.
-- **Running migrations** and the **multi-phase RDS `terraform apply`** (the
-  chicken-and-egg proxy/security-group bootstrap) are hard human gates.
-  This skill authors; it does not apply.
+- **Writes into the migrations location** (separate repo or monorepo
+  path) — confirm the path and the edits.
+- **Running migrations** and the **multi-phase managed-database
+  infrastructure apply** (the chicken-and-egg proxy/security-group
+  bootstrap) are hard human gates. This skill authors; it does not apply.
 
 ## Composition contract
 
@@ -107,10 +108,10 @@ field values.
 schema_version: 1
 
 # ── Identity ────────────────────────────────────────────────
-slug: google-dv360            # lowercase, dashes ok. Drives module dirs,
-                              # SSM paths, deploy URLs, Docker image names.
-package_slug: googledv360     # dashes dropped. Scala package + pg identifiers
-                              # + narrative-db dir names.
+slug: google-dv360            # lowercase, dashes ok. Drives directory names,
+                              # deploy names, image names.
+package_slug: googledv360     # dashes dropped — the identifier-safe variant
+                              # for code packages and database identifiers.
 display_name: "Display & Video 360"   # human-facing listing name
 app_id: 47                    # marketplace app id. null until
                               # /preflight-connector pins it.
@@ -188,9 +189,9 @@ destination:
                                     # (e.g. a CRM contact's list memberships)
 
 # ── Quick settings ──────────────────────────────────────────
-# One entry per QuickSettingsType the connector exposes. `type` is the
+# One entry per quick-settings type the connector exposes. `type` is the
 # JSON discriminator ("<platform>_<kind>_quick_settings"); fields drive
-# both the Scala codecs and the app-ui form.
+# both the connector's codecs and the settings form.
 quick_settings:
   - type: dv360_audience_quick_settings
     parser: Dv360AudienceParser
@@ -225,8 +226,8 @@ delivery:
 # ── Measurement ingestion (present only for measurement/combined) ──
 measurement:
   partition_layout: hive        # hive (dt=yyyyMMdd/) | date_path (YYYY/MM/DD/HH/)
-  inbox_prefix: "s3://.../<slug>/inbox/"
-  partner_access: cross_account_bucket_policy  # | assume_role_external_id | static_keys
+  inbox_prefix: "<object-store>/<slug>/inbox/"
+  partner_access: bucket_policy  # | assumed_role | static_keys
   host_app: poller              # which app runs the ingestion loop
   dataset_ids:
     dev: "ds_..."
@@ -240,11 +241,33 @@ open_questions:
     owner: partner              # partner | internal | customer
     status: "asked 2026-07-20; awaiting reply"
 
-# ── Build & deploy targets ──────────────────────────────────
+# ── Scaffold target ─────────────────────────────────────────
+# Where connector code materializes. The rest of the spec says what the
+# connector is; `target` says where and how it gets built.
+# /scaffold-connector resolves this block (asking when absent) and
+# writes it back; the implementation skills read it to know which
+# working tree and conventions they operate in.
+target:
+  mode: template-repo         # template-repo | reference-clone | greenfield
+  repo_path: "~/dev/my-connectors"   # working tree for template-repo / reference-clone
+  manifest_path: null         # template-repo: scaffold-manifest location; null means
+                              # <repo_path>/connector-scaffold.yaml
+  reference_connector: null   # reference-clone: path (inside repo_path) of the
+                              # existing connector to copy conventions from
+  runtime: null               # greenfield: runtime profile (cloudflare-workers)
+
+# ── Build & deploy stages ───────────────────────────────────
 stages: [dev, prod]
-modules_omitted: []            # of api|services|stores|worker|executor|poller|infra —
-                               # rare; empty means the standard full module set
-narrative_db_path: "~/projects/narrative-db"   # prompted; not a sibling checkout by default
+
+# ── Deployment extension (optional) ─────────────────────────
+# Stack-specific paths and tuning the infra, DB, registration, and
+# deploy skills read. Values here are the target environment's, not the
+# connector's; a scaffold target that doesn't need them omits the block.
+# (Today these skills assume Narrative's stack; the values below are its
+# defaults.)
+deployment:
+  migrations_path: "~/projects/db-migrations"   # prompted; may be a separate repo or a monorepo path
+  modules_omitted: []          # rare tuning of the template's module set
 ```
 
 Fields not yet known carry the literal `TODO` (or `null` where optional)
