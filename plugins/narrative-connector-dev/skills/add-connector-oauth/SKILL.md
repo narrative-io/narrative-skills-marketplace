@@ -17,7 +17,7 @@ compatibility: >-
   auth.oauth block of connector-spec.yaml. Recommends AskUserQuestion for
   gate confirmations. Runs on any agentskills.io-compliant harness.
 metadata:
-  version: 0.2.0
+  version: 0.2.1
   narrative:
     recommends:
       skills:
@@ -68,6 +68,10 @@ Phase: **service** (+ DB + infra at gates).
 - **Manual one-time secret-store writes** of `client_id` / `client_secret`
   per stage. Confirm before each.
 - Out of scope: access-token auto-refresh and token revocation.
+- Code changes land as uncommitted working-tree diffs; the human
+  commits at each checkpoint per
+  [`references/git-conventions.md`](references/git-conventions.md).
+  Client ids, secrets, and tokens never appear in a committed file.
 
 ## Composition contract
 

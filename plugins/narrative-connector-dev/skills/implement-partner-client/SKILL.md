@@ -15,7 +15,7 @@ compatibility: >-
   confirmation. Reads the partner_api block of connector-spec.yaml. Runs on
   any agentskills.io-compliant harness.
 metadata:
-  version: 0.2.0
+  version: 0.2.1
   narrative:
     recommends:
       skills:
@@ -60,6 +60,9 @@ Phase: **service**.
 - Local code — no live partner API calls during implementation. Any
   smoke-test call against the real partner is confirmed first and kept out
   of the default path.
+- Changes land as uncommitted working-tree diffs; the human commits at
+  each checkpoint per
+  [`references/git-conventions.md`](references/git-conventions.md).
 
 ## Composition contract
 
