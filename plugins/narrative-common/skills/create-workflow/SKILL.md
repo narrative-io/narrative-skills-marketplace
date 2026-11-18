@@ -19,7 +19,7 @@ compatibility: >-
   server. Portable to any agentskills.io-compliant harness via the
   documented fallbacks.
 metadata:
-  version: 0.6.5
+  version: 0.7.0
   narrative:
     args:
       - name: "--spec"
@@ -246,6 +246,7 @@ these intents:
 | "Classify / extract / summarize with an LLM inside the workflow" | `examples/09-run-model-inference.yaml` |
 | "Sample the view after refreshing" | `examples/10-dataset-sample-after-refresh.yaml` |
 | "Build an identity graph from these edge datasets" / "UNION my edge sources then label components" | `examples/11-identity-graph-multi-source-build.yaml` |
+| "Fill the cache behind my cached mapping" / "keep the normalized values current" | `examples/12-cached-mapping-cache-fill.yaml` |
 | Nothing in the table fits | [`assets/templates/workflow-skeleton.yaml`](assets/templates/workflow-skeleton.yaml) and combine task patterns from the closest examples |
 
 Read the chosen file(s) — and only those. Do not preload the whole
@@ -415,7 +416,7 @@ first scheduled run.
 - `assets/examples/*.yaml` — task-shape reference, one per intent. Leading comments document when to use each.
 - `assets/templates/workflow-skeleton.yaml` — bare scaffold when no example matches.
 - `narrative-knowledge-base` MCP — `/reference/workflows/specification-syntax` (DSL), `/reference/workflows/tasks` (task catalog), `/guides/workflows/workflow-orchestration` (end-to-end walkthrough), `/concepts/workflows/workflow-orchestration` (why sequential + fail-fast).
-- Sibling skills: `/write-nql` for `with.nql` bodies, `/generate-rosetta-stone-mappings` for mappings consumed by `CreateRosettaStoneMappingsIfNotExist`, `/find-attribute` to resolve a Rosetta Stone `attributeId`.
+- Sibling skills: `/write-nql` for `with.nql` bodies, `/generate-rosetta-stone-mappings` for mappings consumed by `CreateRosettaStoneMappingsIfNotExist`, `/find-attribute` to resolve a Rosetta Stone `attributeId`, `/create-cached-mapping` for the cache-fill workflow in `examples/12-cached-mapping-cache-fill.yaml` (it generates both NQL bodies and hands them here).
 
 ## Feedback (only if something could be improved)
 
