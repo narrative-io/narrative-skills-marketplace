@@ -1,0 +1,76 @@
+---
+name: preflight-connector
+description: |
+  Validate and enrich a connector-spec.yaml before any code is generated —
+  resolve every identifier group to a canonical Rosetta Stone attribute,
+  pin the marketplace app_id, confirm the package-slug derivation, and flag
+  every remaining TODO. Produces a go / no-go preflight report.
+  Use when: "preflight the connector spec", "is this connector spec ready
+  to build", "validate connector-spec.yaml", "check the connector spec
+  before scaffolding".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. No hard requirements: a read-and-enrich
+  skill over connector-spec.yaml; no infra or destructive ops. Recommends
+  the narrative-common find-attribute skill for Rosetta resolution and
+  AskUserQuestion for confirmations. Runs on any agentskills.io harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:spec-connector
+        - narrative-common:find-attribute
+      tools:
+        - AskUserQuestion
+---
+
+# Preflight Connector
+
+> **Status: stub — implementation pending.** Contract only; phased body
+> authored in follow-up work. Consolidates the pre-build validation logic
+> currently spread across `product-build-connector-spec` (spec completeness
+> bar) and `create-connector` (app_id + package-slug + identifier-group
+> derivation) in the sibling repos.
+
+## Purpose
+
+The gate between spec and code. Reads `connector-spec.yaml` and proves it
+is complete and internally consistent enough to generate a connector from
+— so the service, infra, and registration skills never run off a
+half-specified contract. Resolves the fuzzy parts of the spec into the
+exact values downstream skills need, and refuses to pass anything with an
+unresolved `TODO` in a required field.
+
+Phase: **spec** (the last spec-phase step before scaffolding).
+
+## Inputs (from connector-spec.yaml)
+
+- `identifier_groups[].attribute` — each canonical Rosetta URI is resolved
+  and verified (delegates to `/find-attribute`); the `ref_kind`
+  discriminator is checked against the attribute's shape.
+- `slug` / `package_slug` — confirms the de-dashing derivation.
+- `app_id` — pins it to `max(existing app id) + 1` (the human runs the
+  marketplace query; the skill records the result).
+- `auth`, `quick_settings`, `partner_api`, `delivery` — presence and
+  shape checks.
+
+## Outputs (writes back to the spec)
+
+- An enriched `connector-spec.yaml` with resolved attribute URIs, pinned
+  `app_id`, and confirmed slugs.
+- A **preflight report**: a ranked list of every remaining `TODO`,
+  blocking vs non-blocking, with a single go / no-go verdict.
+
+## Human gates
+
+- Read-only against live systems — proposes spec edits, applies on
+  approval.
+- **No-go stops the pipeline.** A blocking `TODO` (unresolved identifier,
+  missing app_id, unknown rate limit) halts here rather than surfacing as
+  a compile or deploy failure three phases later.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

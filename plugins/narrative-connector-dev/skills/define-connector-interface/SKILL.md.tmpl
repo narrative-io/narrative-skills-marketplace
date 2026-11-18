@@ -1,0 +1,66 @@
+---
+name: define-connector-interface
+description: |
+  Define the connector's data contract — the audience metaschema, the
+  QuickSettingsType / ParserType enums and codecs, the identifier-group
+  attribute metaschema with correct $ref kinds, and the collaboration
+  policy — all generated from connector-spec.yaml.
+  Use when: "define the connector interface", "generate the audience
+  metaschema", "wire up the quick settings types", "build the collaboration
+  policy for the connector".
+  (narrative-connector-dev)
+license: MIT
+compatibility: >-
+  Stub — implementation pending. No hard requirements: local codegen of
+  schema/codec files in the narrative-connectors working tree; no infra or
+  destructive ops. Reads connector-spec.yaml. Recommends the narrative-common
+  find-attribute skill. Runs on any agentskills.io-compliant harness.
+metadata:
+  version: 0.1.0
+  narrative:
+    recommends:
+      skills:
+        - narrative-connector-dev:scaffold-connector
+        - narrative-common:find-attribute
+---
+
+# Define Connector Interface
+
+> **Status: stub — implementation pending.** Contract only. Consolidates
+> the schema/type half of `create-connector` — `audience-metaschema.json`,
+> `<Slug>QuickSettingsType` / `<Slug>ParserType` codecs, the identifier
+> metaschema `$ref`-kind handling, and the collaboration policy structure.
+
+## Purpose
+
+Turn the spec's abstract identifier and quick-settings declarations into
+the concrete Scala/JSON contract the connector serializes against. This is
+where the `ref_kind` discriminator matters: `attribute_value` vs
+`attribute_typed_value` vs `attribute_context_value` vs `string_value_type`
+each generate a different metaschema `$ref`.
+
+Phase: **service** (runs alongside `/scaffold-connector`).
+
+## Inputs (from connector-spec.yaml)
+
+- `identifier_groups[]` — `attribute` (canonical Rosetta URI), `ref_kind`,
+  `hash`, `normalization`. Drives the audience metaschema and collaboration
+  policy `required[]` / `anyOf[]` blocks.
+- `quick_settings[]` — `type` discriminator, `parser`, and `fields[]`.
+  Drives the QuickSettingsType/ParserType enums and codecs.
+
+## Outputs
+
+- `audience-metaschema.json`.
+- `<Slug>QuickSettingsType` / `<Slug>ParserType` enums + JSON codecs.
+- The connector's collaboration policy JSON (identifier-group structure).
+
+## Human gates
+
+- Local codegen only — reviewable working-tree changes.
+- Attribute URIs are taken from the spec (already resolved by
+  `/preflight-connector`); this skill does not invent or re-guess them.
+
+## Composition contract
+
+{{SNIPPET:connector-spec-contract}}

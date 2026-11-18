@@ -1,0 +1,8 @@
+# Rendered build artifacts. Regenerate with `bun run gen:all`; review the
+# .tmpl and snippet sources instead. linguist-generated collapses these in
+# GitHub PR diffs and excludes them from diff stats.
+plugins/*/skills/*/SKILL.md linguist-generated=true
+plugins/*/skills/*/references/HARNESS_FALLBACK.md linguist-generated=true
+skills.json linguist-generated=true
+mcp/*.mcp.json linguist-generated=true
+README.md linguist-generated=true
