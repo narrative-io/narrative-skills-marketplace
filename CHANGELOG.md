@@ -14,6 +14,20 @@ the two views are deliberately redundant.
 
 <!-- RELEASES BELOW -->
 
+## [2026.11.0] - 2026-11-19
+
+### ✨ Features
+
+- **rosetta-stone-mapping-rules:** follow attributes' when_to_map hints (SC-85490) (#155) (9e97aba)
+- **rosetta-stone-mapping-rules:** move the mapping rules into their own skill [sc-80646] (#146) (4a3a9d7)
+- **generate-rosetta-stone-mappings:** map every attribute a column holds, let rules give the general one, set a discriminator only with its value (#141) (9ad7bb8)
+
+### 🧹 Maintenance
+
+- **deps:** bump zizmorcore/zizmor-action from 0.6.4 to 0.7.1 (#151) (eab9520)
+- **deps:** update minor and patch updates (#137) (3a71f69)
+
+
 ## [2026.10.0] - 2026-10-19
 
 ### ✨ Features
