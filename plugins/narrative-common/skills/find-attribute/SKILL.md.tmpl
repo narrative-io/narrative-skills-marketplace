@@ -18,7 +18,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.3.5
+  version: 0.4.0
   narrative:
     args:
       - name: "--phrase"
@@ -207,8 +207,8 @@ narrative_attributes_describe(
 )
 ```
 
-Default `include` already returns `metadata` and `schema`. Do not
-loop one-ID-at-a-time — the API supports up to 50 IDs per call.
+Default `include` already returns `metadata`, `schema` and `hints`. Do
+not loop one-ID-at-a-time — the API supports up to 50 IDs per call.
 
 ### Phase 4. Rank and (optionally) confirm
 
@@ -225,6 +225,11 @@ Rank the described candidates by:
 
 Pick the top-ranked candidate as the primary. Keep the next 2-3 as
 `alternatives`.
+
+A candidate's column-level `when_to_map` hint says which columns it
+fits. This skill hasn't seen the caller's column, so don't rank or drop
+on it: return it in `hints`, and the caller checks it against the
+column.
 
 If `--no-confirm` is set, skip to phase 5 with the primary.
 
@@ -251,14 +256,21 @@ display_name: <name>
 schema:
   - { name: <column>, type: <type>, enum: [<values>] | null }
   - …
+hints:
+  - "[when_to_map, <level>] <condition>"
+  - …
 confidence: high | medium | low
 match_reason: "<one-line explanation: shape match, name match, both>"
 alternatives:
-  - { attribute_id: <id>, display_name: <name>, why: "<one line>" }
+  - { attribute_id: <id>, display_name: <name>, why: "<one line>", hints: [<as above>] }
   - …
 warnings:
   - "<any caveats, e.g., 'shape match dropped 3 close candidates'>"
 ```
+
+`hints` copies the attribute's hints from the describe result, one
+line each, as the describe output prints them. It is `[]` when the
+attribute has none.
 
 **confidence rubric**:
 
@@ -275,6 +287,7 @@ warnings:
 attribute_id: null
 display_name: null
 schema: []
+hints: []
 confidence: low
 match_reason: "no Rosetta Stone attribute matched <phrase> after walking <N> pages"
 alternatives: []
