@@ -5,7 +5,7 @@
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
     "@types/bun": "latest",
-    "@typesafe-ai/sdk": "^0.6.0",
+    "@typesafe-ai/sdk": "^0.7.0",
     "gray-matter": "^4.0.3",
     "knip": "^6.40.0",
     "lefthook": "^2.1.17",
