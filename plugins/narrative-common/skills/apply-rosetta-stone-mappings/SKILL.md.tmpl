@@ -22,7 +22,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.3.8
+  version: 0.3.9
   narrative:
     args:
       - name: "--dataset"

@@ -14,7 +14,7 @@
     },
     {
       "name": "narrative-common",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Common Narrative workflows backed by the narrative-mcp server — starting with Rosetta Stone attribute mapping generation, evaluation, and improvement.",
       "mcpServers": [
         "narrative-agent-gateway",
@@ -154,7 +154,7 @@
     },
     {
       "name": "apply-rosetta-stone-mappings",
-      "version": "0.3.8",
+      "version": "0.3.9",
       "description": "Apply a set of Rosetta Stone attribute mappings to a Narrative\ndataset by wrapping them in a one-shot workflow that calls the\n`CreateRosettaStoneMappingsIfNotExist` task. Consumes the structured\noutput of `/generate-rosetta-stone-mappings`, normalizes the\ngenerator's snake_case to the workflow task's camelCase, re-validates\nevery expression against the dataset's current schema, gates on\nuser approval, submits via `narrative_workflows_create`, polls the\ntriggered run, and reports per-mapping created / conflict / failed.\nUse when: \"apply these mappings to dataset N\", \"create the\nRosetta Stone mappings I just generated\", \"push the mappings I\nsaved earlier to <dataset>\", \"productionize this mapping list\",\n\"submit the suggested_mappings array\".\n(narrative-common)",
       "plugin": "narrative-common",
       "path": "plugins/narrative-common/skills/apply-rosetta-stone-mappings/SKILL.md",
