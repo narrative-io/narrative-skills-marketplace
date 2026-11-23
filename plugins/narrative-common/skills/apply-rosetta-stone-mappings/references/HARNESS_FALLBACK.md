@@ -41,7 +41,7 @@ not part of this skill's compatibility surface.
 | `narrative_datasets_describe` | Retry once. If still failing, ask the user for `datasetName` and `dataPlaneId` directly and surface a warning that conflict detection (existing mappings) is unavailable. |
 | `narrative_nql_validate` | Retry once per validate call. If a specific expression's validate keeps failing on transport (not on syntax), surface that mapping with a warning and ask the user whether to proceed (drop, defer, or override). Do not auto-proceed. |
 | `narrative_data_planes_list` | Retry once. If still failing and the dataset describe also failed (no `dataPlaneId` known), ask the user to provide the plane UUID. |
-| `narrative_workflows_create` | A 4xx is a validator error — fix the spec and re-submit (see [`EDGE_CASES.md`](EDGE_CASES.md) for the common root causes). A 5xx or network error is transport — retry once, then surface. |
+| `narrative_workflows_create` | A 4xx is a validator error — surface it verbatim and loop back to Phase 3 or Phase 7 as Phase 8 describes (see [`EDGE_CASES.md`](EDGE_CASES.md) for the common root causes). The approval covers the spec the user saw, so never re-submit an edited spec without a fresh **Submit** at the Phase 7 gate. A 5xx or network error is transport — do not retry: the server may already have created the workflow, and a second submit creates and triggers a duplicate. Surface the error, tell the user the workflow may exist, and re-submit only on a fresh **Submit**. |
 | `narrative_workflow_runs_list` | Retry once per poll. If it keeps failing, stop polling and tell the user the workflow was submitted (give them the `workflow_id`) but the run state is unknown. |
 
 ## Waiting tools not available
