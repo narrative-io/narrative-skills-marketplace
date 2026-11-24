@@ -19,7 +19,7 @@ compatibility: >-
   token. Recommends AskUserQuestion, a Claude Code primitive with a
   prose fallback documented in the body.
 metadata:
-  version: 0.1.0
+  version: 0.1.1
   narrative:
     args:
       - name: "--object"
@@ -161,8 +161,12 @@ reference framework:
 GRANT USAGE ON WAREHOUSE <wh> TO APPLICATION <app>;
 ```
 
-If the caller is not `ACCOUNTADMIN`, surface that statement for someone
-who is and stop.
+The grant lets the app bill that warehouse for every operator job, so
+it does not run unapproved, whatever the caller's role. Ask which
+warehouse to use rather than picking one, render the `GRANT` with it
+filled in, say what it allows in plain words, and run it only on
+explicit approval. If the user declines, stop. If the caller is not
+`ACCOUNTADMIN`, surface that statement for someone who is and stop.
 
 ### Phase 3. Confirm the statement (mandatory gate)
 
@@ -249,12 +253,16 @@ After a successful registration, the useful next steps are
 - `Object 'reference('NARRATIVE_API_TOKEN')' does not exist` — current
   database is not the app. `USE DATABASE <app>;` and retry.
 - `The same object cannot be added more than once` — an object binds
-  once. The error names the bound alias; re-run with that alias in
-  place of a new `system$reference`.
+  once. The error names the bound alias; re-render the `CALL` with that
+  alias in place of a new `system$reference` and return to Phase 3 for
+  approval before running it.
 - `a dataset named '…' is already registered` — `display_name` is
   taken. Ask for another.
 - `… is already registered as '…'` — this object already has a dataset.
-  Delete that one first if re-registering was the intent.
+  Never delete it on your own initiative: tell the user. If
+  re-registering was the intent, render the DELETE from the output
+  contract and run it only on explicit approval, then return to
+  Phase 3.
 - `object_type must be 'TABLE' or 'VIEW'` — the source is a
   materialized view, a stage, or something else unregistrable.
 - `none of the columns of … have a dataset equivalent` — register a
