@@ -73,7 +73,7 @@ Terminal job states:
 | `state` | Meaning | Next step |
 | --- | --- | --- |
 | `completed` | Job finished. **The payload depends on job type — rows almost never live here.** | See [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md) for what `result` looks like per job type. |
-| `failed` | Engine error mid-execution | Read `failures` from the job payload; show it to the user verbatim; revise query and retry |
+| `failed` | Engine error mid-execution | Read `failures` from the job payload; show it to the user verbatim; return to the calling skill's revise/approval step — never re-execute a modified query without fresh approval |
 | `cancelled` | Operator or timeout abort | Tell the user the job was cancelled; offer to re-run |
 
 Non-terminal states (`queued`, `running`, `processing`) → not a
