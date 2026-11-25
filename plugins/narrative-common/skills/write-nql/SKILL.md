@@ -18,7 +18,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.5.10
+  version: 0.5.11
   narrative:
     args:
       - name: "--run"
@@ -492,7 +492,9 @@ Template (adapt to the question — never paste verbatim):
 
 Branch on how the skill was invoked:
 
-- **`--run` was passed**: proceed directly to step 8.
+- **`--run` was passed**: proceed directly to step 8 — for the query as
+  first drafted only. A query revised after a failed run (step 8) is a
+  new query: ask, as below.
 - **`--run` was NOT passed**: ask the user, with `AskUserQuestion`:
 
   > "I've validated the query above. Want me to run it now?"
@@ -632,7 +634,7 @@ Terminal job states:
 | `state` | Meaning | Next step |
 | --- | --- | --- |
 | `completed` | Job finished. **The payload depends on job type — rows almost never live here.** | See [`references/NQL_ASYNC_DEEP.md`](references/NQL_ASYNC_DEEP.md) for what `result` looks like per job type. |
-| `failed` | Engine error mid-execution | Read `failures` from the job payload; show it to the user verbatim; revise query and retry |
+| `failed` | Engine error mid-execution | Read `failures` from the job payload; show it to the user verbatim; return to the calling skill's revise/approval step — never re-execute a modified query without fresh approval |
 | `cancelled` | Operator or timeout abort | Tell the user the job was cancelled; offer to re-run |
 
 Non-terminal states (`queued`, `running`, `processing`) → not a
@@ -725,7 +727,9 @@ On terminal state:
   Re-state the plain-English answer to the original question
   ("There are 4,217 distinct users in the last 30 days.").
 - **failed** — show the error verbatim, identify the likely cause if
-  obvious, and offer to revise the query (loop back to step 4).
+  obvious, and offer to revise the query (loop back to step 4). The
+  revised query goes back through the step 7 gate before it runs;
+  never re-execute it on your own.
 - **cancelled** — note the cancellation and offer to re-run.
 
 Never claim success without a `completed` state on the job
