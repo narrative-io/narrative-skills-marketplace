@@ -19,7 +19,7 @@ compatibility: >-
   references/HARNESS_FALLBACK.md). Runs on any agentskills.io-compliant
   harness.
 metadata:
-  version: 0.3.5
+  version: 0.3.6
   narrative:
     args:
       - name: "--dataset"
