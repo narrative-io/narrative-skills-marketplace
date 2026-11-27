@@ -203,6 +203,7 @@ one of these reasons:
 | --- | --- |
 | `noFittingAttribute` | No Rosetta Stone attribute fits the values. |
 | `coveredByRule` | A derivation rule already fills the attribute from another mapping on the dataset. |
+| `derivedFromMapped` | The column's values come from a column already mapped: a copy, or a normalized or hashed version of it. Name that column in `detail`. |
 | `noValues` | The column is empty in both the sample and the statistics. |
 | `invalidExpression` | No expression for the best candidate validated. Name the candidate and what failed in `detail`. |
 
