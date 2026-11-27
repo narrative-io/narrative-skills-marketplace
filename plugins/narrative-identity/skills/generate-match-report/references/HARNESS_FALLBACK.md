@@ -25,7 +25,18 @@ narrative_dataset_get_column_stats(dataset_id=CUSTOMER_DATASET_ID)
 ```
 
 If the histogram for `_rosetta_stone.graph_edge.target_id_type` is
-missing or stale, configure it, recalculate, poll, and re-read:
+missing or stale, ask the user before changing anything — configuring
+and recalculating writes to their dataset and takes a few minutes:
+
+> "Stats on `<dataset>` are `<missing|stale>`. Recalculating takes a
+> few minutes. Recompute now, or read the id-types from the sample only?"
+>
+> - **Recompute** — configure + recalculate, then re-read.
+> - **Sample only** — skip; read the id-types from
+>   `narrative_datasets_describe(dataset_ids=[CUSTOMER_DATASET_ID], include=["sample"])`
+>   and tell the user rarer id-types may be missing.
+
+Only on **Recompute**, configure it, recalculate, poll, and re-read:
 
 ```
 narrative_dataset_set_column_stats_config(
