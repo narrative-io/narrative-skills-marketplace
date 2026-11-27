@@ -73,6 +73,8 @@ The prompt gives you:
 - the dataset's existing mappings, each with `mappingId`, `attributeId`,
   `mapping`, `source` and `tags`. Treat this list as the dataset's
   mappings; don't fetch them again;
+- the confidence an `add` needs when its attribute would then have more
+  than one mapping. When the prompt doesn't state it, it is 85;
 - optionally, instructions from the workflow, such as a hint about the
   data. Follow them where they don't conflict with the mapping rules.
 
@@ -193,8 +195,8 @@ hint_level: "dataset")`, and check each result's condition.
   passes. Split only a mapping the workflow replaces (step 2); leave any
   other as it is.
 - An `add` of an attribute that would then have more than one mapping
-  needs the higher confidence the prompt states. Score it as the
-  evidence says, not to clear that bar.
+  needs the higher confidence from your inputs. Score it as the evidence
+  says, not to clear that bar.
 - An attribute with a dataset-level `when_to_map` hint (the rules'
   "Follow the attributes' hints") gets the mappings its condition and
   descriptions ask for, under the same rules as any attribute. Add only
