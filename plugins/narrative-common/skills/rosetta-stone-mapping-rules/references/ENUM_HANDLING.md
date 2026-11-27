@@ -67,6 +67,50 @@ target attribute/property:
      don't map to any allowed enum value."
    - Still emit the mapping, so whoever reviews it can patch it.
 
+## Checking an existing mapping
+
+Check what an existing mapping produces from the column statistics, before
+running any query. Enum columns have few distinct values, so the
+statistics usually list all of them.
+
+1. **Read the histogram of each column the expression reads.**
+   ```
+   narrative_dataset_get_column_stats(
+     dataset_id: <id>,
+     columns: ["<col>"],
+     include: ["histogram"],
+     histogram_bin_limit: 100
+   )
+   ```
+   Each bin is a value of the column and how many rows hold it.
+2. **Run each bin's value through the expression.** `LOWER(hash_algo)`
+   turns a bin of `'SHA256'` into `'sha256'`; a `CASE` sends it down its
+   first matching branch. Each output value takes the rows of the bins
+   that produce it.
+3. **Decide whether the statistics settle it.** They do when the bins
+   cover all but 1% of the column's non-null rows. An expression that
+   reads several columns is settled only when every value it can produce
+   is a literal in the enum or NULL, as in
+   `CASE WHEN LOWER(platform) = 'ios' THEN 'idfa' END`. Per-column
+   histograms can't say how often a raw value passed through such an
+   expression lands outside the enum.
+4. **Rate the result:**
+   - **error**: an output value outside the enum takes more than 1% of
+     the rows. The mapping writes values the attribute rejects.
+   - **warning**: output values outside the enum take 1% of the rows or
+     less. Suggest the `CASE WHEN` that fixes them.
+   - **info**: every output value is in the enum, but a source value
+     reaches `NULL` that looks like it belongs in the enum (e.g. raw
+     `device_id` rows the expression doesn't route).
+
+   On an error, write a corrected expression and validate it with
+   `narrative_nql_validate` before proposing it.
+
+When the statistics don't settle it (no histogram, bins that miss more
+than 1% of the rows, or several columns with a raw value passed
+through), say what is unknown and lower the confidence. The calling skill
+says whether a query can settle it.
+
 ## Anti-patterns
 
 - **Quoting an enum literal as a double-quoted identifier**: `"email"`

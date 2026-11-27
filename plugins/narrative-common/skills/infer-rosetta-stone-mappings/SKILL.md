@@ -109,7 +109,12 @@ list them anywhere in the answer.
 The run is the same whether the dataset has no mappings or many.
 Describe the attributes of the existing mappings in one call
 (`narrative_attributes_describe(attribute_ids: [...])`) and check each
-mapping against the rules. Each existing mapping ends up in exactly one
+mapping against the rules. For an attribute with enum constraints, check
+what the mapping produces from the column histograms, as "Checking an
+existing mapping" in
+[`../rosetta-stone-mapping-rules/references/ENUM_HANDLING.md`](../rosetta-stone-mapping-rules/references/ENUM_HANDLING.md)
+describes. No query can settle what the histograms leave open, so score
+that in the confidence. Each existing mapping ends up in exactly one
 place:
 
 - **Kept** when it is right. Give your confidence in it, scored with
