@@ -1,6 +1,6 @@
 {
   "name": "narrative-identity",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Identity-graph workflows backed by the narrative-mcp server — pre-graph data-quality auditing, edge-quality analysis, and graph-build hygiene.",
   "author": {
     "name": "Narrative I/O"

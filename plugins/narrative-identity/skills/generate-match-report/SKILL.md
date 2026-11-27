@@ -21,7 +21,7 @@ compatibility: >-
   present, and paced status checks when not. Portable to any agentskills.io-compliant
   harness via the documented fallbacks.
 metadata:
-  version: 0.7.4
+  version: 0.7.5
   narrative:
     args:
       - name: "--dataset"
@@ -410,13 +410,17 @@ actually emits. Delegate the histogram read — including the
 configure → recalculate → re-read recovery when it's missing or stale —
 to `/profile-dataset` instead of driving the stats tools here:
 
-> `/profile-dataset --dataset CUSTOMER_DATASET_ID --focus _rosetta_stone.graph_edge.target_id_type --histograms --allow-recalc --json`
+> `/profile-dataset --dataset CUSTOMER_DATASET_ID --focus _rosetta_stone.graph_edge.target_id_type --histograms --json`
 
-`--allow-recalc` pre-approves the profiler's (otherwise gated) stats
-recalculation so it can recover a missing/stale histogram without a
-second prompt. From the returned profile object, read the focused
+Do **not** pass `--allow-recalc`. Recovering a missing/stale histogram
+changes the dataset's stats configuration and spends compute, so
+`/profile-dataset` asks the user before it recalculates — let that gate
+ask. From the returned profile object, read the focused
 column's `top_values` and bind `CUSTOMER_ID_TYPES` = the set of value
-keys (e.g. `{normalized_email, e164_phone_number}`).
+keys (e.g. `{normalized_email, e164_phone_number}`). If the user
+declined the recalculation (`stats_freshness: "sample_only"`), the set
+comes from the sample alone and can miss rarer id-types — say so in the
+note below.
 
 **Input:** `CUSTOMER_DATASET_ID`. **Output:** the id-type distribution
 in the focused column's `top_values`. If `/profile-dataset` is
@@ -424,7 +428,8 @@ unavailable, see
 [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md) for
 the inline column-stats-config recovery this step used to carry.
 
-This step is informational — no question to the user. Just note:
+Beyond `/profile-dataset`'s own recalculation gate, this step is
+informational — no question of its own. Just note:
 
 > Your dataset emits `<N>` identifier types: `<list>`.
 
@@ -630,6 +635,16 @@ and present the result:
 > - **A)** Submit (recommended)
 > - **B)** Show me the full YAML first
 > - **C)** Cancel
+
+Honor the user's choice exactly:
+
+- **A)** — continue to the pre-flight validation below, then Phase 7.
+- **B)** — print the full substituted YAML, then re-ask with only
+  **A)** Submit and **C)** Cancel.
+- **C)** — exit without calling `narrative_workflows_create`.
+
+Never submit on an ambiguous answer; re-ask instead. Phase 7 runs only
+on an explicit **A**.
 
 If `--dry-run`, stop here, print the YAML, and exit.
 
@@ -928,9 +943,10 @@ new company context.
 - **Zero-overlap partner.** Surface a blocker; do not submit an empty
   comparison. Offer to switch partners or route to `/generate-rosetta-stone-mappings`.
 - **Missing column-stats histogram on `graph_edge.target_id_type`.**
-  Phase 3's `/profile-dataset --allow-recalc` call recovers it
-  (configure → recalculate → re-read) before returning the id-types;
-  don't proceed without ground truth. If `/profile-dataset` is absent,
+  Phase 3's `/profile-dataset` call offers to recover it (configure →
+  recalculate → re-read) behind its own approval gate before returning
+  the id-types. If the user declines, the id-types come from the sample
+  only — say so. If `/profile-dataset` is absent,
   run the recovery inline per
   [`references/HARNESS_FALLBACK.md`](references/HARNESS_FALLBACK.md).
 - **AskUserQuestion 4-option cap.** Bucket large enrichment attribute
