@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.5
+  version: 0.2.6
   narrative:
     requires:
       skills:
@@ -109,7 +109,12 @@ list them anywhere in the answer.
 The run is the same whether the dataset has no mappings or many.
 Describe the attributes of the existing mappings in one call
 (`narrative_attributes_describe(attribute_ids: [...])`) and check each
-mapping against the rules. Each existing mapping ends up in exactly one
+mapping against the rules. For an attribute with enum constraints, check
+what the mapping produces from the column histograms, as "Checking an
+existing mapping" in
+[`../rosetta-stone-mapping-rules/references/ENUM_HANDLING.md`](../rosetta-stone-mapping-rules/references/ENUM_HANDLING.md)
+describes. No query can settle what the histograms leave open, so score
+that in the confidence. Each existing mapping ends up in exactly one
 place:
 
 - **Kept** when it is right. Give your confidence in it, scored with
@@ -230,6 +235,8 @@ shape:
   takes the place of an existing mapping you `remove`. `replace` carries
   `mappingId`, `attributeId`, `mapping` and `evidence`. `remove`
   carries `mappingId` and `evidence`.
+- The answer has no field for warnings. Put a warning the rules ask
+  you to record in the proposal's `reasoning`.
 - Keep `reasoning`, `evidence` and `detail` to a sentence or two. Name
   attributes by name in them, not only by id.
 - `proposals`, `kept` and `unmapped` are always present, even when
@@ -253,6 +260,3 @@ shape:
 - **`narrative-mcp` is unavailable.** You can't read the dataset or
   validate anything. Answer with empty `proposals`, `kept` and
   `unmapped`.
-- **`narrative-knowledge-base` is unavailable.** The rules skill
-  recommends it for hard cases; continue with the rules' local
-  references.

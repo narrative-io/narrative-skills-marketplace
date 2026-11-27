@@ -205,8 +205,8 @@ Presto-style format mask tokens (most common):
 Drop confidence by ≥15 points and add an `ambiguous_date_format`
 warning when (a) the format mask is locale-dependent (M/D vs D/M), or
 (b) you're using `%y` rather than `%Y` (century rollover depends on
-the engine's pivot year — confirm with `narrative_nql_execute` if any
-records may be pre-2000). Always validate the exact mask against the
+the engine's pivot year — check the sample and statistics for records
+that may be pre-2000). Always validate the exact mask against the
 schema before suggesting it.
 
 ## When validation fails
@@ -226,12 +226,3 @@ the expression. Common fixes:
 Re-validate after every fix. Never suggest a mapping with an
 expression you have not personally validated against the target
 dataset's schema.
-
-## When this file isn't enough
-
-For the official NQL function/operator reference, type-system rules,
-or worked examples (joins, materialized views, performance patterns),
-query the `narrative-knowledge-base` MCP server. See
-`KB_RESEARCH.md` for the recommended search queries and entry-point
-docs paths (`/concepts/nql/...`, `/cookbooks/nql/...`,
-`/api-reference/nql/...`).

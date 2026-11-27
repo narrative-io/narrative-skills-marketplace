@@ -49,11 +49,9 @@ Validate syntactically, then score semantically.
 
 ## Token economy
 
-Prefer the existing sample returned by
-`narrative_datasets_describe(include: ["sample"])` over enqueuing a
-fresh `narrative_dataset_request_sample` job. The existing sample
-is almost always enough to spot the patterns this skill needs, and
-re-sampling costs a job round-trip.
+Work from the sample `narrative_datasets_describe(include: ["sample"])`
+returned. It is almost always enough to spot the patterns this skill
+needs. When it is thin, lower the confidence.
 
 ## Skip underscore-prefixed columns
 

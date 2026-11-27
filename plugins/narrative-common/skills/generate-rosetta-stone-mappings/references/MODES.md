@@ -45,6 +45,23 @@ returns a non-empty `mappings[]` array, or the user said "evaluate" /
    (`../rosetta-stone-mapping-rules/SKILL.md`) says when a direct
    mapping is still right.
 
+### Enum-constrained attributes
+
+Check them from the column statistics first, as "Checking an existing
+mapping" in
+`../rosetta-stone-mapping-rules/references/ENUM_HANDLING.md` describes.
+When the statistics don't settle it, run the distribution of the
+expression's output through `narrative_nql_execute`, following the
+workflow run to its job as in step 2, and rate it the same way:
+
+```sql
+select <the_expression> as produced, count(*) as n
+from company_data."<dataset_id>"
+group by 1
+order by n desc
+limit 50
+```
+
 ## Improve a single mapping expression
 
 If the user pasted an expression and feedback (e.g., "lowercase the
