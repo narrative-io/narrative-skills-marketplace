@@ -172,10 +172,12 @@ hint_level: "dataset")`, and check each result's condition.
 - When the value comes from different columns on different rows, chosen
   by a condition such as `CASE WHEN platform = 'ios' THEN ...`, write one
   mapping with one `CASE`, not a mapping per branch.
-- Leave a column unmapped when it holds the same values as a column
-  already mapped to the attribute: a copy, or a normalized or hashed
-  version of it (the rules' "Leave a derived column unmapped"). Mapping
-  both counts each value twice.
+- Leave a column unmapped when its values come from a column already
+  mapped, to this attribute or any other: a copy, or a normalized or
+  hashed version of it, such as `email_sha256` next to a mapped `email`
+  (the rules' "Leave a derived column unmapped"). Mapping it counts each
+  value twice or overrides a derivation rule. List it as
+  `derivedFromMapped` (step 4).
 - The workflow declines a mapping when every field it reads is read by
   another mapping of the same attribute, or when it reads every field
   that one reads. Between two of your proposals it keeps the more
