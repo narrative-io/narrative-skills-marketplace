@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.6
+  version: 0.3.0
   narrative:
     requires:
       skills:
@@ -134,10 +134,10 @@ the `add` only when it applies the `remove`, so the dataset never ends
 up with both. Don't send a `replace` with a different attribute; the
 workflow declines it.
 
-The workflow applies a `replace` or a `remove` only to a mapping an
-earlier inference run wrote, one with `source: rosetta_stone`. For a
-wrong mapping from any other source, still propose the change with its
-evidence: the workflow declines it and shows it to a person.
+The workflow can decline a `replace` or a `remove` for reasons your
+inputs don't show, such as who last edited the mapping or what else on
+the platform reads it. Still propose the change with its evidence: a
+declined proposal is shown to a person.
 
 Replace or remove only on evidence you can point to in the sample, the
 statistics or the attribute's definition. A mapping someone else wrote
@@ -155,19 +155,43 @@ for the whole dataset, also run the rules' search for dataset-level
 attributes, `narrative_attributes_search(hint_kind: "when_to_map",
 hint_level: "dataset")`, and check each result's condition.
 
-- Propose every candidate you scored, with its confidence, even a low
-  one. Don't hold one back for its score: the workflow decides which
-  proposals are confident enough to apply.
-- Don't add an attribute the dataset already maps. If the existing
-  mapping is wrong, replace it (step 2).
-- Add each attribute at most once. When two columns could fill the same
-  attribute, pick one, or combine them in one expression.
+- Propose every candidate attribute you scored for a column, with its
+  confidence, even a low one: the workflow decides which proposals are
+  confident enough to apply. For one attribute over the same columns,
+  propose one expression, the best you have.
+- Map an attribute more than once only when one row can hold several
+  values of it. Two columns of email addresses get two `raw_email`
+  mappings. An identifier the dataset holds in several columns gets a
+  mapping per column, even when they share a type column, as
+  `(id_type, id_1)` and `(id_type, id_2)` do.
+- When the value comes from different columns on different rows, chosen
+  by a condition such as `CASE WHEN platform = 'ios' THEN ...`, write one
+  mapping with one `CASE`, not a mapping per branch.
+- Leave a column unmapped when it holds the same values as a column
+  already mapped to the attribute: a copy, or a normalized or hashed
+  version of it (the rules' "Leave a derived column unmapped"). Mapping
+  both counts each value twice.
+- The workflow declines a mapping when every field it reads is read by
+  another mapping of the same attribute, or when it reads every field
+  that one reads. Between two of your proposals it keeps the more
+  confident one; next to an existing mapping it declines yours, so
+  replace that mapping instead if it's wrong (step 2). A mapping that
+  reads no field, such as a constant, can't sit next to another mapping
+  of its attribute.
+- An existing mapping that combines columns, such as
+  `COALESCE(TRIM(email), TRIM(alt_email))`, takes `alt_email` only on
+  rows where `email` is empty. To map both columns, split it: a
+  `replace` of it that reads `email`, and an `add` that reads
+  `alt_email`. The workflow applies the replace first, so the add then
+  passes. If the workflow won't replace that mapping, leave it.
+- An `add` of an attribute that would then have more than one mapping
+  needs the higher confidence the prompt states. Score it as the
+  evidence says, not to clear that bar.
 - An attribute with a dataset-level `when_to_map` hint (the rules'
-  "Follow the attributes' hints") is the exception to both. Work out
-  every mapping its condition and descriptions ask for, and add each one
-  no existing mapping of that attribute already covers. When the dataset
-  has gained an identifier column since the last run, that means one
-  more mapping, and the existing ones stay as they are.
+  "Follow the attributes' hints") gets every mapping its condition and
+  descriptions ask for. When the dataset has gained an identifier column
+  since the last run, that means one more mapping, and the existing ones
+  stay as they are.
 
 ### 4. Account for every column
 
