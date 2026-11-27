@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.6
+  version: 0.3.0
   narrative:
     requires:
       skills:
@@ -73,6 +73,8 @@ The prompt gives you:
 - the dataset's existing mappings, each with `mappingId`, `attributeId`,
   `mapping`, `source` and `tags`. Treat this list as the dataset's
   mappings; don't fetch them again;
+- the confidence an `add` needs when its attribute would then have more
+  than one mapping. When the prompt doesn't state it, it is 85;
 - optionally, instructions from the workflow, such as a hint about the
   data. Follow them where they don't conflict with the mapping rules.
 
@@ -133,13 +135,20 @@ up with both. Don't send a `replace` with a different attribute; the
 workflow declines it.
 
 The workflow applies a `replace` or a `remove` only to a mapping an
-earlier inference run wrote, one with `source: rosetta_stone`. For a
-wrong mapping from any other source, still propose the change with its
-evidence: the workflow declines it and shows it to a person.
+inference run wrote and nobody has edited since. You can recognise one
+by `source: rosetta_stone` and an `agent_expression` tag; whether
+someone edited it since, you can't see. Propose a change to any other
+mapping only when it's wrong, with its evidence: the workflow declines
+it and shows it to a person. It can also decline one for reasons your
+inputs don't show, such as what else on the platform reads the mapping.
 
 Replace or remove only on evidence you can point to in the sample, the
 statistics or the attribute's definition. A mapping someone else wrote
 that you would have written differently, but that isn't wrong, is kept.
+The one exception is a mapping that combines columns which each hold the
+attribute on the same rows, such as a `COALESCE`: splitting it into one
+mapping per column is an allowed `replace` (step 3). Say in `evidence`
+which column it misses on which rows.
 
 ### 3. Map the columns
 
@@ -153,19 +162,47 @@ for the whole dataset, also run the rules' search for dataset-level
 attributes, `narrative_attributes_search(hint_kind: "when_to_map",
 hint_level: "dataset")`, and check each result's condition.
 
-- Propose every candidate you scored, with its confidence, even a low
-  one. Don't hold one back for its score: the workflow decides which
-  proposals are confident enough to apply.
-- Don't add an attribute the dataset already maps. If the existing
-  mapping is wrong, replace it (step 2).
-- Add each attribute at most once. When two columns could fill the same
-  attribute, pick one, or combine them in one expression.
+- Propose every candidate attribute you scored, with its confidence,
+  even a low one: the workflow decides which proposals are confident
+  enough to apply. For one attribute over the same columns, propose one
+  expression, the best you have.
+- Map an attribute more than once only when one row can hold several
+  values of it. Two columns of email addresses get two `raw_email`
+  mappings. An identifier the dataset holds in several columns gets a
+  mapping per column, even when they share a type column, as
+  `(id_type, id_1)` and `(id_type, id_2)` do.
+- When the value comes from different columns on different rows, chosen
+  by a condition such as `CASE WHEN platform = 'ios' THEN ...`, write one
+  mapping with one `CASE`, not a mapping per branch.
+- Leave a column unmapped when its values come from a column already
+  mapped, to this attribute or any other: a copy, or a normalized or
+  hashed version of it, such as `email_sha256` next to a mapped `email`
+  (the rules' "Leave a derived column unmapped"). Mapping it counts each
+  value twice or overrides a derivation rule. List it as
+  `derivedFromMapped` (step 4).
+- The workflow declines a mapping when every field it reads is read by
+  another mapping of the same attribute, or when it reads every field
+  that one reads. Between two of your proposals it keeps the more
+  confident one; next to an existing mapping it declines yours, so
+  replace that mapping instead if it's wrong (step 2). A mapping that
+  reads no field, such as a constant, can't sit next to another mapping
+  of its attribute.
+- An existing mapping that combines columns, such as
+  `COALESCE(TRIM(email), TRIM(alt_email))`, takes `alt_email` only on
+  rows where `email` is empty. To map both columns, split it: a
+  `replace` of it that reads `email`, and an `add` that reads
+  `alt_email`. The workflow applies the replace first, so the add then
+  passes. Split only a mapping the workflow replaces (step 2); leave any
+  other as it is.
+- An `add` of an attribute that would then have more than one mapping
+  needs the higher confidence from your inputs. Score it as the evidence
+  says, not to clear that bar.
 - An attribute with a dataset-level `when_to_map` hint (the rules'
-  "Follow the attributes' hints") is the exception to both. Work out
-  every mapping its condition and descriptions ask for, and add each one
-  no existing mapping of that attribute already covers. When the dataset
-  has gained an identifier column since the last run, that means one
-  more mapping, and the existing ones stay as they are.
+  "Follow the attributes' hints") gets the mappings its condition and
+  descriptions ask for, under the same rules as any attribute. Add only
+  the ones no existing mapping of that attribute already covers. When the
+  dataset has gained an identifier column since the last run, that means
+  one more mapping, and the existing ones stay as they are.
 
 ### 4. Account for every column
 
@@ -177,6 +214,7 @@ one of these reasons:
 | --- | --- |
 | `noFittingAttribute` | No Rosetta Stone attribute fits the values. |
 | `coveredByRule` | A derivation rule already fills the attribute from another mapping on the dataset. |
+| `derivedFromMapped` | The column's values come from a column already mapped: a copy, or a normalized or hashed version of it. Name that column in `detail`. |
 | `noValues` | The column is empty in both the sample and the statistics. |
 | `invalidExpression` | No expression for the best candidate validated. Name the candidate and what failed in `detail`. |
 
