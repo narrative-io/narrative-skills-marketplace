@@ -15,7 +15,7 @@ compatibility: >-
   structured-output schema. Needs read tools only. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.5
+  version: 0.2.6
   narrative:
     requires:
       skills:
@@ -228,6 +228,8 @@ shape:
   takes the place of an existing mapping you `remove`. `replace` carries
   `mappingId`, `attributeId`, `mapping` and `evidence`. `remove`
   carries `mappingId` and `evidence`.
+- The answer has no field for warnings. Put a warning the rules ask
+  you to record in the proposal's `reasoning`.
 - Keep `reasoning`, `evidence` and `detail` to a sentence or two. Name
   attributes by name in them, not only by id.
 - `proposals`, `kept` and `unmapped` are always present, even when
@@ -251,6 +253,3 @@ shape:
 - **`narrative-mcp` is unavailable.** You can't read the dataset or
   validate anything. Answer with empty `proposals`, `kept` and
   `unmapped`.
-- **`narrative-knowledge-base` is unavailable.** The rules skill
-  recommends it for hard cases; continue with the rules' local
-  references.

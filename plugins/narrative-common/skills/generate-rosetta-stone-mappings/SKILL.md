@@ -15,7 +15,7 @@ compatibility: >-
   and the narrative-knowledge-base MCP server. Portable to any
   agentskills.io-compliant harness via the documented fallbacks.
 metadata:
-  version: 0.8.1
+  version: 0.8.2
   narrative:
     args:
       - name: "<free-text>"
@@ -263,9 +263,10 @@ Sort by confidence descending; for object_mappings, sort by the
 minimum property confidence.
 
 Hold the structured mapping list in memory for step 6. Each entry
-follows the `value_mapping` or `object_mapping` shape from the rules'
-section 2
-(an array of those entries, no envelope):
+wraps a mapping body from the rules' section 2 with its attribute,
+confidence, reasoning and warnings. The warnings are the ones the rules
+tell you to record. An `object_mapping` also carries each property's
+confidence and reasoning (an array of those entries, no envelope):
 
 ```json
 [
@@ -273,6 +274,19 @@ section 2
     "attribute_id": 123,
     "mapping": { "type": "value_mapping", "expression": "LOWER(email_column)" },
     "confidence": 95,
+    "reasoning": "Column name and '@' pattern in all sampled values clearly indicate email.",
+    "warnings": []
+  },
+  {
+    "attribute_id": 456,
+    "mapping": {
+      "type": "object_mapping",
+      "property_mappings": [
+        { "path": "type",  "expression": "CASE WHEN hashed_email IS NOT NULL THEN 'sha256_email' END", "confidence": 100, "reasoning": "Discriminator, set only where there is a hash; all sampled hashes are 64 chars." },
+        { "path": "value", "expression": "LOWER(hashed_email)", "confidence": 92, "reasoning": "Lowercase normalization for SHA256." }
+      ]
+    },
+    "confidence": 92,
     "reasoning": "…",
     "warnings": []
   }

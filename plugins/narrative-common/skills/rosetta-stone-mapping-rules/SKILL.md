@@ -12,11 +12,10 @@ description: |
   (narrative-common)
 license: MIT
 compatibility: >-
-  Requires the narrative-mcp MCP server. Recommends the
-  narrative-knowledge-base MCP server. Portable to any
+  Requires the narrative-mcp MCP server. Portable to any
   agentskills.io-compliant harness.
 metadata:
-  version: 0.2.3
+  version: 0.3.0
   narrative:
     requires:
       skills:
@@ -28,12 +27,8 @@ metadata:
         - narrative_attributes_search
         - narrative_nql_validate
     recommends:
-      mcp-servers:
-        - narrative-knowledge-base
       mcp-tools:
         - narrative_derivations_describe
-        - search_narrative_i_o_knowledge_base
-        - query_docs_filesystem_narrative_i_o_knowledge_base
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -58,12 +53,9 @@ skill gathered. The one step that isn't per cluster is the search for
 dataset-level attributes in "Follow the attributes' hints": run it once
 for the whole dataset.
 
-When the platform-data tools aren't enough — e.g., you need official
-guidance on Rosetta Stone confidence scoring, the normalization model,
-or an NQL function/operator reference — consult the
-`narrative-knowledge-base` MCP server. See
-[`references/KB_RESEARCH.md`](references/KB_RESEARCH.md) for the
-recommended query patterns.
+The rules need only the tools in this skill's frontmatter. Where a rule
+says to record a warning on a mapping, the calling skill says where
+warnings go.
 
 ## 1. Find candidate Rosetta Stone attributes
 
@@ -247,8 +239,8 @@ CASE WHEN LOWER(platform) = 'android' THEN LOWER(TRIM(device_id)) END
   maps its hash column to `sha256_hashed_email`.
 - **When a rule fits the data poorly, say so instead of adding a
   mapping.** The `telephone_number` → `e164_phone_number` rule only
-  handles numbers that start with `+`. Put that in the `telephone_number`
-  mapping's `warnings`; don't add an `e164_phone_number` mapping from
+  handles numbers that start with `+`. Record that as a warning on the
+  `telephone_number` mapping; don't add an `e164_phone_number` mapping from
   the same column.
 
 To read what a rule computes, call
@@ -264,36 +256,30 @@ derivation id from the line.
 | Multiple columns → one structured attribute (e.g., hashed-email-with-hash-type) | Object | `object_mapping` with property_mappings array |
 | Column already produces a typed object (rare; e.g., a struct column) | Object | `object_mapping` mirroring the struct |
 
-`value_mapping` shape:
+A `value_mapping` body:
 
 ```json
 {
-  "attribute_id": 123,
-  "mapping": {
-    "type": "value_mapping",
-    "expression": "LOWER(email_column)"
-  },
-  "confidence": 95,
-  "reasoning": "Column name and '@' pattern in all sampled values clearly indicate email.",
-  "warnings": []
+  "type": "value_mapping",
+  "expression": "LOWER(email_column)"
 }
 ```
 
-`object_mapping` shape:
+An `object_mapping` body:
 
 ```json
 {
-  "attribute_id": 456,
-  "mapping": {
-    "type": "object_mapping",
-    "property_mappings": [
-      { "path": "type",  "expression": "CASE WHEN hashed_email IS NOT NULL THEN 'sha256_email' END", "confidence": 100, "reasoning": "Discriminator, set only where there is a hash; all sampled hashes are 64 chars." },
-      { "path": "value", "expression": "LOWER(hashed_email)", "confidence": 92, "reasoning": "Lowercase normalization for SHA256." }
-    ]
-  },
-  "warnings": []
+  "type": "object_mapping",
+  "property_mappings": [
+    { "path": "type",  "expression": "CASE WHEN hashed_email IS NOT NULL THEN 'sha256_email' END" },
+    { "path": "value", "expression": "LOWER(hashed_email)" }
+  ]
 }
 ```
+
+Score each property of an object mapping as you write it (section 4).
+The calling skill says what goes around the body: the attribute id, the
+confidence, the reasoning and any warnings.
 
 ### Set a discriminator only where there is a value
 
@@ -369,11 +355,11 @@ attribute's job.
   `CASE WHEN TRIM(email) RLIKE '^[^@ ]+@[^@ ]+[.][^@ ]{2,}$' THEN TRIM(email) END`.
   It runs on every row, and it withdraws raw data the attribute may
   accept. If the attribute has no validation for clearly broken values, map
-  them anyway and name the missing validation in `warnings`.
+  them anyway and name the missing validation in a warning.
 - **Keep values that look like placeholders.** `0000000000`, an all-zero
   device id, the hash of `''`, `-` or `?` stay as they are, unless the
   attribute's description or validations state a convention for them.
-  Mention them in `warnings` when they are common.
+  Mention them in a warning when they are common.
 - **Trim with `TRIM`, and keep other whitespace.** `TRIM(col)` removes
   surrounding spaces. A tab or other whitespace around a value is raw data;
   don't strip it with a regex.
@@ -403,14 +389,8 @@ narrative_nql_validate(
 A success response means the expression compiles against the
 dataset's schema. A structured error points at the offending token.
 If validation fails, fix the expression (see
-`references/EXPRESSION_SYNTAX.md`) and re-validate. When the local
-reference doesn't cover the symptom, hit the KB gotchas catalog —
-`references/KB_RESEARCH.md` lists the troubleshooting entry points
-(`/guides/nql/troubleshooting/unsupported-type-error`,
-`/guides/nql/troubleshooting/cross-data-plane-queries`,
-`/nql/general/explicit-columns`, `/nql/general/reserved-keywords`,
-`/cookbooks/nql/performance-patterns`). Do **not** suggest a mapping
-with an expression that has not been validated.
+`references/EXPRESSION_SYNTAX.md`) and re-validate. Do **not** suggest
+a mapping with an expression that has not been validated.
 
 Validates are cheap and independent — fire all candidate expressions
 as concurrent tool calls in a single turn rather than serializing
@@ -423,7 +403,7 @@ them.
 | 95-100 | Clear semantic match (column name + all-sample-pattern matches), well-known standard (email, ISO timestamp, US state code, SHA256 hash). |
 | 85-94 | Strong pattern with minor ambiguity (e.g., `id` column that is *probably* a user identifier given the sample). |
 | 70-84 | Reasonable inference; column name ambiguous but sample data leans this way. |
-| Below 70 | Multiple valid interpretations or sparse evidence. Include the suggestion but flag for user verification. |
+| Below 70 | Multiple valid interpretations or sparse evidence. Include the mapping with its score; the calling skill decides what a low score means. |
 
 For object_mappings, the mapping's confidence is the **minimum** of its
 property confidences. A high-confidence `type` literal cannot rescue a
@@ -434,39 +414,5 @@ low-confidence `value` expression.
 
 - [`references/EDGE_CASES.md`](references/EDGE_CASES.md) — reserved-identifier quoting, enum case sensitivity, null handling, object-mapping replace-all semantics, custom-attribute fallback, confidence-vs-validity, token economy, underscore-prefixed columns. Read when an expression won't validate or a mapping feels off.
 - [`references/EXPRESSION_SYNTAX.md`](references/EXPRESSION_SYNTAX.md) — SQL/NQL quoting, function, and CASE WHEN rules. Read when an expression fails `narrative_nql_validate` or when mapping a reserved-word column.
-- [`references/ENUM_HANDLING.md`](references/ENUM_HANDLING.md) — generation-vs-evaluation rules for enum-constrained attributes. Read when `narrative_attributes_describe` shows `{value1|value2|...}` constraints.
-- [`references/KB_RESEARCH.md`](references/KB_RESEARCH.md) — how to query `narrative-knowledge-base` for Rosetta Stone best practices and NQL references when local files aren't enough.
+- [`references/ENUM_HANDLING.md`](references/ENUM_HANDLING.md) — writing expressions for enum-constrained attributes. Read when `narrative_attributes_describe` shows `{value1|value2|...}` constraints.
 - `../find-attribute/SKILL.md` — section 1 defers to this skill per cluster, `--no-confirm`, structured results.
-
-## Feedback (only if something could be improved)
-
-**Silence is success.** Do *not* call `submit_feedback` when the skill
-worked. No "great skill!" submissions, no positive feedback, no "FYI"
-notes.
-
-**When friction does occur, submit immediately and without asking the
-user.** `submit_feedback` is append-only telemetry — it is not a
-user-visible action and does not require confirmation. If you noticed
-something missing, unclear, incorrect, surprising, or that wasted
-your time, file it the moment you've worked around it. Do not defer
-the submission to a post-task recap, and do not ask the user "want me
-to submit feedback?" — that's the wrong default for this tool.
-
-One submission per distinct friction point. Submit liberally.
-
-Fields that matter most:
-
-- `skill_name`: `narrative-common:rosetta-stone-mapping-rules` (use this verbatim).
-- `severity`: `info` (nit) | `friction` (slowed you down) |
-  `blocker` (stopped you).
-- `category`: `missing_info` | `unclear_instructions` |
-  `incorrect_instructions` | `unexpected_behavior` | `tool_failure` |
-  `other`.
-- `summary`: one concrete line — what went wrong, not how you felt.
-- `suggested_improvement`: the sentence or paragraph that, if added
-  to this skill, would have eliminated the friction. **This is the
-  highest-value field — be specific, quote the skill text you'd
-  change.**
-
-Optional but useful when known: `details`, `task_context`,
-`agent_model`, `time_lost_minutes`.

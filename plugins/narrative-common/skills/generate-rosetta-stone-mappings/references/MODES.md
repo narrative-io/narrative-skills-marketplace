@@ -45,6 +45,42 @@ returns a non-empty `mappings[]` array, or the user said "evaluate" /
    (`../rosetta-stone-mapping-rules/SKILL.md`) says when a direct
    mapping is still right.
 
+### Enum-constrained attributes
+
+When the mapping's attribute or one of its properties has enum constraints:
+
+1. Submit a distribution query via `narrative_nql_execute(nql: ...)`.
+   It returns a workflow run rather than a job, so find the job with
+   `narrative_jobs_search(workflow_run_id: "<run_id>")`, then follow
+   `narrative_jobs_describe` until `state` is `completed`. The query selects the expression against
+   the dataset's table reference `company_data."<dataset_id>"`:
+   ```sql
+   select <the_expression> as produced, count(*) as n
+   from company_data."<dataset_id>"
+   group by 1
+   order by n desc
+   limit 50
+   ```
+
+2. Compare each distinct `produced` value to the enum.
+
+3. Severities:
+   - **error** — any produced value is outside the enum *and* appears
+     in a non-trivial share (>1%) of records. The mapping will produce
+     invalid data downstream.
+   - **warning** — produced value is outside the enum but only in a
+     tiny tail (rounding error). Still flag, suggest a CASE WHEN tweak.
+   - **info** — every produced value is in the enum, but the user might
+     be missing a source value (e.g., the source has `device_id` raw
+     records that the expression isn't routing into the enum).
+
+4. Include `suggested_fix` with a corrected expression on every
+   `error`-severity recommendation. Validate the fix with
+   `narrative_nql_validate` before emitting it.
+
+To write the fix, follow
+`../rosetta-stone-mapping-rules/references/ENUM_HANDLING.md`.
+
 ## Improve a single mapping expression
 
 If the user pasted an expression and feedback (e.g., "lowercase the

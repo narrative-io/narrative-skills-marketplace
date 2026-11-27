@@ -16,16 +16,14 @@ Enum matching is **case-sensitive** and **exact-string**. `'SHA256'`
 does NOT match `'sha256_email'`. This is the single most common cause
 of low-confidence mappings in production.
 
-## Generation flow (creating a new mapping)
+## Writing the expression
 
 When `narrative_attributes_describe` shows enum constraints on the
 target attribute/property:
 
 1. **Compare sample values against the enum exactly.**
-   - Use the sample already returned by
-     `narrative_datasets_describe(include: ["sample"])`. Only enqueue
-     `narrative_dataset_request_sample` (async — poll via
-     `narrative_jobs_describe`) if the existing sample is stale.
+   - Use the sample `narrative_datasets_describe(include: ["sample"])`
+     returned.
    - Look at the distinct values of the source column. If the column
      has high cardinality, also pull
      `narrative_dataset_get_column_stats(columns: ["<col>"])` for
@@ -64,44 +62,10 @@ target attribute/property:
 
 4. **If values cannot be reliably mapped**:
    - Lower the suggestion's confidence to <70.
-   - Add a per-suggestion warning:
-     ```json
-     { "type": "enum_mismatch", "message": "Source values include 'EMAIL_V2' and 'em' which don't map to any allowed enum value. User must define the mapping." }
-     ```
-   - Still emit the suggestion so the user can review and patch.
-
-## Evaluation flow (rating an existing mapping)
-
-When evaluating a mapping whose target has enum constraints:
-
-1. Submit a distribution query via `narrative_nql_execute(nql: ...)`.
-   It returns a workflow run rather than a job, so find the job with
-   `narrative_jobs_search(workflow_run_id: "<run_id>")`, then follow
-   `narrative_jobs_describe` until `state` is `completed`. The query selects the expression against
-   the dataset's table reference `company_data."<dataset_id>"`:
-   ```sql
-   select <the_expression> as produced, count(*) as n
-   from company_data."<dataset_id>"
-   group by 1
-   order by n desc
-   limit 50
-   ```
-
-2. Compare each distinct `produced` value to the enum.
-
-3. Severities:
-   - **error** — any produced value is outside the enum *and* appears
-     in a non-trivial share (>1%) of records. The mapping will produce
-     invalid data downstream.
-   - **warning** — produced value is outside the enum but only in a
-     tiny tail (rounding error). Still flag, suggest a CASE WHEN tweak.
-   - **info** — every produced value is in the enum, but the user might
-     be missing a source value (e.g., the source has `device_id` raw
-     records that the expression isn't routing into the enum).
-
-4. Include `suggested_fix` with a corrected expression on every
-   `error`-severity recommendation. Validate the fix with
-   `narrative_nql_validate` before emitting it.
+   - Record an `enum_mismatch` warning on the mapping that names the
+     values, e.g. "Source values include 'EMAIL_V2' and 'em', which
+     don't map to any allowed enum value."
+   - Still emit the mapping, so whoever reviews it can patch it.
 
 ## Anti-patterns
 
@@ -120,13 +84,9 @@ When evaluating a mapping whose target has enum constraints:
 - **Trusting search-result snippets over describe responses for the
   enum list**: `narrative_attributes_search` returns shortened
   descriptions. Always `narrative_attributes_describe` to get the full
-  enum list before generating or evaluating.
+  enum list before writing the expression.
 
 ## Cross-reference
 
 - For SQL/NQL syntax of the CASE WHEN expressions themselves, see
   `EXPRESSION_SYNTAX.md`.
-- For the official Rosetta Stone confidence-scoring rubric and
-  normalization model — useful when calibrating low-confidence enum
-  cases — query the `narrative-knowledge-base` MCP server. See
-  `KB_RESEARCH.md` (entry points: `/concepts/rosetta-stone/...`).
