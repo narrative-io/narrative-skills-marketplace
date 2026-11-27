@@ -132,10 +132,13 @@ the `add` only when it applies the `remove`, so the dataset never ends
 up with both. Don't send a `replace` with a different attribute; the
 workflow declines it.
 
-The workflow can decline a `replace` or a `remove` for reasons your
-inputs don't show, such as who last edited the mapping or what else on
-the platform reads it. Still propose the change with its evidence: a
-declined proposal is shown to a person.
+The workflow applies a `replace` or a `remove` only to a mapping an
+inference run wrote and nobody has edited since. You can recognise one
+by `source: rosetta_stone` and an `agent_expression` tag; whether
+someone edited it since, you can't see. Propose a change to any other
+mapping only when it's wrong, with its evidence: the workflow declines
+it and shows it to a person. It can also decline one for reasons your
+inputs don't show, such as what else on the platform reads the mapping.
 
 Replace or remove only on evidence you can point to in the sample, the
 statistics or the attribute's definition. A mapping someone else wrote
@@ -181,7 +184,8 @@ hint_level: "dataset")`, and check each result's condition.
   rows where `email` is empty. To map both columns, split it: a
   `replace` of it that reads `email`, and an `add` that reads
   `alt_email`. The workflow applies the replace first, so the add then
-  passes. If the workflow won't replace that mapping, leave it.
+  passes. Split only a mapping the workflow replaces (step 2); leave any
+  other as it is.
 - An `add` of an attribute that would then have more than one mapping
   needs the higher confidence the prompt states. Score it as the
   evidence says, not to clear that bar.
