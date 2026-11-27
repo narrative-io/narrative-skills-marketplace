@@ -145,6 +145,10 @@ inputs don't show, such as what else on the platform reads the mapping.
 Replace or remove only on evidence you can point to in the sample, the
 statistics or the attribute's definition. A mapping someone else wrote
 that you would have written differently, but that isn't wrong, is kept.
+The one exception is a mapping that combines columns which each hold the
+attribute on the same rows, such as a `COALESCE`: splitting it into one
+mapping per column is an allowed `replace` (step 3). Say in `evidence`
+which column it misses on which rows.
 
 ### 3. Map the columns
 
