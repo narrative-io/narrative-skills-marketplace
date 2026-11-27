@@ -188,10 +188,11 @@ hint_level: "dataset")`, and check each result's condition.
   needs the higher confidence the prompt states. Score it as the
   evidence says, not to clear that bar.
 - An attribute with a dataset-level `when_to_map` hint (the rules'
-  "Follow the attributes' hints") gets every mapping its condition and
-  descriptions ask for. When the dataset has gained an identifier column
-  since the last run, that means one more mapping, and the existing ones
-  stay as they are.
+  "Follow the attributes' hints") gets the mappings its condition and
+  descriptions ask for, under the same rules as any attribute. Add only
+  the ones no existing mapping of that attribute already covers. When the
+  dataset has gained an identifier column since the last run, that means
+  one more mapping, and the existing ones stay as they are.
 
 ### 4. Account for every column
 
