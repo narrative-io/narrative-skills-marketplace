@@ -162,10 +162,10 @@ for the whole dataset, also run the rules' search for dataset-level
 attributes, `narrative_attributes_search(hint_kind: "when_to_map",
 hint_level: "dataset")`, and check each result's condition.
 
-- Propose every candidate attribute you scored for a column, with its
-  confidence, even a low one: the workflow decides which proposals are
-  confident enough to apply. For one attribute over the same columns,
-  propose one expression, the best you have.
+- Propose every candidate attribute you scored, with its confidence,
+  even a low one: the workflow decides which proposals are confident
+  enough to apply. For one attribute over the same columns, propose one
+  expression, the best you have.
 - Map an attribute more than once only when one row can hold several
   values of it. Two columns of email addresses get two `raw_email`
   mappings. An identifier the dataset holds in several columns gets a
